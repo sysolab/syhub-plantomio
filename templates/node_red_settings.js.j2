@@ -1,0 +1,24 @@
+module.exports = {
+    flowFile: 'flows.json',
+    flowFilePretty: true,
+    adminAuth: {
+        type: "credentials",
+        users: [{
+            username: "{{ node_red_username }}",
+            // The password must be provided as a hash generated via `node-red admin hash-pw`
+            password: "{{ node_red_password_hash }}",
+            permissions: "*"
+        }]
+    },
+    httpAdminRoot: "/admin",
+    httpNodeRoot: "/",
+    userDir: "{{ HOME_DIR }}/.node-red",
+    nodesDir: "{{ HOME_DIR }}/.node-red/nodes",
+    functionGlobalContext: {},
+    mqttConfig: {
+        host: "{{ mqtt.uri | replace('mqtt://', '') }}",
+        port: {{ mqtt.port }},
+        username: "{{ mqtt.username }}",
+        password: "{{ mqtt.password }}"
+    }
+};
