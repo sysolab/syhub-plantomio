@@ -1,71 +1,46 @@
 #!/bin/bash
 
-# Exit on any error
-set -e
+# SysoHub IoT Setup Script - Improved with network resilience
+# A shell script equivalent of the Python setup script
 
-# Determine the invoking user (since this script runs with sudo)
-USER=${SUDO_USER:-$(whoami)}
+# Version
+VERSION="1.0.0"
+
+# Ensure script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "This script must be run with sudo"
+    exit 1
+fi
+
+# Determine the user who invoked sudo
+if [ -n "$SUDO_USER" ]; then
+    USER=$SUDO_USER
+else
+    USER=$(whoami)
+fi
+
+# Set up paths
 HOME_DIR=$(eval echo ~$USER)
-INSTALL_DIR="$HOME_DIR/syhub"
+INSTALL_DIR="$HOME_DIR/sysohub"
 CONFIG_PATH="$INSTALL_DIR/config/config.yml"
 TEMPLATES_DIR="$INSTALL_DIR/templates"
 NODE_RED_DIR="$HOME_DIR/.node-red"
+SCRIPT_LOG="/var/log/sysohub_setup.log"
 
-# Default configuration values (will be overridden by config.yml)
-HOSTNAME="plantomio.local"
-MQTT_HOST="localhost"
-MQTT_PORT="1883"
-MQTT_USERNAME="plantomioX1"
-MQTT_PASSWORD="plantomioX1Pass"
-VM_HOST="localhost"
-VM_PORT="8428"
-
-# Logging function with timestamp
+# Logging function with timestamp that writes to both console and log file
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] $1"
+    echo "[$timestamp] $1" >> "$SCRIPT_LOG"
 }
 
-# Check if running as root
-check_root() {
-    if [ "$(id -u)" != "0" ]; then
-        log "This script must be run with sudo"
-        exit 1
-    fi
-}
+# Create log directory if it doesn't exist
+mkdir -p "$(dirname "$SCRIPT_LOG")"
+touch "$SCRIPT_LOG"
+chmod 644 "$SCRIPT_LOG"
 
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Install yq if not present (needed to parse config.yml)
-install_yq() {
-    if ! command_exists yq; then
-        log "Installing yq to parse YAML configuration..."
-        wget https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_arm64 -O /usr/bin/yq
-        chmod +x /usr/bin/yq
-        if ! command_exists yq; then
-            log "Failed to install yq. Please install it manually."
-            exit 1
-        fi
-    fi
-}
-
-# Load configuration from config.yml
-load_config() {
-    if [ ! -f "$CONFIG_PATH" ]; then
-        log "Config file not found at $CONFIG_PATH"
-        exit 1
-    fi
-    install_yq
-    HOSTNAME=$(yq e '.project.hostname' "$CONFIG_PATH")
-    MQTT_HOST=$(yq e '.project.mqtt.host' "$CONFIG_PATH")
-    MQTT_PORT=$(yq e '.project.mqtt.port' "$CONFIG_PATH")
-    MQTT_USERNAME=$(yq e '.project.mqtt.username' "$CONFIG_PATH")
-    MQTT_PASSWORD=$(yq e '.project.mqtt.password' "$CONFIG_PATH")
-    VM_HOST=$(yq e '.project.victoria_metrics.host' "$CONFIG_PATH")
-    VM_PORT=$(yq e '.project.victoria_metrics.port' "$CONFIG_PATH")
-}
+log "Starting sysohub_setup.sh version $VERSION"
+log "User: $USER, Home: $HOME_DIR, Install dir: $INSTALL_DIR"
 
 # Function to check if a package is installed
 is_package_installed() {
@@ -75,239 +50,332 @@ is_package_installed() {
 
 # Function to check if a service is enabled
 is_service_enabled() {
-    systemctl is-enabled "$1" 2>/dev/null | grep -q "enabled"
+    local result
+    result=$(systemctl is-enabled "$1" 2>/dev/null || echo "disabled")
+    [ "$result" = "enabled" ]
     return $?
 }
 
 # Function to check if a service is running
 is_service_running() {
-    systemctl is-active "$1" 2>/dev/null | grep -q "active"
+    local result
+    result=$(systemctl is-active "$1" 2>/dev/null || echo "inactive")
+    [ "$result" = "active" ]
     return $?
 }
 
-# Function to compute file hash
+# Function to calculate a file's SHA-256 hash
 file_hash() {
     if [ -f "$1" ]; then
-        sha256sum "$1" | cut -d ' ' -f 1
+        sha256sum "$1" | cut -d' ' -f1
     else
         echo ""
     fi
 }
 
-# Prompt user to overwrite/update a component
+# Function to prompt user for overwriting components
 prompt_overwrite() {
-    local component=$1
-    local condition=$2
-    if [ "$condition" = "true" ]; then
-        log "$component detected or update available."
-        read -p "Install/Update $component? [y/N]: " response
-        if [[ "${response,,}" == "y" ]]; then
-            return 0
-        else
-            return 1
-        fi
+    if [ "$2" = true ]; then
+        log "$1 detected or update available."
+        read -p "Install/Update $1? [y/N]: " response
+        [ "${response,,}" = "y" ]
+        return $?
     fi
     return 0
 }
 
-# Simplified template rendering (copy static template files)
+# Install yq for YAML parsing
+install_yq() {
+    if [ ! -f "/usr/bin/yq" ]; then
+        log "Installing yq to parse YAML configuration..."
+        wget -q -O /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_arm64
+        chmod +x /usr/bin/yq
+    fi
+}
+
+# Function to load YAML configuration using yq
+load_config() {
+    if [ ! -f "$CONFIG_PATH" ]; then
+        log "Config not found at $CONFIG_PATH"
+        exit 1
+    fi
+    
+    install_yq
+    
+    # Extract configuration values
+    HOSTNAME=$(yq '.project.hostname' "$CONFIG_PATH")
+    
+    # Extract MQTT settings
+    MQTT_HOST=$(yq '.project.mqtt.host' "$CONFIG_PATH")
+    MQTT_PORT=$(yq '.project.mqtt.port' "$CONFIG_PATH")
+    MQTT_USERNAME=$(yq '.project.mqtt.username' "$CONFIG_PATH")
+    MQTT_PASSWORD=$(yq '.project.mqtt.password' "$CONFIG_PATH")
+    
+    # Extract VictoriaMetrics settings
+    VM_HOST=$(yq '.project.victoria_metrics.host' "$CONFIG_PATH")
+    VM_PORT=$(yq '.project.victoria_metrics.port' "$CONFIG_PATH")
+    
+    log "Configuration loaded successfully."
+}
+
+# Function to render templates from the templates directory
 render_template() {
-    local template_name=$1
-    local dest=$2
-    local temp_dir=$3
-    local temp_file="$temp_dir/$(basename "$dest")"
-    cp "$TEMPLATES_DIR/$template_name" "$temp_file"
+    local template_path="$TEMPLATES_DIR/$1"
+    local dest_path="$2"
+    local temp_file="/tmp/$(basename "$dest_path")"
+    
+    if [ ! -f "$template_path" ]; then
+        log "Template $template_path not found."
+        return 1
+    fi
+    
+    # Copy template to temp file
+    cp "$template_path" "$temp_file"
+    
+    # Replace placeholders with values
+    sed -i "s/{{hostname}}/$HOSTNAME/g" "$temp_file"
+    sed -i "s/{{mqtt_host}}/$MQTT_HOST/g" "$temp_file"
+    sed -i "s/{{mqtt_port}}/$MQTT_PORT/g" "$temp_file"
+    sed -i "s/{{mqtt_username}}/$MQTT_USERNAME/g" "$temp_file"
+    sed -i "s/{{mqtt_password}}/$MQTT_PASSWORD/g" "$temp_file"
+    sed -i "s/{{vm_host}}/$VM_HOST/g" "$temp_file"
+    sed -i "s/{{vm_port}}/$VM_PORT/g" "$temp_file"
+    
     echo "$temp_file"
 }
 
-# Update file if changed
+# Function to update a file if it has changed
 update_file_if_changed() {
-    local template_name=$1
-    local dest=$2
-    local temp_dir=$3
-    local temp_file
-    temp_file=$(render_template "$template_name" "$dest" "$temp_dir")
-    local temp_hash
-    local dest_hash
-    temp_hash=$(file_hash "$temp_file")
-    dest_hash=$(file_hash "$dest")
+    local template_name="$1"
+    local dest_path="$2"
+    
+    local temp_file=$(render_template "$template_name" "$dest_path")
+    if [ -z "$temp_file" ]; then
+        return 1
+    fi
+    
+    local temp_hash=$(file_hash "$temp_file")
+    local dest_hash=$(file_hash "$dest_path")
+    
     if [ "$temp_hash" != "$dest_hash" ]; then
-        log "Updating $dest..."
-        mv "$temp_file" "$dest"
-        chown root:root "$dest"
-        chmod 644 "$dest"
+        log "Updating $dest_path..."
+        mv "$temp_file" "$dest_path"
+        chown root:root "$dest_path"
+        chmod 644 "$dest_path"
         return 0
     else
-        log "$dest is up-to-date, skipping."
+        log "$dest_path is up-to-date, skipping."
+        rm -f "$temp_file"
         return 1
     fi
 }
 
-# Setup WiFi Access Point
+# Function to set up WiFi Access Point
 setup_wifi_ap() {
-    local temp_dir=$1
-    local update_mode=$2
+    local update_mode=$1
     log "Configuring WiFi AP..."
+    
     # Install required packages
     for pkg in hostapd dnsmasq avahi-daemon; do
-        if [ "$update_mode" = "true" ] && ! prompt_overwrite "$pkg" "$(is_package_installed "$pkg" && echo true || echo false)"; then
+        if [ "$update_mode" = true ] && ! prompt_overwrite "$pkg" "$(is_package_installed "$pkg")"; then
             log "Skipping $pkg installation/update."
             continue
         fi
+        
         if is_package_installed "$pkg"; then
             log "$pkg is installed, skipping."
         else
             apt update && apt install -y "$pkg"
         fi
     done
-
+    
     # Stop services before configuration
     for service in hostapd dnsmasq avahi-daemon; do
         systemctl unmask "$service" 2>/dev/null || true
         systemctl stop "$service" 2>/dev/null || true
     done
-
+    
+    # Create backup of network configuration
+    log "Creating backup of network configuration..."
+    local backup_dir="$HOME_DIR/sysohub_backups/network_$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$backup_dir"
+    
+    for file in /etc/dhcpcd.conf /etc/hostapd/hostapd.conf /etc/dnsmasq.conf /etc/default/hostapd; do
+        if [ -f "$file" ]; then
+            cp "$file" "$backup_dir/$(basename "$file")" || true
+        fi
+    done
+    
     # Update configuration files
-    configs_changed=0
-    update_file_if_changed "dhcpcd.conf.j2" "/etc/dhcpcd.conf" "$temp_dir" && configs_changed=1
-    update_file_if_changed "hostapd.conf.j2" "/etc/hostapd/hostapd.conf" "$temp_dir" && configs_changed=1
-    update_file_if_changed "dnsmasq.conf.j2" "/etc/dnsmasq.conf" "$temp_dir" && configs_changed=1
-
-    # Update /etc/default/hostapd
+    configs_changed=false
+    for template in dhcpcd.conf.j2 hostapd.conf.j2 dnsmasq.conf.j2; do
+        dest_path=""
+        case "$template" in
+            dhcpcd.conf.j2) dest_path="/etc/dhcpcd.conf" ;;
+            hostapd.conf.j2) dest_path="/etc/hostapd/hostapd.conf" ;;
+            dnsmasq.conf.j2) dest_path="/etc/dnsmasq.conf" ;;
+        esac
+        
+        if update_file_if_changed "$template" "$dest_path"; then
+            configs_changed=true
+        fi
+    done
+    
+    # Configure hostapd defaults
     default_hostapd="/etc/default/hostapd"
-    default_content='DAEMON_CONF="/etc/hostapd/hostapd.conf"'
-    if [ "$(file_hash "$default_hostapd")" != "$(echo "$default_content" | sha256sum | cut -d ' ' -f 1)" ]; then
+    if [ "$(file_hash "$default_hostapd")" != "$(echo -n 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' | sha256sum | cut -d' ' -f1)" ]; then
         log "Updating /etc/default/hostapd..."
-        echo "$default_content" > "$default_hostapd"
+        echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > "$default_hostapd"
     fi
-
-    # Update hostname
-    if [ "$(cat /etc/hostname)" != "$HOSTNAME" ]; then
-        log "Updating hostname to $HOSTNAME..."
-        echo "$HOSTNAME" > /etc/hostname
-        sed -i "s/127.0.0.1.*/127.0.1.1 $HOSTNAME/" /etc/hosts
+    
+    # Create a script to update hostname at the end, to avoid network interruption
+    if [ -n "$HOSTNAME" ]; then
+        local current_hostname=$(cat /etc/hostname 2>/dev/null || echo "")
+        if [ "$current_hostname" != "$HOSTNAME" ]; then
+            log "Will update hostname to $HOSTNAME at the end of setup..."
+            echo "#!/bin/bash" > /tmp/update_hostname.sh
+            echo "echo \"$HOSTNAME\" > /etc/hostname" >> /tmp/update_hostname.sh
+            echo "sed -i \"s/127.0.0.1.*/127.0.1.1 $HOSTNAME/\" /etc/hosts" >> /tmp/update_hostname.sh
+            chmod +x /tmp/update_hostname.sh
+        fi
     fi
-
+    
     # Enable IP forwarding
-    if [ "$(sysctl -n net.ipv4.ip_forward)" != "1" ]; then
+    ip_forward=$(sysctl net.ipv4.ip_forward | grep -q "= 1" && echo true || echo false)
+    if [ "$ip_forward" != "true" ]; then
         log "Enabling IP forwarding..."
         sysctl -w net.ipv4.ip_forward=1
+        echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-sysohub.conf
     fi
-
-    # Enable and start services
+    
+    # Enable services
     for service in hostapd dnsmasq avahi-daemon; do
         if is_service_enabled "$service"; then
             log "$service is enabled, skipping."
         else
-            systemctl enable "$service" 2>/dev/null || true
-        fi
-        if is_service_running "$service" && [ "$configs_changed" -eq 0 ]; then
-            log "$service is running, skipping start."
-        else
-            log "Starting $service..."
-            systemctl start "$service" 2>/dev/null || true
+            systemctl enable "$service" || true
         fi
     done
+    
+    # Services will be started at the end of the setup to avoid network interruption
+    log "WiFi AP configuration complete, services will be started at the end of setup."
 }
 
-# Install Mosquitto
+# Function to install and configure Mosquitto MQTT broker
 install_mosquitto() {
-    local temp_dir=$1
-    local update_mode=$2
+    local update_mode=$1
     log "Installing Mosquitto..."
-    if [ "$update_mode" = "true" ] && ! prompt_overwrite "Mosquitto" "$(is_package_installed "mosquitto" && echo true || echo false)"; then
+    
+    if [ "$update_mode" = true ] && ! prompt_overwrite "Mosquitto" "$(is_package_installed "mosquitto")"; then
         log "Skipping Mosquitto installation/update."
         return
     fi
+    
     if is_package_installed "mosquitto"; then
         log "Mosquitto is installed, skipping."
     else
         apt install -y mosquitto mosquitto-clients
     fi
-
-    # Update Mosquitto configuration
-    configs_changed=0
-    update_file_if_changed "mosquitto.conf.j2" "/etc/mosquitto/mosquitto.conf" "$temp_dir" && configs_changed=1
-
-    # Update Mosquitto password
+    
+    # Update configuration
+    configs_changed=false
+    if update_file_if_changed "mosquitto.conf.j2" "/etc/mosquitto/mosquitto.conf"; then
+        configs_changed=true
+    fi
+    
+    # Update password file
     passwd_file="/etc/mosquitto/passwd"
     passwd_content="$MQTT_USERNAME:$MQTT_PASSWORD"
-    if [ "$(file_hash "$passwd_file")" != "$(echo "$passwd_content" | sha256sum | cut -d ' ' -f 1)" ]; then
+    passwd_hash=$(echo -n "$passwd_content" | sha256sum | cut -d' ' -f1)
+    
+    if [ "$(file_hash "$passwd_file")" != "$passwd_hash" ]; then
         log "Updating Mosquitto password..."
         echo "$passwd_content" > "$passwd_file"
         mosquitto_passwd -U "$passwd_file"
     fi
-
-    # Enable and start Mosquitto service
+    
+    # Enable and start service
     if is_service_enabled "mosquitto"; then
         log "Mosquitto service is enabled, skipping."
     else
-        systemctl enable mosquitto 2>/dev/null || true
+        systemctl enable mosquitto || true
     fi
-    if is_service_running "mosquitto" && [ "$configs_changed" -eq 0 ]; then
-        log "Mosquitto is running, skipping start."
-    else
+    
+    if [ "$configs_changed" = true ] || ! is_service_running "mosquitto"; then
         log "Starting Mosquitto..."
-        systemctl start mosquitto 2>/dev/null || true
+        systemctl restart mosquitto || true
+    else
+        log "Mosquitto is running, skipping start."
     fi
 }
 
-# Install VictoriaMetrics
+# Function to install and configure VictoriaMetrics
 install_victoria_metrics() {
-    local temp_dir=$1
-    local update_mode=$2
+    local update_mode=$1
     log "Installing VictoriaMetrics..."
+    
     vm_binary="/usr/local/bin/victoria-metrics"
-    if [ "$update_mode" = "true" ] && ! prompt_overwrite "VictoriaMetrics" "$([ -f "$vm_binary" ] && echo true || echo false)"; then
+    
+    if [ "$update_mode" = true ] && ! prompt_overwrite "VictoriaMetrics" "$([ -f "$vm_binary" ] && echo true || echo false)"; then
         log "Skipping VictoriaMetrics installation/update."
         return
     fi
-    if [ -x "$vm_binary" ]; then
+    
+    if [ -f "$vm_binary" ] && [ -x "$vm_binary" ]; then
         log "VictoriaMetrics binary exists, skipping download."
     else
-        rm -f "$vm_binary" /usr/local/bin/victoria-metrics-prod 2>/dev/null || true
+        rm -f "$vm_binary" "/usr/local/bin/victoria-metrics-prod" || true
         mkdir -p /usr/local/bin
         chmod 755 /usr/local/bin
+        
         vm_url="https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v1.115.0/victoria-metrics-linux-arm64-v1.115.0.tar.gz"
         vm_tar="/tmp/vm.tar.gz"
+        
         log "Downloading VictoriaMetrics from $vm_url..."
         wget "$vm_url" -O "$vm_tar"
+        
         if [ ! -f "$vm_tar" ]; then
             log "Failed to download VictoriaMetrics."
-            exit 1
+            return 1
         fi
+        
         log "Extracting VictoriaMetrics binary..."
         tar -xzf "$vm_tar" -C /usr/local/bin
+        
         prod_binary="/usr/local/bin/victoria-metrics-prod"
         if [ -f "$prod_binary" ] && [ ! -f "$vm_binary" ]; then
             log "Renaming $prod_binary to $vm_binary..."
             mv "$prod_binary" "$vm_binary"
         fi
+        
         if [ ! -f "$vm_binary" ]; then
             log "Failed to extract VictoriaMetrics to $vm_binary."
-            exit 1
+            return 1
         fi
+        
         chmod +x "$vm_binary"
         rm -f "$vm_tar"
     fi
-
-    # Update VictoriaMetrics configuration
-    update_file_if_changed "victoria_metrics.yml.j2" "/etc/victoria-metrics.yml" "$temp_dir"
-
-    # Create victoria-metrics user
-    if id victoria-metrics >/dev/null 2>&1; then
-        log "victoria-metrics user exists, skipping."
+    
+    # Update VM configuration
+    update_file_if_changed "victoria_metrics.yml.j2" "/etc/victoria-metrics.yml"
+    
+    # Create victoria-metrics user if it doesn't exist
+    if ! id victoria-metrics &>/dev/null; then
+        log "Creating victoria-metrics user..."
+        useradd -r victoria-metrics || true
     else
-        useradd -r victoria-metrics
+        log "victoria-metrics user exists, skipping."
     fi
+    
+    # Set permissions
     chown victoria-metrics:victoria-metrics "$vm_binary"
     mkdir -p /var/lib/victoria-metrics
     chown victoria-metrics:victoria-metrics /var/lib/victoria-metrics
-
-    # Configure VictoriaMetrics service
+    
+    # Create service file
     vm_service="/etc/systemd/system/victoria-metrics.service"
-    service_content=$(cat << EOF
-[Unit]
+    service_content="[Unit]
 Description=VictoriaMetrics
 After=network.target
 
@@ -319,67 +387,166 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
-)
-    if [ "$(file_hash "$vm_service")" != "$(echo "$service_content" | sha256sum | cut -d ' ' -f 1)" ]; then
+"
+    
+    service_hash=$(echo -n "$service_content" | sha256sum | cut -d' ' -f1)
+    if [ "$(file_hash "$vm_service")" != "$service_hash" ]; then
         log "Updating VictoriaMetrics service..."
         echo "$service_content" > "$vm_service"
         systemctl daemon-reload
     fi
-
-    # Enable and start VictoriaMetrics service
+    
+    # Enable and start service
     if is_service_enabled "victoria-metrics"; then
         log "VictoriaMetrics service is enabled, skipping."
     else
-        systemctl enable victoria-metrics 2>/dev/null || true
+        systemctl enable victoria-metrics || true
     fi
-    if is_service_running "victoria-metrics"; then
-        log "VictoriaMetrics is running, skipping start."
-    else
+    
+    if ! is_service_running "victoria-metrics"; then
         log "Starting VictoriaMetrics..."
-        systemctl start victoria-metrics 2>/dev/null || true
+        systemctl start victoria-metrics || true
+    else
+        log "VictoriaMetrics is running, skipping start."
     fi
 }
 
-# Install Node-RED
+# Function to install and configure Node-RED with proper error handling
 install_node_red() {
-    local temp_dir=$1
-    local update_mode=$2
+    local update_mode=$1
     log "Installing Node-RED..."
+    
     # Check if Node-RED is installed
-    if [ "$update_mode" = "true" ] && ! prompt_overwrite "Node-RED" "$(sudo -u "$USER" which node-red >/dev/null 2>&1 && echo true || echo false)"; then
+    node_red_installed=false
+    node_path=""
+    node_red_path=""
+    
+    # Check for node executable
+    node_path=$(which node 2>/dev/null)
+    if [ -z "$node_path" ]; then
+        log "Node.js is not installed or not in PATH"
+    else
+        log "Found Node.js at $node_path"
+    fi
+    
+    # Check for node-red executable as the user
+    node_red_path=$(sudo -u "$USER" bash -c 'which node-red 2>/dev/null || echo ""')
+    if [ -n "$node_red_path" ]; then
+        node_red_installed=true
+        log "Found Node-RED at $node_red_path"
+    else
+        log "Node-RED is not installed or not in PATH"
+    fi
+    
+    if [ "$update_mode" = true ] && ! prompt_overwrite "Node-RED" "$node_red_installed"; then
         log "Skipping Node-RED installation/update."
         return
     fi
-    if sudo -u "$USER" which node-red >/dev/null 2>&1; then
-        log "Node-RED is installed, cleaning up for fresh install..."
+    
+    # If updating or reinstalling, clean up first
+    if [ "$node_red_installed" = true ]; then
+        log "Stopping and disabling existing Node-RED service..."
         systemctl stop nodered 2>/dev/null || true
         systemctl disable nodered 2>/dev/null || true
         rm -f /lib/systemd/system/nodered.service 2>/dev/null || true
-        systemctl daemon-reload 2>/dev/null || true
-        rm -rf /usr/bin/node-red* /usr/local/bin/node-red* /root/.node-red "$NODE_RED_DIR" 2>/dev/null || true
+        rm -f /etc/systemd/system/nodered.service 2>/dev/null || true
+        systemctl daemon-reload
     fi
-
-    # Install Node.js and Node-RED
-    log "Ensuring Node.js is installed..."
-    apt update
-    apt install -y nodejs npm
-    log "Installing Node-RED using npm as user $USER..."
-    sudo -u "$USER" npm install -g --unsafe-perm node-red
-
+    
+    # Install Node.js if not present
+    if [ -z "$node_path" ]; then
+        log "Installing Node.js..."
+        # Use NodeSource repository for newer Node.js version
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        apt install -y nodejs
+        node_path=$(which node)
+        if [ -z "$node_path" ]; then
+            log "Failed to install Node.js"
+            return 1
+        fi
+        log "Node.js installed at $node_path"
+    fi
+    
+    # Install Node-RED globally
+    log "Installing Node-RED globally..."
+    npm install -g --unsafe-perm node-red
+    node_red_path=$(which node-red)
+    if [ -z "$node_red_path" ]; then
+        log "Failed to install Node-RED"
+        return 1
+    fi
+    log "Node-RED installed at $node_red_path"
+    
     # Ensure Node-RED directory exists with correct permissions
     mkdir -p "$NODE_RED_DIR"
     chown "$USER:$USER" "$NODE_RED_DIR"
     chmod -R u+rw "$NODE_RED_DIR"
-
+    
+    # Create optimized Node-RED settings file
+    log "Creating optimized Node-RED settings..."
+    cat > "$NODE_RED_DIR/settings.js" << 'EOL'
+// Node-RED Settings file - optimized for resource-constrained devices
+module.exports = {
+    // Flowfile location
+    flowFile: 'flows.json',
+    
+    // Limit memory usage
+    nodeMaxMessageBufferLength: 50,
+    
+    // Configure user directory
+    userDir: process.env.NODE_RED_HOME,
+    
+    // Logging settings
+    logging: {
+        console: {
+            level: "info",
+            metrics: false,
+            audit: false
+        }
+    },
+    
+    // Disable unused nodes to save memory
+    nodesExcludes: [
+        'node-red-node-email',
+        'node-red-node-twitter',
+        'node-red-node-rbe'
+    ],
+    
+    // Reduce websocket ping interval to save resources
+    webSocketKeepAliveTime: 60000,
+    
+    // Reduce context store memory usage
+    contextStorage: {
+        default: { module: 'memory', config: { flushInterval: 30 } },
+    },
+    
+    // Limit concurrent HTTP requests
+    httpRequestTimeout: 60000,
+    httpNodeMaxConcurrentRequests: 10,
+    
+    // Function global context
+    functionGlobalContext: {
+        // Add global context items here
+    }
+};
+EOL
+    
+    chown "$USER:$USER" "$NODE_RED_DIR/settings.js"
+    chmod 644 "$NODE_RED_DIR/settings.js"
+    
     # Install node-red-contrib-victoriametrics
     log "Installing node-red-contrib-victoriametrics..."
-    sudo -u "$USER" bash -c "cd $NODE_RED_DIR && npm install node-red-contrib-victoriametrics"
-
-    # Configure Node-RED flow
+    if ! su -c "cd $NODE_RED_DIR && npm install node-red-contrib-victoriametrics" - "$USER"; then
+        log "Warning: Failed to install node-red-contrib-victoriametrics, but continuing"
+    fi
+    
+    # Configure Node-RED flow for MQTT to VictoriaMetrics
+    log "Configuring Node-RED flows..."
     flows_file="$NODE_RED_DIR/flows.json"
     vm_url="http://$VM_HOST:$VM_PORT/api/v1/write"
-    cat > "$flows_file" << EOF
+    
+    # Create flows.json with basic MQTT to VictoriaMetrics configuration
+    cat > "$flows_file" << EOL
 [
     {
         "id": "mqtt-to-vm",
@@ -410,7 +577,7 @@ install_node_red() {
         "type": "function",
         "z": "mqtt-to-vm",
         "name": "Format for VictoriaMetrics",
-        "func": "// Format MQTT data into InfluxDB line protocol for VictoriaMetrics\\nvar deviceID = msg.payload.deviceID || 'unknown';\\nvar timestamp = (msg.payload.timestamp || Math.floor(Date.now() / 1000)) * 1000; // Ensure timestamp in milliseconds\\nvar lines = [];\\nvar errors = [];\\n\\n// Define measurements\\nvar measurements = [\\n    { name: 'temperature', value: parseFloat(msg.payload.temperature) },\\n    { name: 'distance', value: parseFloat(msg.payload.distance) },\\n    { name: 'pH', value: parseFloat(msg.payload.pH) },\\n    { name: 'ORP', value: parseFloat(msg.payload.ORP) },\\n    { name: 'TDS', value: parseFloat(msg.payload.TDS) },\\n    { name: 'EC', value: parseFloat(msg.payload.EC) }\\n];\\n\\n// Validate and create a line for each measurement\\nmeasurements.forEach(function(m) {\\n    if (typeof msg.payload[m.name] === 'undefined') {\\n        errors.push('Missing field: ' + m.name);\\n    } else if (isNaN(m.value)) {\\n        errors.push('Invalid value for ' + m.name + ': ' + msg.payload[m.name]);\\n    } else {\\n        var line = \`\${m.name},deviceID=\${deviceID} value=\${m.value} \${timestamp}\`;\\n        lines.push(line);\\n    }\\n});\\n\\n// Log errors if any\\nif (errors.length > 0) {\\n    node.warn('Errors in MQTT data: ' + errors.join('; '));\\n}\\n\\n// Join lines with newlines\\nmsg.payload = lines.join('\\\\n');\\nmsg.headers = { 'Content-Type': 'text/plain' };\\nreturn msg;",
+        "func": "// Format MQTT data into InfluxDB line protocol for VictoriaMetrics\\nvar deviceID = msg.payload.deviceID || 'unknown';\\nvar timestamp = (msg.payload.timestamp || Math.floor(Date.now() / 1000)) * 1000; // Ensure timestamp in milliseconds\\nvar lines = [];\\nvar errors = [];\\n\\n// Define measurements\\nvar measurements = [\\n    { name: 'temperature', value: parseFloat(msg.payload.temperature) },\\n    { name: 'distance', value: parseFloat(msg.payload.distance) },\\n    { name: 'pH', value: parseFloat(msg.payload.pH) },\\n    { name: 'ORP', value: parseFloat(msg.payload.ORP) },\\n    { name: 'TDS', value: parseFloat(msg.payload.TDS) },\\n    { name: 'EC', value: parseFloat(msg.payload.EC) }\\n];\\n\\n// Validate and create a line for each measurement\\nmeasurements.forEach(function(m) {\\n    if (typeof msg.payload[m.name] === 'undefined') {\\n        errors.push('Missing field: ' + m.name);\\n    } else if (isNaN(m.value)) {\\n        errors.push('Invalid value for ' + m.name + ': ' + msg.payload[m.name]);\\n    } else {\\n        var line = `\${m.name},deviceID=\${deviceID} value=\${m.value} \${timestamp}`;\\n        lines.push(line);\\n    }\\n});\\n\\n// Log errors if any\\nif (errors.length > 0) {\\n    node.warn('Errors in MQTT data: ' + errors.join('; '));\\n}\\n\\n// Join lines with newlines\\nmsg.payload = lines.join('\\\\n');\\nmsg.headers = { 'Content-Type': 'text/plain' };\\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "initialize": "",
@@ -428,7 +595,7 @@ install_node_red() {
         "method": "POST",
         "ret": "txt",
         "paytoqs": "ignore",
-        "url": "$vm_url",
+        "url": "${vm_url}",
         "persist": false,
         "authType": "",
         "x": 500,
@@ -455,8 +622,8 @@ install_node_red() {
         "id": "mqtt-broker",
         "type": "mqtt-broker",
         "name": "MQTT Broker",
-        "broker": "$MQTT_HOST",
-        "port": "$MQTT_PORT",
+        "broker": "${MQTT_HOST}",
+        "port": "${MQTT_PORT}",
         "clientid": "",
         "autoConnect": true,
         "usetls": false,
@@ -473,22 +640,32 @@ install_node_red() {
         "willQos": "0",
         "willPayload": "",
         "userProps": "",
-        "sessionExpiry": "",
-        "credentials": {
-            "user": "$MQTT_USERNAME",
-            "password": "$MQTT_PASSWORD"
-        }
+        "sessionExpiry": ""
     }
 ]
-EOF
+EOL
+    
     chown "$USER:$USER" "$flows_file"
     chmod 644 "$flows_file"
-
-    # Update Node-RED service
+    
+    # Create credentials file for MQTT
+    credentials_file="$NODE_RED_DIR/flows_cred.json"
+    cat > "$credentials_file" << EOL
+{
+    "mqtt-broker": {
+        "user": "${MQTT_USERNAME}",
+        "password": "${MQTT_PASSWORD}"
+    }
+}
+EOL
+    
+    chown "$USER:$USER" "$credentials_file"
+    chmod 600 "$credentials_file"
+    
+    # Create service file
+    log "Creating Node-RED service..."
     nodered_service="/lib/systemd/system/nodered.service"
-    node_red_path=$(sudo -u "$USER" which node-red || echo "/usr/local/bin/node-red")
-    service_content=$(cat << EOF
-[Unit]
+    service_content="[Unit]
 Description=Node-RED graphical event wiring tool
 After=network.target
 
@@ -497,67 +674,83 @@ Type=simple
 User=$USER
 Group=$USER
 WorkingDirectory=$NODE_RED_DIR
-Environment="NODE_RED_HOME=$NODE_RED_DIR"
-ExecStart=$node_red_path --userDir $NODE_RED_DIR --max-old-space-size=512
+Environment=\"NODE_RED_HOME=$NODE_RED_DIR\"
+Environment=\"NODE_OPTIONS=--max_old_space_size=512\"
+ExecStart=$node_path $node_red_path --userDir $NODE_RED_DIR --max-old-space-size=512
 Restart=on-failure
 KillSignal=SIGINT
 SyslogIdentifier=Node-RED
 
 [Install]
 WantedBy=multi-user.target
-EOF
-)
-    if [ "$(file_hash "$nodered_service")" != "$(echo "$service_content" | sha256sum | cut -d ' ' -f 1)" ]; then
-        log "Updating Node-RED service..."
+"
+    
+    service_hash=$(echo -n "$service_content" | sha256sum | cut -d' ' -f1)
+    if [ "$(file_hash "$nodered_service")" != "$service_hash" ]; then
+        log "Updating Node-RED service file..."
         echo "$service_content" > "$nodered_service"
         systemctl daemon-reload
     fi
-
-    # Enable and start Node-RED service
+    
+    # Enable service
     if is_service_enabled "nodered"; then
-        log "Node-RED service is enabled, skipping."
+        log "Node-RED service is already enabled, skipping."
     else
-        systemctl enable nodered 2>/dev/null || true
+        log "Enabling Node-RED service..."
+        systemctl enable nodered || true
     fi
+    
+    # Start service
+    log "Starting Node-RED service..."
+    systemctl restart nodered || true
+    
+    # Verify service is running
+    sleep 5
     if is_service_running "nodered"; then
-        log "Node-RED is running, restarting to apply changes..."
-        systemctl restart nodered 2>/dev/null || true
+        log "Node-RED is running successfully."
     else
-        log "Starting Node-RED..."
-        systemctl start nodered 2>/dev/null || true
+        log "Warning: Node-RED service failed to start. Check with: journalctl -u nodered -n 50"
+        journalctl -u nodered -n 50 >> "$SCRIPT_LOG"
     fi
 }
 
-# Install Dashboard
+# Function to install and configure the Dashboard
 install_dashboard() {
-    local temp_dir=$1
-    local update_mode=$2
+    local update_mode=$1
     log "Installing Dashboard..."
-    if [ "$update_mode" = "true" ] && ! prompt_overwrite "Dashboard dependencies" "$(is_package_installed "python3-flask" && echo true || echo false)"; then
+    
+    flask_installed=$(is_package_installed "python3-flask")
+    if [ "$update_mode" = true ] && ! prompt_overwrite "Dashboard dependencies" "$flask_installed"; then
         log "Skipping dashboard dependencies installation/update."
         return
     fi
+    
     apt update && apt install -y python3-flask python3-socketio python3-paho-mqtt python3-requests python3-eventlet python3-psutil python3-gunicorn
-    dashboard_file="$INSTALL_DIR/flask_app.py"
-    update_file_if_changed "flask_app.py" "$dashboard_file" "$temp_dir"
-    chown "$USER:$USER" "$dashboard_file"
-    chmod 644 "$dashboard_file"
-
-    # Fix index.html if needed
-    index_html="$INSTALL_DIR/static/index.html"
-    if [ -f "$index_html" ] && grep -q 'tojson(pretty=true)' "$index_html"; then
-        log "Fixing Jinja2 template in index.html..."
-        sed 's/tojson(pretty=true)/tojson | safe/' "$index_html" > "$temp_dir/index.html"
-        mv "$temp_dir/index.html" "$index_html"
-        chown "$USER:$USER" "$index_html"
-        chmod 644 "$index_html"
+    
+    # Update dashboard files using templates
+    if [ -f "$TEMPLATES_DIR/flask_app.py" ]; then
+        update_file_if_changed "flask_app.py" "$INSTALL_DIR/flask_app.py"
+        chown "$USER:$USER" "$INSTALL_DIR/flask_app.py"
+        chmod 644 "$INSTALL_DIR/flask_app.py"
+    else
+        log "Warning: flask_app.py template not found, skipping."
     fi
-
-    # Configure dashboard service
-    dashboard_service="/etc/systemd/system/syhub-dashboard.service"
-    service_content=$(cat << EOF
-[Unit]
-Description=syhub Dashboard
+    
+    # Fix Jinja2 template in index.html if needed
+    index_html="$INSTALL_DIR/static/index.html"
+    if [ -f "$index_html" ]; then
+        if grep -q "tojson(pretty=true)" "$index_html"; then
+            log "Fixing Jinja2 template in index.html..."
+            sed -i 's/tojson(pretty=true)/tojson | safe/g' "$index_html"
+            chown "$USER:$USER" "$index_html"
+            chmod 644 "$index_html"
+        fi
+    fi
+    
+    # Create dashboard service
+    dashboard_service="/etc/systemd/system/sysohub-dashboard.service"
+    service_content="[Unit]
+Description=sysohub Dashboard
 After=network.target
 
 [Service]
@@ -569,134 +762,32 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-EOF
-)
-    if [ "$(file_hash "$dashboard_service")" != "$(echo "$service_content" | sha256sum | cut -d ' ' -f 1)" ]; then
+"
+    
+    service_hash=$(echo -n "$service_content" | sha256sum | cut -d' ' -f1)
+    if [ "$(file_hash "$dashboard_service")" != "$service_hash" ]; then
         log "Updating Dashboard service..."
         echo "$service_content" > "$dashboard_service"
         systemctl daemon-reload
     fi
-
-    # Enable and start dashboard service
-    if is_service_enabled "syhub-dashboard"; then
+    
+    # Enable and start service
+    if is_service_enabled "sysohub-dashboard"; then
         log "Dashboard service is enabled, skipping."
     else
-        systemctl enable syhub-dashboard 2>/dev/null || true
+        systemctl enable sysohub-dashboard || true
     fi
-    if is_service_running "syhub-dashboard"; then
+    
+    if is_service_running "sysohub-dashboard"; then
         log "Dashboard is running, restarting to apply changes..."
-        systemctl restart syhub-dashboard 2>/dev/null || true
+        systemctl restart sysohub-dashboard || true
     else
         log "Starting Dashboard..."
-        systemctl start syhub-dashboard 2>/dev/null || true
+        systemctl start sysohub-dashboard || true
     fi
 }
 
-# Setup function
-setup() {
-    log "Setting up a fresh Raspberry Pi OS installation..."
-    # Set permissions for the script itself
-    syhub_script="$INSTALL_DIR/scripts/syhub.sh"
-    log "Setting permissions for $syhub_script..."
-    chown "$USER:$USER" "$syhub_script"
-    chmod 755 "$syhub_script"
-
-    # Load configuration
-    load_config
-
-    # Update system packages
-    apt update && apt upgrade -y
-
-    # Create a temporary directory
-    temp_dir=$(mktemp -d)
-    trap 'rm -rf "$temp_dir"' EXIT
-
-    # Run setup tasks in parallel using background jobs
-    setup_wifi_ap "$temp_dir" "false" &
-    install_mosquitto "$temp_dir" "false" &
-    install_victoria_metrics "$temp_dir" "false" &
-    install_node_red "$temp_dir" "false" &
-    install_dashboard "$temp_dir" "false" &
-
-    # Wait for all background jobs to complete
-    wait
-
-    log "Setup complete. Rebooting..."
-    reboot
-}
-
-# Update function
-update() {
-    log "Updating components..."
-    # Load configuration
-    load_config
-
-    # Create a temporary directory
-    temp_dir=$(mktemp -d)
-    trap 'rm -rf "$temp_dir"' EXIT
-
-    # Update system packages
-    if prompt_overwrite "System packages" "true"; then
-        apt update && apt upgrade -y
-    fi
-
-    # Update components with prompts
-    setup_wifi_ap "$temp_dir" "true"
-    install_mosquitto "$temp_dir" "true"
-    install_victoria_metrics "$temp_dir" "true"
-    install_node_red "$temp_dir" "true"
-    install_dashboard "$temp_dir" "true"
-
-    log "Update complete. Services have been restarted."
-}
-
-# Purge function
-purge() {
-    log "Purging all PlantOMIO components..."
-    # Stop all services
-    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered syhub-dashboard; do
-        systemctl stop "$service" 2>/dev/null || true
-        systemctl disable "$service" 2>/dev/null || true
-        rm -f "/etc/systemd/system/$service.service" 2>/dev/null || true
-        rm -f "/lib/systemd/system/$service.service" 2>/dev/null || true
-    done
-
-    # Remove packages
-    for pkg in hostapd dnsmasq avahi-daemon mosquitto mosquitto-clients nodejs npm \
-               python3-flask python3-socketio python3-paho-mqtt python3-requests python3-eventlet python3-psutil python3-gunicorn; do
-        apt remove -y "$pkg" 2>/dev/null || true
-        apt purge -y "$pkg" 2>/dev/null || true
-    done
-
-    # Remove VictoriaMetrics
-    rm -rf /usr/local/bin/victoria-metrics /var/lib/victoria-metrics /etc/victoria-metrics.yml 2>/dev/null || true
-    userdel victoria-metrics 2>/dev/null || true
-
-    # Remove Node-RED
-    rm -rf /usr/bin/node-red* /usr/local/bin/node-red* /root/.node-red "$NODE_RED_DIR" 2>/dev/null || true
-
-    # Remove configuration files
-    for file in /etc/dhcpcd.conf /etc/hostapd/hostapd.conf /etc/dnsmasq.conf /etc/default/hostapd \
-                /etc/mosquitto/mosquitto.conf /etc/mosquitto/passwd /etc/hostname /etc/hosts; do
-        if [ -f "$file" ]; then
-            mv "$file" "$file.bak" 2>/dev/null || true
-        fi
-    done
-
-    # Reset IP forwarding
-    sysctl -w net.ipv4.ip_forward=0 2>/dev/null || true
-
-    # Remove project directory
-    rm -rf "$INSTALL_DIR" 2>/dev/null || true
-
-    # Clean up apt cache
-    apt autoremove -y && apt autoclean 2>/dev/null || true
-
-    log "Purge complete. System is in a near-fresh state. Rebooting..."
-    reboot
-}
-
-# Backup function
+# Function to create a backup
 backup() {
     log "Creating backup..."
     backup_dir="$HOME_DIR/backups"
@@ -707,18 +798,169 @@ backup() {
     log "Backup created at $backup_file"
 }
 
-# Status function
+# Function to display service status
 status() {
     log "Service status:"
-    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered syhub-dashboard; do
+    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered sysohub-dashboard; do
         systemctl status "$service" --no-pager || true
     done
 }
 
-# Main function
+# Function to purge all components
+purge() {
+    log "Purging all components..."
+    
+    # Stop all services
+    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered sysohub-dashboard; do
+        systemctl stop "$service" 2>/dev/null || true
+        systemctl disable "$service" 2>/dev/null || true
+        rm -f "/etc/systemd/system/$service.service" 2>/dev/null || true
+        rm -f "/lib/systemd/system/$service.service" 2>/dev/null || true
+    done
+    systemctl daemon-reload
+    
+    # Remove packages
+    apt remove -y hostapd dnsmasq avahi-daemon mosquitto mosquitto-clients nodejs npm \
+               python3-flask python3-socketio python3-paho-mqtt python3-requests python3-eventlet python3-psutil || true
+    apt autoremove -y || true
+    
+    # Remove VictoriaMetrics
+    rm -rf /usr/local/bin/victoria-metrics /var/lib/victoria-metrics /etc/victoria-metrics.yml
+    userdel victoria-metrics 2>/dev/null || true
+    
+    # Remove Node-RED
+    rm -rf /usr/bin/node-red* /usr/local/bin/node-red* /root/.node-red "$NODE_RED_DIR"
+    
+    # Back up configuration files
+    for file in /etc/dhcpcd.conf /etc/hostapd/hostapd.conf /etc/dnsmasq.conf /etc/default/hostapd \
+                /etc/mosquitto/mosquitto.conf /etc/mosquitto/passwd; do
+        if [ -f "$file" ]; then
+            mv "$file" "$file.bak" || true
+        fi
+    done
+    
+    # Reset IP forwarding
+    sysctl -w net.ipv4.ip_forward=0 || true
+    
+    # Remove project directory
+    rm -rf "$INSTALL_DIR"
+    
+    # Clean up
+    apt autoremove -y && apt autoclean
+    
+    log "Purge complete. System is in a near-fresh state. Rebooting..."
+    reboot
+}
+
+# Function to perform a full setup
+setup() {
+    log "Setting up a fresh Raspberry Pi OS installation..."
+    
+    # Set permissions for sysohub script itself if it exists
+    sysohub_script="$INSTALL_DIR/scripts/sysohub_setup.sh"
+    if [ -f "$sysohub_script" ]; then
+        log "Setting permissions for $sysohub_script..."
+        chown "$USER:$USER" "$sysohub_script"
+        chmod 755 "$sysohub_script"
+    fi
+    
+    # Load configuration
+    load_config
+    
+    # Update system packages
+    prompt_overwrite "System packages" true
+    if [ $? -eq 0 ]; then
+        log "Updating system packages..."
+        apt update && apt upgrade -y
+    fi
+    
+    # Run setup components (order matters)
+    install_mosquitto false         # Start with MQTT broker
+    install_victoria_metrics false  # Then time series DB
+    install_node_red false          # Then Node-RED
+    install_dashboard false         # Then web dashboard
+    setup_wifi_ap false             # WiFi AP configuration last (can interrupt network)
+    
+    # Start network services that might have been deferred
+    log "Starting network services..."
+    for service in hostapd dnsmasq avahi-daemon; do
+        systemctl start "$service" || true
+    done
+    
+    # Run hostname update if needed
+    if [ -f "/tmp/update_hostname.sh" ]; then
+        log "Updating hostname..."
+        bash /tmp/update_hostname.sh
+    fi
+    
+    log "Setup complete. Reboot recommended."
+    read -p "Reboot now? [Y/n]: " reboot_response
+    if [ -z "$reboot_response" ] || [ "${reboot_response,,}" = "y" ]; then
+        log "Rebooting system..."
+        sleep 2
+        reboot
+    else
+        log "Skipping reboot. Please reboot manually when convenient."
+    fi
+}
+
+# Function to update components
+update() {
+    log "Updating components..."
+    
+    # Load configuration
+    load_config
+    
+    # Update system packages if requested
+    prompt_overwrite "System packages" true
+    if [ $? -eq 0 ]; then
+        log "Updating system packages..."
+        apt update && apt upgrade -y
+    fi
+    
+    # Update components in a specific order to minimize disruption
+    install_mosquitto true      # MQTT first (least disruptive)
+    install_victoria_metrics true   # Then time series DB
+    install_node_red true          # Then Node-RED
+    install_dashboard true         # Then web dashboard
+    setup_wifi_ap true             # WiFi AP configuration last (can interrupt network)
+    
+    # Run hostname update if needed
+    if [ -f "/tmp/update_hostname.sh" ]; then
+        log "Updating hostname..."
+        bash /tmp/update_hostname.sh
+    fi
+    
+    log "Update complete. All services have been updated."
+}
+
+# Function to handle installation of Node-RED only
+fix_node_red() {
+    log "Fixing Node-RED installation..."
+    
+    # Load configuration
+    load_config
+    
+    # Stop the service
+    systemctl stop nodered 2>/dev/null || true
+    
+    # Fix installation
+    install_node_red false
+    
+    log "Node-RED fix complete."
+}
+
+# Main script execution
 main() {
-    check_root
-    case "$1" in
+    # Check command
+    if [ $# -eq 0 ]; then
+        echo "Usage: $0 [setup|update|purge|backup|status|fix-nodered]"
+        exit 1
+    fi
+    
+    command="$1"
+    
+    case "$command" in
         setup)
             setup
             ;;
@@ -734,11 +976,16 @@ main() {
         status)
             status
             ;;
+        fix-nodered)
+            fix_node_red
+            ;;
         *)
-            log "Usage: $0 {setup|update|purge|backup|status}"
+            echo "Unknown command: $command"
+            echo "Usage: $0 [setup|update|purge|backup|status|fix-nodered]"
             exit 1
             ;;
     esac
 }
 
+# Execute main function
 main "$@"
