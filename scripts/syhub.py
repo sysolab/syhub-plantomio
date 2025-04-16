@@ -541,9 +541,9 @@ def install_dashboard(config, temp_dir, update_mode=False):
             run_command(f"sudo mv {temp_file} {index_html}")
             run_command(f"sudo chown {USER}:{USER} {index_html}")
             run_command(f"sudo chmod 644 {index_html}")
-    dashboard_service = "/etc/systemd/system/sysohub-dashboard.service"
+    dashboard_service = "/etc/systemd/system/syhub-dashboard.service"
     service_content = f"""[Unit]
-Description=sysohub Dashboard
+Description=syhub Dashboard
 After=network.target
 
 [Service]
@@ -562,24 +562,24 @@ WantedBy=multi-user.target
             f.write(service_content)
         run_command(f"sudo mv {temp_dir}/dashboard.service {dashboard_service}")
         run_command("sudo systemctl daemon-reload")
-    if is_service_enabled("sysohub-dashboard"):
+    if is_service_enabled("syhub-dashboard"):
         log("Dashboard service is enabled, skipping.")
     else:
-        run_command("sudo systemctl enable sysohub-dashboard", ignore_errors=True)
-    if is_service_running("sysohub-dashboard"):
+        run_command("sudo systemctl enable syhub-dashboard", ignore_errors=True)
+    if is_service_running("syhub-dashboard"):
         log("Dashboard is running, restarting to apply changes...")
-        run_command("sudo systemctl restart sysohub-dashboard", ignore_errors=True)
+        run_command("sudo systemctl restart syhub-dashboard", ignore_errors=True)
     else:
         log("Starting Dashboard...")
-        run_command("sudo systemctl start sysohub-dashboard", ignore_errors=True)
+        run_command("sudo systemctl start syhub-dashboard", ignore_errors=True)
 
 def setup():
     log("Setting up a fresh Raspberry Pi OS installation...")
     # Set permissions for syhub.py itself
-    sysohub_script = os.path.join(INSTALL_DIR, "scripts", "syhub.py")
-    log(f"Setting permissions for {sysohub_script}...")
-    run_command(f"sudo chown {USER}:{USER} {sysohub_script}")
-    run_command(f"sudo chmod 755 {sysohub_script}")
+    syhub_script = os.path.join(INSTALL_DIR, "scripts", "syhub.py")
+    log(f"Setting permissions for {syhub_script}...")
+    run_command(f"sudo chown {USER}:{USER} {syhub_script}")
+    run_command(f"sudo chmod 755 {syhub_script}")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         config = load_config()
