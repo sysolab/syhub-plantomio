@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SysoHub IoT Setup Script - Improved with network resilience
+# syhub IoT Setup Script - Improved with network resilience
 # A shell script equivalent of the Python setup script
 
 # Version
@@ -21,11 +21,11 @@ fi
 
 # Set up paths
 HOME_DIR=$(eval echo ~$USER)
-INSTALL_DIR="$HOME_DIR/sysohub"
+INSTALL_DIR="$HOME_DIR/syhub"
 CONFIG_PATH="$INSTALL_DIR/config/config.yml"
 TEMPLATES_DIR="$INSTALL_DIR/templates"
 NODE_RED_DIR="$HOME_DIR/.node-red"
-SCRIPT_LOG="/var/log/sysohub_setup.log"
+SCRIPT_LOG="/var/log/syhub_setup.log"
 
 # Logging function with timestamp that writes to both console and log file
 log() {
@@ -39,7 +39,7 @@ mkdir -p "$(dirname "$SCRIPT_LOG")"
 touch "$SCRIPT_LOG"
 chmod 644 "$SCRIPT_LOG"
 
-log "Starting sysohub_setup.sh version $VERSION"
+log "Starting syhub_setup.sh version $VERSION"
 log "User: $USER, Home: $HOME_DIR, Install dir: $INSTALL_DIR"
 
 # Function to check if a package is installed
@@ -197,7 +197,7 @@ setup_wifi_ap() {
     
     # Create backup of network configuration
     log "Creating backup of network configuration..."
-    local backup_dir="$HOME_DIR/sysohub_backups/network_$(date +%Y%m%d_%H%M%S)"
+    local backup_dir="$HOME_DIR/syhub_backups/network_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$backup_dir"
     
     for file in /etc/dhcpcd.conf /etc/hostapd/hostapd.conf /etc/dnsmasq.conf /etc/default/hostapd; do
@@ -245,7 +245,7 @@ setup_wifi_ap() {
     if [ "$ip_forward" != "true" ]; then
         log "Enabling IP forwarding..."
         sysctl -w net.ipv4.ip_forward=1
-        echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-sysohub.conf
+        echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-syhub.conf
     fi
     
     # Enable services
@@ -748,9 +748,9 @@ install_dashboard() {
     fi
     
     # Create dashboard service
-    dashboard_service="/etc/systemd/system/sysohub-dashboard.service"
+    dashboard_service="/etc/systemd/system/syhub-dashboard.service"
     service_content="[Unit]
-Description=sysohub Dashboard
+Description=syhub Dashboard
 After=network.target
 
 [Service]
@@ -772,18 +772,18 @@ WantedBy=multi-user.target
     fi
     
     # Enable and start service
-    if is_service_enabled "sysohub-dashboard"; then
+    if is_service_enabled "syhub-dashboard"; then
         log "Dashboard service is enabled, skipping."
     else
-        systemctl enable sysohub-dashboard || true
+        systemctl enable syhub-dashboard || true
     fi
     
-    if is_service_running "sysohub-dashboard"; then
+    if is_service_running "syhub-dashboard"; then
         log "Dashboard is running, restarting to apply changes..."
-        systemctl restart sysohub-dashboard || true
+        systemctl restart syhub-dashboard || true
     else
         log "Starting Dashboard..."
-        systemctl start sysohub-dashboard || true
+        systemctl start syhub-dashboard || true
     fi
 }
 
@@ -801,7 +801,7 @@ backup() {
 # Function to display service status
 status() {
     log "Service status:"
-    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered sysohub-dashboard; do
+    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered syhub-dashboard; do
         systemctl status "$service" --no-pager || true
     done
 }
@@ -811,7 +811,7 @@ purge() {
     log "Purging all components..."
     
     # Stop all services
-    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered sysohub-dashboard; do
+    for service in hostapd dnsmasq avahi-daemon mosquitto victoria-metrics nodered syhub-dashboard; do
         systemctl stop "$service" 2>/dev/null || true
         systemctl disable "$service" 2>/dev/null || true
         rm -f "/etc/systemd/system/$service.service" 2>/dev/null || true
@@ -856,12 +856,12 @@ purge() {
 setup() {
     log "Setting up a fresh Raspberry Pi OS installation..."
     
-    # Set permissions for sysohub script itself if it exists
-    sysohub_script="$INSTALL_DIR/scripts/sysohub_setup.sh"
-    if [ -f "$sysohub_script" ]; then
-        log "Setting permissions for $sysohub_script..."
-        chown "$USER:$USER" "$sysohub_script"
-        chmod 755 "$sysohub_script"
+    # Set permissions for syhub script itself if it exists
+    syhub_script="$INSTALL_DIR/scripts/syhub_setup.sh"
+    if [ -f "$syhub_script" ]; then
+        log "Setting permissions for $syhub_script..."
+        chown "$USER:$USER" "$syhub_script"
+        chmod 755 "$syhub_script"
     fi
     
     # Load configuration
