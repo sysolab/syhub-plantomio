@@ -98,4 +98,3 @@ VictoriaMetrics: Efficient storage in VICTORIA_METRICS_DATA_DIR.
 Flask: DASHBOARD_WORKERS workers.
 Data Processor and Alerter: ~50MB each.
 Mosquitto: Minimal overhead with authentication.
-
