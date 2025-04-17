@@ -121,7 +121,7 @@ check_internet() {
 # Install dependencies
 install_dependencies() {
     log "INFO" "Updating package lists..."
-    sudo apt update || handle_error "APT update"
+    sudo apt update 2>&1 | tee -a "$LOG_FILE" || handle_error "APT update"
 
     log "INFO" "Installing dependencies..."
     sudo apt install -y \
@@ -130,11 +130,11 @@ install_dependencies() {
         mosquitto mosquitto-clients \
         hostapd dnsmasq avahi-daemon \
         git wget curl \
-        || handle_error "Dependency installation"
+        2>&1 | tee -a "$LOG_FILE" || handle_error "Dependency installation"
 
     log "INFO" "Installing Node.js..."
     curl -fsSL https://deb.nodesource.com/setup_"$NODEJS_VERSION".x | sudo -E bash -
-    sudo apt install -y nodejs || handle_error "Node.js installation"
+    sudo apt install -y nodejs 2>&1 | tee -a "$LOG_FILE" || handle_error "Node.js installation"
 }
 
 # Configure WiFi AP+STA
@@ -145,6 +145,11 @@ configure_wifi() {
     fi
 
     log "INFO" "Configuring WiFi AP+STA..."
+    # Verify templates exist
+    for template in dhcpcd.conf.j2 dnsmasq.conf.j2 hostapd.conf.j2; do
+        [ -f "$BASE_DIR/config/$template" ] || handle_error "Missing template: $template"
+    done
+
     sudo mv /etc/dhcpcd.conf /etc/dhcpcd.conf.bak-$(date +%F) 2>/dev/null || true
     sudo mv /etc/dnsmasq.conf /etc/dnsmasq.conf.bak-$(date +%F) 2>/dev/null || true
     sudo mv /etc/hostapd/hostapd.conf /etc/hostapd/hostapd.conf.bak-$(date +%F) 2>/dev/null || true
@@ -172,6 +177,7 @@ configure_wifi() {
 # Configure Mosquitto
 configure_mosquitto() {
     log "INFO" "Configuring Mosquitto MQTT broker..."
+    [ -f "$BASE_DIR/config/mosquitto.conf.j2" ] || handle_error "Missing template: mosquitto.conf.j2"
     echo "$MQTT_USERNAME:$(openssl passwd -6 "$MQTT_PASSWORD")" | sudo tee /etc/mosquitto/passwd >/dev/null
     sudo chown mosquitto:mosquitto /etc/mosquitto/passwd
     sudo chmod 600 /etc/mosquitto/passwd
@@ -193,14 +199,11 @@ configure_victoriametrics() {
     sudo mkdir -p "$VICTORIA_METRICS_DATA_DIR"
     sudo chown "$VICTORIA_METRICS_USER:$VICTORIA_METRICS_GROUP" "$VICTORIA_METRICS_DATA_DIR"
 
+    log "INFO" "Downloading VictoriaMetrics v$VICTORIA_METRICS_VERSION..."
     wget "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/$VICTORIA_METRICS_VERSION/victoria-metrics-linux-arm64-$VICTORIA_METRICS_VERSION.tar.gz" -O /tmp/vm.tar.gz || handle_error "VictoriaMetrics download"
     sudo tar -xzf /tmp/vm.tar.gz -C /usr/local/bin
     sudo mv /usr/local/bin/victoria-metrics-prod /usr/local/bin/victoria-metrics
     sudo chmod +x /usr/local/bin/victoria-metrics
-
-    sed -e "s|__VICTORIA_METRICS_PORT__|$VICTORIA_METRICS_PORT|" \
-        -e "s|__VICTORIA_METRICS_RETENTION_PERIOD__|$VICTORIA_METRICS_RETENTION|" \
-        "$BASE_DIR/config/victoria_metrics.yml.j2" > "/etc/victoriametrics.yml" || handle_error "VictoriaMetrics config processing"
 
     cat << EOF | sudo tee /etc/systemd/system/victoriametrics.service
 [Unit]
@@ -208,7 +211,7 @@ Description=VictoriaMetrics Time Series Database
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/victoria-metrics --config=/etc/victoriametrics.yml --storageDataPath=$VICTORIA_METRICS_DATA_DIR
+ExecStart=/usr/local/bin/victoria-metrics -httpListenAddr=:$VICTORIA_METRICS_PORT -retentionPeriod=$VICTORIA_METRICS_RETENTION -storageDataPath=$VICTORIA_METRICS_DATA_DIR
 User=$VICTORIA_METRICS_USER
 Group=$VICTORIA_METRICS_GROUP
 Restart=always
@@ -217,6 +220,7 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
+    sudo systemctl daemon-reload
     sudo systemctl enable victoriametrics
     sudo systemctl restart victoriametrics || handle_error "VictoriaMetrics service restart"
 }
@@ -256,6 +260,7 @@ Environment=NODE_RED_HOME=$BASE_DIR/.node-red
 WantedBy=multi-user.target
 EOF
 
+    sudo systemctl daemon-reload
     sudo systemctl enable nodered
     sudo systemctl restart nodered || handle_error "Node-RED service restart"
 }
@@ -278,6 +283,7 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
+    sudo systemctl daemon-reload
     sudo systemctl enable "$PROJECT_NAME"-processor
     sudo systemctl restart "$PROJECT_NAME"-processor || handle_error "Data Processor service restart"
 }
@@ -300,6 +306,7 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
+    sudo systemctl daemon-reload
     sudo systemctl enable "$PROJECT_NAME"-alerter
     sudo systemctl restart "$PROJECT_NAME"-alerter || handle_error "Alerter service restart"
 }
@@ -316,7 +323,7 @@ Description=$PROJECT_NAME Flask Dashboard
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/gunicorn --workers $DASHBOARD_WORKERS --bind 0.0.0.0:$DASHBOARD_PORT app:app
+ExecStart=/usr/bin/python3 -m gunicorn --workers $DASHBOARD_WORKERS --bind 0.0.0.0:$DASHBOARD_PORT app:app
 WorkingDirectory=$BASE_DIR/src
 Restart=always
 User=$SUDO_USER
@@ -325,6 +332,7 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
+    sudo systemctl daemon-reload
     sudo systemctl enable "$PROJECT_NAME"-dashboard
     sudo systemctl restart "$PROJECT_NAME"-dashboard || handle_error "Dashboard service restart"
 }
@@ -350,6 +358,7 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
+    sudo systemctl daemon-reload
     sudo systemctl enable "$PROJECT_NAME"-healthcheck
     sudo systemctl restart "$PROJECT_NAME"-healthcheck || handle_error "Health Check service restart"
 }
