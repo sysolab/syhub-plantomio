@@ -27,7 +27,7 @@ Boot the Pi and ensure the user is __SYSTEM_USER__.
 
 Create Project Structure:
 
-Create directories: mkdir -p __BASE_DIR__/{config,scripts,src/static/css,.node-red,venv,backups}
+Create directories: mkdir -p __BASE_DIR__/{config,scripts,src/static/css,.node-red,backups}
 Add files as specified.
 
 
@@ -98,3 +98,4 @@ VictoriaMetrics: Efficient storage in VICTORIA_METRICS_DATA_DIR.
 Flask: DASHBOARD_WORKERS workers.
 Data Processor and Alerter: ~50MB each.
 Mosquitto: Minimal overhead with authentication.
+

@@ -91,7 +91,7 @@ install_dependencies() {
 
     log "INFO" "Installing dependencies..."
     sudo apt install -y \
-        python3 python3-pip python3-venv \
+        python3 python3-pip \
         mosquitto mosquitto-clients \
         hostapd dnsmasq avahi-daemon \
         git wget curl yq \
@@ -101,11 +101,8 @@ install_dependencies() {
     curl -fsSL https://deb.nodesource.com/setup_"$NODEJS_VERSION".x | sudo -E bash -
     sudo apt install -y nodejs || handle_error "Node.js installation"
 
-    log "INFO" "Setting up Python virtual environment..."
-    python3 -m venv "$BASE_DIR/venv"
-    source "$BASE_DIR/venv/bin/activate"
-    pip install flask gunicorn requests paho-mqtt pyyaml smtplib || handle_error "Python package installation"
-    deactivate
+    log "INFO" "Installing Python packages..."
+    sudo pip3 install flask gunicorn requests paho-mqtt pyyaml || handle_error "Python package installation"
 }
 
 # Configure WiFi AP+STA
@@ -240,7 +237,7 @@ Description=$PROJECT_NAME Data Processor
 After=network.target mosquitto.service victoriametrics.service
 
 [Service]
-ExecStart=$BASE_DIR/venv/bin/python $BASE_DIR/src/data_processor.py
+ExecStart=/usr/bin/python3 $BASE_DIR/src/data_processor.py
 WorkingDirectory=$BASE_DIR/src
 Restart=always
 User=$SUDO_USER
@@ -262,7 +259,7 @@ Description=$PROJECT_NAME Alerter
 After=network.target victoriametrics.service
 
 [Service]
-ExecStart=$BASE_DIR/venv/bin/python $BASE_DIR/src/alerter.py
+ExecStart=/usr/bin/python3 $BASE_DIR/src/alerter.py
 WorkingDirectory=$BASE_DIR/src
 Restart=always
 User=$SUDO_USER
@@ -287,7 +284,7 @@ Description=$PROJECT_NAME Flask Dashboard
 After=network.target
 
 [Service]
-ExecStart=$BASE_DIR/venv/bin/gunicorn --workers $DASHBOARD_WORKERS --bind 0.0.0.0:$DASHBOARD_PORT app:app
+ExecStart=/usr/bin/gunicorn --workers $DASHBOARD_WORKERS --bind 0.0.0.0:$DASHBOARD_PORT app:app
 WorkingDirectory=$BASE_DIR/src
 Restart=always
 User=$SUDO_USER
