@@ -19,14 +19,23 @@ def index():
 @app.route('/data/<field>')
 def data(field):
     try:
+        # Query to match how data is actually stored in VictoriaMetrics
         response = requests.get(f'http://{HOSTNAME}:{VICTORIA_METRICS_PORT}/api/v1/query_range', params={
-            'query': f'telemetry{{metric="{field}"}}',
+            'query': f'{field}{{device=~".+"}}',  # Match any device
             'start': 'now-1h',
             'step': '1m'
         })
-        data = response.json()['data']['result'][0]['values']
-        return jsonify([{'time': float(t), 'value': float(v)} for t, v in data])
+        
+        data = response.json()
+        if 'data' in data and 'result' in data['data'] and len(data['data']['result']) > 0:
+            # Extract values from the response
+            values = data['data']['result'][0]['values']
+            return jsonify([{'time': float(t), 'value': float(v)} for t, v in values])
+        else:
+            print(f"No data found for {field}")
+            return jsonify([])
     except Exception as e:
+        print(f"Error retrieving data for {field}: {e}")
         return jsonify([]), 500
 
 if __name__ == '__main__':

@@ -1,54 +1,91 @@
-
 [
     {
-        "id": "mqtt_in",
-        "type": "mqtt in",
-        "name": "MQTT Input",
-        "topic": "__MQTT_TOPIC__",
-        "broker": "mqtt_broker",
-        "x": 100,
-        "y": 100,
-        "wires": [["json_parse"]]
+        "id": "query-flow",
+        "type": "tab",
+        "label": "VictoriaMetrics Query",
+        "disabled": false,
+        "info": "",
+        "env": []
     },
     {
-        "id": "json_parse",
-        "type": "json",
-        "name": "Parse JSON",
-        "x": 300,
-        "y": 100,
-        "wires": [["format_metrics"]]
+        "id": "query-inject",
+        "type": "inject",
+        "z": "query-flow",
+        "name": "Query Data",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 120,
+        "wires": [
+            [
+                "query-function"
+            ]
+        ]
     },
     {
-        "id": "format_metrics",
+        "id": "query-function",
         "type": "function",
-        "name": "Format for VictoriaMetrics",
-        "func": "var lines = [];\nfor (var key in msg.payload) {\n    lines.push(`telemetry{metric=\"${key}\"} ${msg.payload[key]}`);\n}\nmsg.payload = lines.join('\\n');\nreturn msg;",
-        "x": 500,
-        "y": 100,
-        "wires": [["http_request"]]
+        "z": "query-flow",
+        "name": "Prepare Query",
+        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Create query parameters\nmsg.url = `http://plantomio.local:8428/api/v1/query?query=temperature{device=\"plt-404cca470da0\"}&start=${oneHourAgo}&end=${now}`;\n\nreturn msg;",
+        "outputs": 1,
+        "x": 300,
+        "y": 120,
+        "wires": [
+            [
+                "query-request"
+            ]
+        ]
     },
     {
-        "id": "http_request",
+        "id": "query-request",
         "type": "http request",
-        "name": "Send to VictoriaMetrics",
-        "method": "POST",
-        "url": "http://__HOSTNAME__:__VICTORIA_METRICS_PORT__/api/v1/write",
-        "x": 700,
-        "y": 100,
-        "wires": []
+        "z": "query-flow",
+        "name": "Query VictoriaMetrics",
+        "method": "GET",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 510,
+        "y": 120,
+        "wires": [
+            [
+                "query-debug"
+            ]
+        ]
     },
     {
-        "id": "mqtt_broker",
-        "type": "mqtt-broker",
-        "name": "MQTT Broker",
-        "broker": "localhost",
-        "port": "__MQTT_PORT__",
-        "clientid": "__PROJECT_NAME__",
-        "usetls": false,
-        "protocolVersion": "4",
-        "credentials": {
-            "user": "__MQTT_USERNAME__",
-            "password": "__MQTT_PASSWORD__"
-        }
+        "id": "query-debug",
+        "type": "debug",
+        "z": "query-flow",
+        "name": "Display Results",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 120,
+        "wires": []
     }
 ]
