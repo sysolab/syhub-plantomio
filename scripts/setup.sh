@@ -13,11 +13,16 @@ else
     USER_HOME="$HOME"
 fi
 
+# Set default log file
+LOG_FILE="/tmp/syhub_setup.log"
+
 # Logging function
 log() {
     local level="$1"
     local message="$2"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    # Ensure log file directory exists
+    mkdir -p "$(dirname "$LOG_FILE")"
     echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
 }
 
@@ -57,7 +62,9 @@ fi
 # Parse config.yml with error handling
 PROJECT_NAME=$(yq e '.project.name' "$CONFIG_FILE" || { log "ERROR" "Failed to parse project.name from $CONFIG_FILE"; exit 1; })
 BASE_DIR=$(yq e '.base_dir // "'"$USER_HOME/syhub"'"' "$CONFIG_FILE" || { log "ERROR" "Failed to parse base_dir from $CONFIG_FILE"; exit 1; })
-LOG_FILE=$(yq e '.log_file' "$CONFIG_FILE" || { log "ERROR" "Failed to parse log_file from $CONFIG_FILE"; exit 1; })
+# Update LOG_FILE if specified in config.yml
+NEW_LOG_FILE=$(yq e '.log_file' "$CONFIG_FILE" || { log "ERROR" "Failed to parse log_file from $CONFIG_FILE"; exit 1; })
+[ -n "$NEW_LOG_FILE" ] && LOG_FILE="$NEW_LOG_FILE"
 BACKUP_DIR=$(yq e '.backup_directory' "$CONFIG_FILE" || { log "ERROR" "Failed to parse backup_directory from $CONFIG_FILE"; exit 1; })
 SYSTEM_USER=$(whoami)
 HOSTNAME=$(yq e '.hostname' "$CONFIG_FILE" || { log "ERROR" "Failed to parse hostname from $CONFIG_FILE"; exit 1; })
