@@ -13,11 +13,44 @@ else
     USER_HOME="$HOME"
 fi
 
+# Fix locale settings
+log() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
+}
+
+fix_locale() {
+    log "INFO" "Configuring locale settings..."
+    sudo locale-gen en_GB.UTF-8
+    sudo update-locale LANG=en_GB.UTF-8 LC_ALL=en_GB.UTF-8 LC_CTYPE=en_GB.UTF-8
+    export LANG=en_GB.UTF-8
+    export LC_ALL=en_GB.UTF-8
+    export LC_CTYPE=en_GB.UTF-8
+}
+
 # Read config.yml
 CONFIG_FILE="$USER_HOME/syhub/config/config.yml"
-if ! command -v yq &>/dev/null; then
-    sudo apt update
-    sudo apt install -y yq || { echo "Failed to install yq"; exit 1; }
+
+# Verify config.yml exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    log "ERROR" "Configuration file $CONFIG_FILE not found"
+    exit 1
+fi
+
+# Install mikefarah/yq
+install_yq() {
+    log "INFO" "Installing mikefarah/yq..."
+    YQ_VERSION="v4.44.3"
+    wget "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_arm64" -O /tmp/yq || { log "ERROR" "Failed to download yq"; exit 1; }
+    sudo mv /tmp/yq /usr/bin/yq
+    sudo chmod +x /usr/bin/yq
+}
+
+# Check and install yq
+if ! command -v yq &>/dev/null || ! yq --version | grep -q "mikefarah"; then
+    install_yq
 fi
 
 PROJECT_NAME=$(yq e '.project.name' "$CONFIG_FILE")
@@ -56,14 +89,6 @@ DASHBOARD_PORT=$(yq e '.dashboard.port' "$CONFIG_FILE")
 DASHBOARD_WORKERS=$(yq e '.dashboard.workers' "$CONFIG_FILE")
 NODEJS_VERSION=$(yq e '.nodejs.install_version' "$CONFIG_FILE")
 
-# Logging function
-log() {
-    local level="$1"
-    local message="$2"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
-}
-
 # Error handling function
 handle_error() {
     log "ERROR" "Failed at step: $1"
@@ -95,7 +120,7 @@ install_dependencies() {
         python3-flask python3-gunicorn python3-requests python3-paho-mqtt python3-yaml \
         mosquitto mosquitto-clients \
         hostapd dnsmasq avahi-daemon \
-        git wget curl yq \
+        git wget curl \
         || handle_error "Dependency installation"
 
     log "INFO" "Installing Node.js..."
@@ -322,6 +347,7 @@ EOF
 
 # Main setup function
 main() {
+    fix_locale
     log "INFO" "Starting $PROJECT_NAME setup..."
     check_internet
     install_dependencies
@@ -349,6 +375,9 @@ backup() {
 
 # Handle script arguments
 case "$1" in
+    setup)
+        main
+        ;;
     setup)
         main
         ;;
