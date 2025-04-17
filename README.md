@@ -1,61 +1,101 @@
-syhub IoT Lite
-A lightweight, scalable, idempotent IoT platform for Raspberry Pi 3B, featuring a WiFi AP, MQTT broker, VictoriaMetrics, Node-RED, and a Flask-based dashboard.
+PROJECT_NAME IoT Monitoring System
+An IoT solution for monitoring plant-related telemetry data (temperature, pH, ORP, TDS, EC, distance) on a Raspberry Pi 3B. Features WiFi AP+STA, MQTT broker (Mosquitto), time-series storage (VictoriaMetrics), data processing (Node-RED and Python), alerting, health checks, and a Flask-based dashboard with Chart.js.
 Prerequisites
 
 Raspberry Pi 3B with Raspberry Pi OS 64-bit Lite (Bookworm).
-SD card with at least 8GB.
+MicroSD card (8GB+).
+Temporary internet access (Ethernet or WiFi).
+
+Telemetry Data Format
+Publish JSON data to the MQTT topic __MQTT_TOPIC__:
+{
+  "temperature": 25.0,
+  "pH": 7.0,
+  "ORP": 300.0,
+  "TDS": 500.0,
+  "EC": 1.0,
+  "distance": 50.0
+}
 
 Setup Instructions
 
-Clone the repository:
-git clone https://github.com/sysolab/SyHub.git ~/syhub
-cd ~/syhub
+Prepare SD Card:
+
+Flash Raspberry Pi OS 64-bit Lite to the SD card.
+Boot the Pi and ensure the user is __SYSTEM_USER__.
 
 
-Configure config/config.yml (e.g., change name to "greenio").
+Create Project Structure:
 
-Flash the SD card:
-./scripts/flash_image.sh /dev/sdX
-
-
-Boot the Pi, connect to the WiFi AP (e.g., plantomio_ap), and SSH:
-ssh plantomioX1@192.168.4.1
+Create directories: mkdir -p __BASE_DIR__/{config,scripts,src/static/css,.node-red,venv,backups}
+Add files as specified.
 
 
-Run the setup script with sudo (safe to run multiple times):
-sudo python3 ~/syhub/scripts/syhub.py setup
+Configure:
+
+Edit config/config.yml with your settings (WiFi, MQTT, email, etc.).
 
 
-Access the dashboard at http://192.168.4.1:5000.
+Run Setup Script:
+chmod +x scripts/setup.sh
+sudo bash scripts/setup.sh setup
 
 
-Services
+Access System:
 
-WiFi AP: Configured via config.yml.
-MQTT Broker: Mosquitto at mqtt://<hostname>:1883.
-VictoriaMetrics: Time-series database at http://192.168.4.1:8428.
-Node-RED: Flow editor at http://192.168.4.1:1880.
-Dashboard: Flask UI at http://192.168.4.1:5000.
-
-Management
-
-Use syhub.py for setup, backup, update, and status:
-sudo python3 ~/syhub/scripts/syhub.py [setup|backup|update|status]
-
-
-The setup command is idempotent, skipping completed tasks to prevent bloat.
-
-Schedule backups with cron (keeps only the latest 5 backups):
-crontab -e
-0 2 * * * ~/syhub/scripts/backup.sh
+Connect to WiFi AP (__WIFI_AP_SSID__) if configured.
+Verify STA mode: iwconfig wlan0.
+Access Node-RED: http://__HOSTNAME__:__NODE_RED_PORT__/admin.
+Access dashboard: http://__HOSTNAME__:__DASHBOARD_PORT__.
 
 
 
-Scaling
+Usage
 
-Flash multiple SD cards with flash_image.sh.
-Use a prebuilt image for faster deployment.
+Setup: sudo bash scripts/setup.sh setup
+Backup: sudo bash scripts/setup.sh backup
+Check Logs: cat __LOG_FILE__, cat /tmp/syhub_processor.log, cat /tmp/syhub_alerter.log, cat /tmp/syhub_health.log
+Service Status: sudo systemctl status mosquitto victoriametrics nodered __PROJECT_NAME__-processor __PROJECT_NAME__-alerter __PROJECT_NAME__-dashboard __PROJECT_NAME__-healthcheck
+
+Troubleshooting
+
+Mosquitto:
+Logs: journalctl -xeu mosquitto.service
+Config: cat /etc/mosquitto/conf.d/__PROJECT_NAME__.conf
 
 
-License:
-The code base is property of SYSO OÜ. If you plan to use it for commercial purpose please contact me. 
+VictoriaMetrics:
+Status: sudo systemctl status victoriametrics
+Test: curl http://__HOSTNAME__:__VICTORIA_METRICS_PORT__/api/v1/query?query=telemetry
+
+
+Node-RED:
+Access: http://__HOSTNAME__:__NODE_RED_PORT__/admin
+Flows: cat __BASE_DIR__/.node-red/flows.json
+
+
+Data Processor:
+Logs: cat /tmp/syhub_processor.log
+
+
+Alerter:
+Logs: cat /tmp/syhub_alerter.log
+
+
+Dashboard:
+Status: sudo systemctl status __PROJECT_NAME__-dashboard
+
+
+Health Check:
+Logs: cat /tmp/syhub_health.log
+
+
+
+Resource Optimization
+
+Node-RED: Limited to NODE_RED_MEMORY_LIMIT MB.
+VictoriaMetrics: Efficient storage in VICTORIA_METRICS_DATA_DIR.
+Flask: DASHBOARD_WORKERS workers.
+Data Processor and Alerter: ~50MB each.
+Mosquitto: Minimal overhead with authentication.
+

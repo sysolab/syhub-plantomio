@@ -1,0 +1,54 @@
+
+[
+    {
+        "id": "mqtt_in",
+        "type": "mqtt in",
+        "name": "MQTT Input",
+        "topic": "__MQTT_TOPIC__",
+        "broker": "mqtt_broker",
+        "x": 100,
+        "y": 100,
+        "wires": [["json_parse"]]
+    },
+    {
+        "id": "json_parse",
+        "type": "json",
+        "name": "Parse JSON",
+        "x": 300,
+        "y": 100,
+        "wires": [["format_metrics"]]
+    },
+    {
+        "id": "format_metrics",
+        "type": "function",
+        "name": "Format for VictoriaMetrics",
+        "func": "var lines = [];\nfor (var key in msg.payload) {\n    lines.push(`telemetry{metric=\"${key}\"} ${msg.payload[key]}`);\n}\nmsg.payload = lines.join('\\n');\nreturn msg;",
+        "x": 500,
+        "y": 100,
+        "wires": [["http_request"]]
+    },
+    {
+        "id": "http_request",
+        "type": "http request",
+        "name": "Send to VictoriaMetrics",
+        "method": "POST",
+        "url": "http://__HOSTNAME__:__VICTORIA_METRICS_PORT__/api/v1/write",
+        "x": 700,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "mqtt_broker",
+        "type": "mqtt-broker",
+        "name": "MQTT Broker",
+        "broker": "localhost",
+        "port": "__MQTT_PORT__",
+        "clientid": "__PROJECT_NAME__",
+        "usetls": false,
+        "protocolVersion": "4",
+        "credentials": {
+            "user": "__MQTT_USERNAME__",
+            "password": "__MQTT_PASSWORD__"
+        }
+    }
+]

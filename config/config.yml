@@ -1,24 +1,73 @@
-project:
-  name: plantomio
-  hostname: plantomio.local
-  wifi_ssid: plantomio_ap
-  wifi_password: plantomio123
-  mqtt:
-    uri: mqtt://plantomio.local
-    port: 1883
-    username: plantomioX1
-    client_id: plantomioX1
-    password: plantomioX1Pass
-    topic: v1/devices/me/telemetry
-  victoria_metrics:
-    port: 8428
-  node_red:
-    port: 1880
-  dashboard:
-    port: 5000
+# /home/<YOUR_USER>/syhub/config/config.yml
+# --- SyHub Configuration ---
+# Ensure 2-space indentation. Quote values starting with special characters like '!'
 
-  node_red_username: "admin"
-  # IMPORTANT: Generate the hash for your desired password using:
-  #       node-red admin hash-pw YOUR_PASSWORD
-  # and paste the output below., default is "admin"
-  node_red_password_hash: "$2b$08$W99V1mAwhUg5M9.hX6kjY.qtLHyvk1YbiXIMQ8T.xafDsGHNEa1Na"
+project:
+  name: plantomio            # Project name, used in dashboard title etc.
+
+hostname: plantomio.local     # mDNS hostname for accessing services (.local suffix)
+
+# --- System Setup ---
+# system_user: Automatically detected from user running 'sudo ./setup.sh'
+# base_dir: Automatically set to /home/<system_user>/syhub
+log_file: /tmp/syhub_setup.log # Path for the setup script's detailed log
+backup_directory: backups     # Relative to base_dir for config/data backups
+
+# --- Network Configuration ---
+# Set to false to skip AP+STA setup entirely (e.g., if using Ethernet or manual config)
+configure_network: false
+
+# --- WiFi Access Point (AP) + Station (STA) Mode ---
+wifi:
+  ap_interface: uap0
+  ap_ip: 192.168.77.1
+  ap_subnet_mask: 255.255.255.0
+  ap_dhcp_range_start: 192.168.77.100
+  ap_dhcp_range_end: 192.168.77.150
+  ap_dhcp_lease_time: 12h
+  ap_ssid: plantomio_ap
+  ap_password: plantomio123
+  country_code: "DE"
+  sta_ssid: "LiveLongAndRouter"
+  sta_password: "!Pirjo2diPirjo2diPirjo2di"
+
+# --- MQTT Broker (Mosquitto) ---
+mqtt:
+  port: 1883
+  username: plantomioX1
+  client_id_base: plantomioX1
+  password: plantomioX1Pass
+  topic_telemetry: "v1/devices/me/telemetry"
+
+# --- Time Series Database (VictoriaMetrics) ---
+victoria_metrics:
+  version: v1.115.0
+  port: 8428
+  data_directory: /var/lib/victoria-metrics
+  retention_period: 1y
+  service_user: victoriametrics
+  service_group: victoriametrics
+
+# --- Data Processing (Node-RED) ---
+node_red:
+  port: 1880
+  memory_limit_mb: 256
+  username: "admin"
+  password_hash: "$2b$08$W99V1mAwhUg5M9.hX6kjY.qtLHyvk1YbiXIMQ8T.xafDsGHNEa1Na"
+
+# --- Web Dashboard (Flask + Gunicorn) ---
+dashboard:
+  port: 5000
+  workers: 2
+
+# --- Email Alerts ---
+email:
+  sender: "plantomio@example.com"
+  password: "your-email-password"
+  receiver: "admin@example.com"
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+
+# --- Node.js Installation ---
+nodejs:
+  install_version: "lts"
