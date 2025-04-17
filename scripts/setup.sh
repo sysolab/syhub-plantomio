@@ -14,13 +14,6 @@ else
 fi
 
 # Fix locale settings
-log() {
-    local level="$1"
-    local message="$2"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
-}
-
 fix_locale() {
     log "INFO" "Configuring locale settings..."
     sudo locale-gen en_GB.UTF-8
@@ -32,12 +25,6 @@ fix_locale() {
 
 # Read config.yml
 CONFIG_FILE="$USER_HOME/syhub/config/config.yml"
-
-# Verify config.yml exists
-if [ ! -f "$CONFIG_FILE" ]; then
-    log "ERROR" "Configuration file $CONFIG_FILE not found"
-    exit 1
-fi
 
 # Install mikefarah/yq
 install_yq() {
@@ -51,6 +38,12 @@ install_yq() {
 # Check and install yq
 if ! command -v yq &>/dev/null || ! yq --version | grep -q "mikefarah"; then
     install_yq
+fi
+
+# Verify config.yml exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    log "ERROR" "Configuration file $CONFIG_FILE not found"
+    exit 1
 fi
 
 PROJECT_NAME=$(yq e '.project.name' "$CONFIG_FILE")
@@ -88,6 +81,14 @@ NODE_RED_PASSWORD_HASH=$(yq e '.node_red.password_hash' "$CONFIG_FILE")
 DASHBOARD_PORT=$(yq e '.dashboard.port' "$CONFIG_FILE")
 DASHBOARD_WORKERS=$(yq e '.dashboard.workers' "$CONFIG_FILE")
 NODEJS_VERSION=$(yq e '.nodejs.install_version' "$CONFIG_FILE")
+
+# Logging function
+log() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
+}
 
 # Error handling function
 handle_error() {
@@ -191,7 +192,7 @@ configure_victoriametrics() {
 
     sed -e "s|__VICTORIA_METRICS_PORT__|$VICTORIA_METRICS_PORT|" \
         -e "s|__VICTORIA_METRICS_RETENTION_PERIOD__|$VICTORIA_METRICS_RETENTION|" \
-        "$BASE_DIR/config/victoria_metrics.yml.j2" > /etc/victoriametrics.yml || handle_error "VictoriaMetrics config processing"
+        "$BASE_DIR/config/victoria_metrics.yml.j2" > "/etc/victoriametrics.yml" || handle_error "VictoriaMetrics config processing"
 
     cat << EOF | sudo tee /etc/systemd/system/victoriametrics.service
 [Unit]
@@ -375,9 +376,6 @@ backup() {
 
 # Handle script arguments
 case "$1" in
-    setup)
-        main
-        ;;
     setup)
         main
         ;;
