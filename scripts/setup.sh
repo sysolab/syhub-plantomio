@@ -91,7 +91,8 @@ install_dependencies() {
 
     log "INFO" "Installing dependencies..."
     sudo apt install -y \
-        python3 python3-pip \
+        python3 \
+        python3-flask python3-gunicorn python3-requests python3-paho-mqtt python3-yaml \
         mosquitto mosquitto-clients \
         hostapd dnsmasq avahi-daemon \
         git wget curl yq \
@@ -100,9 +101,6 @@ install_dependencies() {
     log "INFO" "Installing Node.js..."
     curl -fsSL https://deb.nodesource.com/setup_"$NODEJS_VERSION".x | sudo -E bash -
     sudo apt install -y nodejs || handle_error "Node.js installation"
-
-    log "INFO" "Installing Python packages..."
-    sudo pip3 install flask gunicorn requests paho-mqtt pyyaml || handle_error "Python package installation"
 }
 
 # Configure WiFi AP+STA
