@@ -12,8 +12,6 @@ hostname: plantomio.local     # mDNS hostname for accessing services (.local suf
 # base_dir: Automatically set to /home/<system_user>/syhub
 
 base_dir: /home/pi/syhub
-log_file: /tmp/syhub_setup.log
-
 log_file: /tmp/syhub_setup.log # Path for the setup script's detailed log
 backup_directory: backups     # Relative to base_dir for config/data backups
 

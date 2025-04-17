@@ -13,6 +13,14 @@ else
     USER_HOME="$HOME"
 fi
 
+# Logging function
+log() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
+}
+
 # Fix locale settings
 fix_locale() {
     log "INFO" "Configuring locale settings..."
@@ -46,49 +54,42 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-PROJECT_NAME=$(yq e '.project.name' "$CONFIG_FILE")
-BASE_DIR=$(yq e '.base_dir // "'"$USER_HOME/syhub"'"' "$CONFIG_FILE")
-LOG_FILE=$(yq e '.log_file' "$CONFIG_FILE")
-BACKUP_DIR=$(yq e '.backup_directory' "$CONFIG_FILE")
+# Parse config.yml with error handling
+PROJECT_NAME=$(yq e '.project.name' "$CONFIG_FILE" || { log "ERROR" "Failed to parse project.name from $CONFIG_FILE"; exit 1; })
+BASE_DIR=$(yq e '.base_dir // "'"$USER_HOME/syhub"'"' "$CONFIG_FILE" || { log "ERROR" "Failed to parse base_dir from $CONFIG_FILE"; exit 1; })
+LOG_FILE=$(yq e '.log_file' "$CONFIG_FILE" || { log "ERROR" "Failed to parse log_file from $CONFIG_FILE"; exit 1; })
+BACKUP_DIR=$(yq e '.backup_directory' "$CONFIG_FILE" || { log "ERROR" "Failed to parse backup_directory from $CONFIG_FILE"; exit 1; })
 SYSTEM_USER=$(whoami)
-HOSTNAME=$(yq e '.hostname' "$CONFIG_FILE")
-CONFIGURE_NETWORK=$(yq e '.configure_network' "$CONFIG_FILE")
-WIFI_AP_INTERFACE=$(yq e '.wifi.ap_interface' "$CONFIG_FILE")
-WIFI_AP_IP=$(yq e '.wifi.ap_ip' "$CONFIG_FILE")
-WIFI_AP_SUBNET_MASK=$(yq e '.wifi.ap_subnet_mask' "$CONFIG_FILE")
-WIFI_AP_DHCP_RANGE_START=$(yq e '.wifi.ap_dhcp_range_start' "$CONFIG_FILE")
-WIFI_AP_DHCP_RANGE_END=$(yq e '.wifi.ap_dhcp_range_end' "$CONFIG_FILE")
-WIFI_AP_DHCP_LEASE_TIME=$(yq e '.wifi.ap_dhcp_lease_time' "$CONFIG_FILE")
-WIFI_AP_SSID=$(yq e '.wifi.ap_ssid' "$CONFIG_FILE")
-WIFI_AP_PASSWORD=$(yq e '.wifi.ap_password' "$CONFIG_FILE")
-WIFI_COUNTRY_CODE=$(yq e '.wifi.country_code' "$CONFIG_FILE")
-WIFI_STA_SSID=$(yq e '.wifi.sta_ssid' "$CONFIG_FILE")
-WIFI_STA_PASSWORD=$(yq e '.wifi.sta_password' "$CONFIG_FILE")
-MQTT_PORT=$(yq e '.mqtt.port' "$CONFIG_FILE")
-MQTT_USERNAME=$(yq e '.mqtt.username' "$CONFIG_FILE")
-MQTT_PASSWORD=$(yq e '.mqtt.password' "$CONFIG_FILE")
-MQTT_TOPIC=$(yq e '.mqtt.topic_telemetry' "$CONFIG_FILE")
-VICTORIA_METRICS_VERSION=$(yq e '.victoria_metrics.version' "$CONFIG_FILE")
-VICTORIA_METRICS_PORT=$(yq e '.victoria_metrics.port' "$CONFIG_FILE")
-VICTORIA_METRICS_DATA_DIR=$(yq e '.victoria_metrics.data_directory' "$CONFIG_FILE")
-VICTORIA_METRICS_RETENTION=$(yq e '.victoria_metrics.retention_period' "$CONFIG_FILE")
-VICTORIA_METRICS_USER=$(yq e '.victoria_metrics.service_user' "$CONFIG_FILE")
-VICTORIA_METRICS_GROUP=$(yq e '.victoria_metrics.service_group' "$CONFIG_FILE")
-NODE_RED_PORT=$(yq e '.node_red.port' "$CONFIG_FILE")
-NODE_RED_MEMORY_LIMIT=$(yq e '.node_red.memory_limit_mb' "$CONFIG_FILE")
-NODE_RED_USERNAME=$(yq e '.node_red.username' "$CONFIG_FILE")
-NODE_RED_PASSWORD_HASH=$(yq e '.node_red.password_hash' "$CONFIG_FILE")
-DASHBOARD_PORT=$(yq e '.dashboard.port' "$CONFIG_FILE")
-DASHBOARD_WORKERS=$(yq e '.dashboard.workers' "$CONFIG_FILE")
-NODEJS_VERSION=$(yq e '.nodejs.install_version' "$CONFIG_FILE")
-
-# Logging function
-log() {
-    local level="$1"
-    local message="$2"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
-}
+HOSTNAME=$(yq e '.hostname' "$CONFIG_FILE" || { log "ERROR" "Failed to parse hostname from $CONFIG_FILE"; exit 1; })
+CONFIGURE_NETWORK=$(yq e '.configure_network' "$CONFIG_FILE" || { log "ERROR" "Failed to parse configure_network from $CONFIG_FILE"; exit 1; })
+WIFI_AP_INTERFACE=$(yq e '.wifi.ap_interface' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_interface from $CONFIG_FILE"; exit 1; })
+WIFI_AP_IP=$(yq e '.wifi.ap_ip' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_ip from $CONFIG_FILE"; exit 1; })
+WIFI_AP_SUBNET_MASK=$(yq e '.wifi.ap_subnet_mask' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_subnet_mask from $CONFIG_FILE"; exit 1; })
+WIFI_AP_DHCP_RANGE_START=$(yq e '.wifi.ap_dhcp_range_start' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_dhcp_range_start from $CONFIG_FILE"; exit 1; })
+WIFI_AP_DHCP_RANGE_END=$(yq e '.wifi.ap_dhcp_range_end' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_dhcp_range_end from $CONFIG_FILE"; exit 1; })
+WIFI_AP_DHCP_LEASE_TIME=$(yq e '.wifi.ap_dhcp_lease_time' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_dhcp_lease_time from $CONFIG_FILE"; exit 1; })
+WIFI_AP_SSID=$(yq e '.wifi.ap_ssid' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_ssid from $CONFIG_FILE"; exit 1; })
+WIFI_AP_PASSWORD=$(yq e '.wifi.ap_password' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.ap_password from $CONFIG_FILE"; exit 1; })
+WIFI_COUNTRY_CODE=$(yq e '.wifi.country_code' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.country_code from $CONFIG_FILE"; exit 1; })
+WIFI_STA_SSID=$(yq e '.wifi.sta_ssid' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.sta_ssid from $CONFIG_FILE"; exit 1; })
+WIFI_STA_PASSWORD=$(yq e '.wifi.sta_password' "$CONFIG_FILE" || { log "ERROR" "Failed to parse wifi.sta_password from $CONFIG_FILE"; exit 1; })
+MQTT_PORT=$(yq e '.mqtt.port' "$CONFIG_FILE" || { log "ERROR" "Failed to parse mqtt.port from $CONFIG_FILE"; exit 1; })
+MQTT_USERNAME=$(yq e '.mqtt.username' "$CONFIG_FILE" || { log "ERROR" "Failed to parse mqtt.username from $CONFIG_FILE"; exit 1; })
+MQTT_PASSWORD=$(yq e '.mqtt.password' "$CONFIG_FILE" || { log "ERROR" "Failed to parse mqtt.password from $CONFIG_FILE"; exit 1; })
+MQTT_TOPIC=$(yq e '.mqtt.topic_telemetry' "$CONFIG_FILE" || { log "ERROR" "Failed to parse mqtt.topic_telemetry from $CONFIG_FILE"; exit 1; })
+VICTORIA_METRICS_VERSION=$(yq e '.victoria_metrics.version' "$CONFIG_FILE" || { log "ERROR" "Failed to parse victoria_metrics.version from $CONFIG_FILE"; exit 1; })
+VICTORIA_METRICS_PORT=$(yq e '.victoria_metrics.port' "$CONFIG_FILE" || { log "ERROR" "Failed to parse victoria_metrics.port from $CONFIG_FILE"; exit 1; })
+VICTORIA_METRICS_DATA_DIR=$(yq e '.victoria_metrics.data_directory' "$CONFIG_FILE" || { log "ERROR" "Failed to parse victoria_metrics.data_directory from $CONFIG_FILE"; exit 1; })
+VICTORIA_METRICS_RETENTION=$(yq e '.victoria_metrics.retention_period' "$CONFIG_FILE" || { log "ERROR" "Failed to parse victoria_metrics.retention_period from $CONFIG_FILE"; exit 1; })
+VICTORIA_METRICS_USER=$(yq e '.victoria_metrics.service_user' "$CONFIG_FILE" || { log "ERROR" "Failed to parse victoria_metrics.service_user from $CONFIG_FILE"; exit 1; })
+VICTORIA_METRICS_GROUP=$(yq e '.victoria_metrics.service_group' "$CONFIG_FILE" || { log "ERROR" "Failed to parse victoria_metrics.service_group from $CONFIG_FILE"; exit 1; })
+NODE_RED_PORT=$(yq e '.node_red.port' "$CONFIG_FILE" || { log "ERROR" "Failed to parse node_red.port from $CONFIG_FILE"; exit 1; })
+NODE_RED_MEMORY_LIMIT=$(yq e '.node_red.memory_limit_mb' "$CONFIG_FILE" || { log "ERROR" "Failed to parse node_red.memory_limit_mb from $CONFIG_FILE"; exit 1; })
+NODE_RED_USERNAME=$(yq e '.node_red.username' "$CONFIG_FILE" || { log "ERROR" "Failed to parse node_red.username from $CONFIG_FILE"; exit 1; })
+NODE_RED_PASSWORD_HASH=$(yq e '.node_red.password_hash' "$CONFIG_FILE" || { log "ERROR" "Failed to parse node_red.password_hash from $CONFIG_FILE"; exit 1; })
+DASHBOARD_PORT=$(yq e '.dashboard.port' "$CONFIG_FILE" || { log "ERROR" "Failed to parse dashboard.port from $CONFIG_FILE"; exit 1; })
+DASHBOARD_WORKERS=$(yq e '.dashboard.workers' "$CONFIG_FILE" || { log "ERROR" "Failed to parse dashboard.workers from $CONFIG_FILE"; exit 1; })
+NODEJS_VERSION=$(yq e '.nodejs.install_version' "$CONFIG_FILE" || { log "ERROR" "Failed to parse nodejs.install_version from $CONFIG_FILE"; exit 1; })
 
 # Error handling function
 handle_error() {
