@@ -6,15 +6,22 @@
 
 set -e
 
+# Determine the invoking user's home directory
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    USER_HOME="$HOME"
+fi
+
 # Read config.yml
-CONFIG_FILE="$HOME/syhub/config/config.yml"
+CONFIG_FILE="$USER_HOME/syhub/config/config.yml"
 if ! command -v yq &>/dev/null; then
     sudo apt update
     sudo apt install -y yq || { echo "Failed to install yq"; exit 1; }
 fi
 
 PROJECT_NAME=$(yq e '.project.name' "$CONFIG_FILE")
-BASE_DIR=$(yq e '.base_dir // "'"$HOME/syhub"'"' "$CONFIG_FILE")
+BASE_DIR=$(yq e '.base_dir // "'"$USER_HOME/syhub"'"' "$CONFIG_FILE")
 LOG_FILE=$(yq e '.log_file' "$CONFIG_FILE")
 BACKUP_DIR=$(yq e '.backup_directory' "$CONFIG_FILE")
 SYSTEM_USER=$(whoami)
@@ -190,78 +197,19 @@ configure_nodered() {
     log "INFO" "Configuring Node-RED..."
     sudo npm install -g --unsafe-perm node-red
     mkdir -p "$BASE_DIR/.node-red"
-    cat << EOF > "$BASE_DIR/.node-red/settings.js"
-module.exports = {
-    httpAdminRoot: '/admin',
-    httpNodeRoot: '/',
-    userDir: '$BASE_DIR/.node-red',
-    adminAuth: {
-        type: "credentials",
-        users: [{
-            username: "$NODE_RED_USERNAME",
-            password: "$NODE_RED_PASSWORD_HASH",
-            permissions: "*"
-        }]
-    },
-    editorTheme: { projects: { enabled: false } }
-}
-EOF
+    sed -e "s|__BASE_DIR__|$BASE_DIR|" \
+        -e "s|__NODE_RED_USERNAME__|$NODE_RED_USERNAME|" \
+        -e "s|__NODE_RED_PASSWORD_HASH__|$NODE_RED_PASSWORD_HASH|" \
+        "$BASE_DIR/.node-red/settings.js" > "$BASE_DIR/.node-red/settings.js.tmp" && mv "$BASE_DIR/.node-red/settings.js.tmp" "$BASE_DIR/.node-red/settings.js" || handle_error "Node-RED settings processing"
 
-    cat << EOF > "$BASE_DIR/.node-red/flows.json"
-[
-    {
-        "id": "mqtt_in",
-        "type": "mqtt in",
-        "name": "MQTT Input",
-        "topic": "$MQTT_TOPIC",
-        "broker": "mqtt_broker",
-        "x": 100,
-        "y": 100,
-        "wires": [["json_parse"]]
-    },
-    {
-        "id": "json_parse",
-        "type": "json",
-        "name": "Parse JSON",
-        "x": 300,
-        "y": 100,
-        "wires": [["format_metrics"]]
-    },
-    {
-        "id": "format_metrics",
-        "type": "function",
-        "name": "Format for VictoriaMetrics",
-        "func": "var lines = [];\nfor (var key in msg.payload) {\n    lines.push(\`telemetry{metric=\\"\${key}\\"} \${msg.payload[key]}\`);\n}\nmsg.payload = lines.join('\\n');\nreturn msg;",
-        "x": 500,
-        "y": 100,
-        "wires": [["http_request"]]
-    },
-    {
-        "id": "http_request",
-        "type": "http request",
-        "name": "Send to VictoriaMetrics",
-        "method": "POST",
-        "url": "http://$HOSTNAME:$VICTORIA_METRICS_PORT/api/v1/write",
-        "x": 700,
-        "y": 100,
-        "wires": []
-    },
-    {
-        "id": "mqtt_broker",
-        "type": "mqtt-broker",
-        "name": "MQTT Broker",
-        "broker": "localhost",
-        "port": "$MQTT_PORT",
-        "clientid": "$PROJECT_NAME",
-        "usetls": false,
-        "protocolVersion": "4",
-        "credentials": {
-            "user": "$MQTT_USERNAME",
-            "password": "$MQTT_PASSWORD"
-        }
-    }
-]
-EOF
+    sed -e "s|__MQTT_TOPIC__|$MQTT_TOPIC|" \
+        -e "s|__HOSTNAME__|$HOSTNAME|" \
+        -e "s|__VICTORIA_METRICS_PORT__|$VICTORIA_METRICS_PORT|" \
+        -e "s|__MQTT_PORT__|$MQTT_PORT|" \
+        -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
+        -e "s|__MQTT_USERNAME__|$MQTT_USERNAME|" \
+        -e "s|__MQTT_PASSWORD__|$MQTT_PASSWORD|" \
+        "$BASE_DIR/.node-red/flows.json" > "$BASE_DIR/.node-red/flows.json.tmp" && mv "$BASE_DIR/.node-red/flows.json.tmp" "$BASE_DIR/.node-red/flows.json" || handle_error "Node-RED flows processing"
 
     cat << EOF | sudo tee /etc/systemd/system/nodered.service
 [Unit]
@@ -271,7 +219,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/node-red --max-old-space-size=$NODE_RED_MEMORY_LIMIT -p $NODE_RED_PORT
 WorkingDirectory=$BASE_DIR/.node-red
-User=$SYSTEM_USER
+User=$SUDO_USER
 Restart=always
 Environment=NODE_RED_HOME=$BASE_DIR/.node-red
 
@@ -295,7 +243,7 @@ After=network.target mosquitto.service victoriametrics.service
 ExecStart=$BASE_DIR/venv/bin/python $BASE_DIR/src/data_processor.py
 WorkingDirectory=$BASE_DIR/src
 Restart=always
-User=$SYSTEM_USER
+User=$SUDO_USER
 
 [Install]
 WantedBy=multi-user.target
@@ -317,7 +265,7 @@ After=network.target victoriametrics.service
 ExecStart=$BASE_DIR/venv/bin/python $BASE_DIR/src/alerter.py
 WorkingDirectory=$BASE_DIR/src
 Restart=always
-User=$SYSTEM_USER
+User=$SUDO_USER
 
 [Install]
 WantedBy=multi-user.target
@@ -330,6 +278,9 @@ EOF
 # Configure Flask Dashboard
 configure_dashboard() {
     log "INFO" "Configuring Flask Dashboard..."
+    sed -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
+        "$BASE_DIR/src/static/index.html" > "$BASE_DIR/src/static/index.html.tmp" && mv "$BASE_DIR/src/static/index.html.tmp" "$BASE_DIR/src/static/index.html" || handle_error "Index.html processing"
+
     cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-dashboard.service
 [Unit]
 Description=$PROJECT_NAME Flask Dashboard
@@ -339,7 +290,7 @@ After=network.target
 ExecStart=$BASE_DIR/venv/bin/gunicorn --workers $DASHBOARD_WORKERS --bind 0.0.0.0:$DASHBOARD_PORT app:app
 WorkingDirectory=$BASE_DIR/src
 Restart=always
-User=$SYSTEM_USER
+User=$SUDO_USER
 
 [Install]
 WantedBy=multi-user.target
@@ -352,6 +303,9 @@ EOF
 # Configure Health Check
 configure_health_check() {
     log "INFO" "Configuring Health Check..."
+    sed -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
+        "$BASE_DIR/scripts/health_check.sh" > "$BASE_DIR/scripts/health_check.sh.tmp" && mv "$BASE_DIR/scripts/health_check.sh.tmp" "$BASE_DIR/scripts/health_check.sh" || handle_error "Health check processing"
+
     cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-healthcheck.service
 [Unit]
 Description=$PROJECT_NAME Health Check
@@ -361,7 +315,7 @@ After=network.target
 ExecStart=/bin/bash $BASE_DIR/scripts/health_check.sh
 WorkingDirectory=$BASE_DIR/scripts
 Restart=always
-User=$SYSTEM_USER
+User=$SUDO_USER
 
 [Install]
 WantedBy=multi-user.target
