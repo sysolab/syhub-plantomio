@@ -2,7 +2,7 @@
 
 # SyHub Setup Script
 # Sets up IoT monitoring system on Raspberry Pi 3B with Raspberry Pi OS 64-bit Lite
-# Date: April 17, 2025
+# Date: April 18, 2025
 
 set -e
 
@@ -26,14 +26,43 @@ log() {
     echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
 }
 
+# Ask yes/no question with default answer
+ask_yes_no() {
+    local prompt="$1"
+    local default="$2"
+    local response
+    
+    if [[ "$default" == "Y" || "$default" == "y" ]]; then
+        prompt="$prompt [Y/n]: "
+        default="Y"
+    else
+        prompt="$prompt [y/N]: "
+        default="N"
+    fi
+    
+    read -p "$prompt" response
+    response=${response:-$default}
+    
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        return 0  # Yes
+    else
+        return 1  # No
+    fi
+}
+
 # Fix locale settings
 fix_locale() {
-    log "INFO" "Configuring locale settings..."
-    sudo locale-gen en_GB.UTF-8
-    sudo update-locale LANG=en_GB.UTF-8 LC_ALL=en_GB.UTF-8 LC_CTYPE=en_GB.UTF-8
-    export LANG=en_GB.UTF-8
-    export LC_ALL=en_GB.UTF-8
-    export LC_CTYPE=en_GB.UTF-8
+    if ask_yes_no "Configure locale settings?" "Y"; then
+        log "INFO" "Configuring locale settings..."
+        sudo locale-gen en_GB.UTF-8
+        sudo update-locale LANG=en_GB.UTF-8 LC_ALL=en_GB.UTF-8 LC_CTYPE=en_GB.UTF-8
+        export LANG=en_GB.UTF-8
+        export LC_ALL=en_GB.UTF-8
+        export LC_CTYPE=en_GB.UTF-8
+        log "INFO" "Locale settings configured successfully."
+    else
+        log "INFO" "Skipping locale configuration."
+    fi
 }
 
 # Read config.yml
@@ -41,11 +70,20 @@ CONFIG_FILE="$USER_HOME/syhub/config/config.yml"
 
 # Install mikefarah/yq
 install_yq() {
-    log "INFO" "Installing mikefarah/yq..."
-    YQ_VERSION="v4.44.3"
-    wget "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_arm64" -O /tmp/yq || { log "ERROR" "Failed to download yq"; exit 1; }
-    sudo mv /tmp/yq /usr/bin/yq
-    sudo chmod +x /usr/bin/yq
+    if ask_yes_no "Install mikefarah/yq (YAML processor)?" "Y"; then
+        log "INFO" "Installing mikefarah/yq..."
+        YQ_VERSION="v4.44.3"
+        wget "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_arm64" -O /tmp/yq || { log "ERROR" "Failed to download yq"; exit 1; }
+        sudo mv /tmp/yq /usr/bin/yq
+        sudo chmod +x /usr/bin/yq
+        log "INFO" "yq installed successfully."
+    else
+        log "INFO" "Skipping yq installation. Note: This tool is required for parsing the config file."
+        if ! command -v yq &>/dev/null; then
+            log "ERROR" "yq is not installed, but is required for this script."
+            exit 1
+        fi
+    fi
 }
 
 # Check and install yq
@@ -106,106 +144,162 @@ handle_error() {
 
 # Check internet connectivity
 check_internet() {
-    log "INFO" "Checking internet connectivity..."
-    for i in {1..3}; do
-        if ping -c 1 github.com &>/dev/null; then
-            log "INFO" "Internet connection verified."
-            return 0
-        fi
-        log "WARNING" "No internet connection. Retrying ($i/3)..."
-        sleep 5
-    done
-    handle_error "Internet connectivity check"
+    if ask_yes_no "Check internet connectivity?" "Y"; then
+        log "INFO" "Checking internet connectivity..."
+        for i in {1..3}; do
+            if ping -c 1 github.com &>/dev/null; then
+                log "INFO" "Internet connection verified."
+                return 0
+            fi
+            log "WARNING" "No internet connection. Retrying ($i/3)..."
+            sleep 5
+        done
+        handle_error "Internet connectivity check"
+    else
+        log "INFO" "Skipping internet connectivity check."
+    fi
 }
 
 # Install dependencies
 install_dependencies() {
-    log "INFO" "Updating package lists..."
-    sudo apt update 2>&1 | tee -a "$LOG_FILE" || handle_error "APT update"
+    if ask_yes_no "Update package lists?" "Y"; then
+        log "INFO" "Updating package lists..."
+        sudo apt update 2>&1 | tee -a "$LOG_FILE" || handle_error "APT update"
+    else
+        log "INFO" "Skipping package list update."
+    fi
 
-    log "INFO" "Installing dependencies..."
-    sudo apt install -y \
-        python3 \
-        python3-flask python3-gunicorn python3-requests python3-paho-mqtt python3-yaml \
-        mosquitto mosquitto-clients \
-        hostapd dnsmasq avahi-daemon \
-        git wget curl \
-        2>&1 | tee -a "$LOG_FILE" || handle_error "Dependency installation"
+    if ask_yes_no "Install core dependencies (Python, Git, etc.)?" "Y"; then
+        log "INFO" "Installing core dependencies..."
+        sudo apt install -y \
+            python3 \
+            python3-flask python3-gunicorn python3-requests python3-paho-mqtt python3-yaml \
+            git wget curl \
+            2>&1 | tee -a "$LOG_FILE" || handle_error "Core dependency installation"
+    else
+        log "INFO" "Skipping core dependency installation."
+    fi
 
-    log "INFO" "Installing Node.js..."
-    curl -fsSL https://deb.nodesource.com/setup_"$NODEJS_VERSION".x | sudo -E bash -
-    sudo apt install -y nodejs 2>&1 | tee -a "$LOG_FILE" || handle_error "Node.js installation"
+    if ask_yes_no "Install network tools (hostapd, dnsmasq)?" "Y"; then
+        log "INFO" "Installing network tools..."
+        sudo apt install -y \
+            hostapd dnsmasq avahi-daemon \
+            2>&1 | tee -a "$LOG_FILE" || handle_error "Network tools installation"
+    else
+        log "INFO" "Skipping network tools installation."
+    fi
+
+    if ask_yes_no "Install Node.js v$NODEJS_VERSION?" "Y"; then
+        log "INFO" "Installing Node.js..."
+        curl -fsSL https://deb.nodesource.com/setup_"$NODEJS_VERSION".x | sudo -E bash -
+        sudo apt install -y nodejs 2>&1 | tee -a "$LOG_FILE" || handle_error "Node.js installation"
+        log "INFO" "Node.js installed successfully."
+    else
+        log "INFO" "Skipping Node.js installation."
+    fi
 }
 
 # Configure WiFi AP+STA
 configure_wifi() {
     if [ "$CONFIGURE_NETWORK" != "true" ]; then
-        log "INFO" "Skipping network configuration (configure_network=false)"
+        log "INFO" "Skipping network configuration (configure_network=false in config)"
         return
     fi
 
-    log "INFO" "Configuring WiFi AP+STA..."
-    # Verify templates exist
-    for template in dhcpcd.conf.j2 dnsmasq.conf.j2 hostapd.conf.j2; do
-        [ -f "$BASE_DIR/config/$template" ] || handle_error "Missing template: $template"
-    done
+    if ask_yes_no "Configure WiFi Access Point + Station?" "Y"; then
+        log "INFO" "Configuring WiFi AP+STA..."
+        # Verify templates exist
+        for template in dhcpcd.conf.j2 dnsmasq.conf.j2 hostapd.conf.j2; do
+            [ -f "$BASE_DIR/config/$template" ] || handle_error "Missing template: $template"
+        done
 
-    sudo mv /etc/dhcpcd.conf /etc/dhcpcd.conf.bak-$(date +%F) 2>/dev/null || true
-    sudo mv /etc/dnsmasq.conf /etc/dnsmasq.conf.bak-$(date +%F) 2>/dev/null || true
-    sudo mv /etc/hostapd/hostapd.conf /etc/hostapd/hostapd.conf.bak-$(date +%F) 2>/dev/null || true
+        sudo mv /etc/dhcpcd.conf /etc/dhcpcd.conf.bak-$(date +%F) 2>/dev/null || true
+        sudo mv /etc/dnsmasq.conf /etc/dnsmasq.conf.bak-$(date +%F) 2>/dev/null || true
+        sudo mv /etc/hostapd/hostapd.conf /etc/hostapd/hostapd.conf.bak-$(date +%F) 2>/dev/null || true
 
-    for template in dhcpcd.conf.j2 dnsmasq.conf.j2 hostapd.conf.j2; do
-        sed -e "s|__WIFI_AP_INTERFACE__|$WIFI_AP_INTERFACE|" \
-            -e "s|__WIFI_AP_IP__|$WIFI_AP_IP|" \
-            -e "s|__WIFI_AP_SUBNET_MASK__|$WIFI_AP_SUBNET_MASK|" \
-            -e "s|__WIFI_AP_DHCP_RANGE_START__|$WIFI_AP_DHCP_RANGE_START|" \
-            -e "s|__WIFI_AP_DHCP_RANGE_END__|$WIFI_AP_DHCP_RANGE_END|" \
-            -e "s|__WIFI_AP_DHCP_LEASE_TIME__|$WIFI_AP_DHCP_LEASE_TIME|" \
-            -e "s|__WIFI_AP_SSID__|$WIFI_AP_SSID|" \
-            -e "s|__WIFI_AP_PASSWORD__|$WIFI_AP_PASSWORD|" \
-            -e "s|__WIFI_COUNTRY_CODE__|$WIFI_COUNTRY_CODE|" \
-            -e "s|__WIFI_STA_SSID__|$WIFI_STA_SSID|" \
-            -e "s|__WIFI_STA_PASSWORD__|$WIFI_STA_PASSWORD|" \
-            "$BASE_DIR/config/$template" > "/etc/${template%.j2}" || handle_error "Template processing: $template"
-    done
+        for template in dhcpcd.conf.j2 dnsmasq.conf.j2 hostapd.conf.j2; do
+            sed -e "s|__WIFI_AP_INTERFACE__|$WIFI_AP_INTERFACE|" \
+                -e "s|__WIFI_AP_IP__|$WIFI_AP_IP|" \
+                -e "s|__WIFI_AP_SUBNET_MASK__|$WIFI_AP_SUBNET_MASK|" \
+                -e "s|__WIFI_AP_DHCP_RANGE_START__|$WIFI_AP_DHCP_RANGE_START|" \
+                -e "s|__WIFI_AP_DHCP_RANGE_END__|$WIFI_AP_DHCP_RANGE_END|" \
+                -e "s|__WIFI_AP_DHCP_LEASE_TIME__|$WIFI_AP_DHCP_LEASE_TIME|" \
+                -e "s|__WIFI_AP_SSID__|$WIFI_AP_SSID|" \
+                -e "s|__WIFI_AP_PASSWORD__|$WIFI_AP_PASSWORD|" \
+                -e "s|__WIFI_COUNTRY_CODE__|$WIFI_COUNTRY_CODE|" \
+                -e "s|__WIFI_STA_SSID__|$WIFI_STA_SSID|" \
+                -e "s|__WIFI_STA_PASSWORD__|$WIFI_STA_PASSWORD|" \
+                "$BASE_DIR/config/$template" > "/tmp/${template%.j2}" || handle_error "Template processing: $template"
+            
+            sudo mv "/tmp/${template%.j2}" "/etc/${template%.j2}"
+        done
 
-    sudo systemctl unmask hostapd
-    sudo systemctl enable hostapd dnsmasq
-    sudo systemctl restart hostapd dnsmasq || handle_error "WiFi service restart"
+        sudo systemctl unmask hostapd
+        sudo systemctl enable hostapd dnsmasq
+        sudo systemctl restart hostapd dnsmasq || handle_error "WiFi service restart"
+        log "INFO" "WiFi AP+STA configured successfully."
+    else
+        log "INFO" "Skipping WiFi configuration."
+    fi
 }
 
-# Configure Mosquitto
+# Configure Mosquitto - Corrected as per https://randomnerdtutorials.com/how-to-install-mosquitto-broker-on-raspberry-pi/
 configure_mosquitto() {
-    log "INFO" "Configuring Mosquitto MQTT broker..."
-    [ -f "$BASE_DIR/config/mosquitto.conf.j2" ] || handle_error "Missing template: mosquitto.conf.j2"
-    echo "$MQTT_USERNAME:$(openssl passwd -6 "$MQTT_PASSWORD")" | sudo tee /etc/mosquitto/passwd >/dev/null
-    sudo chown mosquitto:mosquitto /etc/mosquitto/passwd
-    sudo chmod 600 /etc/mosquitto/passwd
+    if ask_yes_no "Install and configure Mosquitto MQTT broker?" "Y"; then
+        log "INFO" "Installing Mosquitto MQTT broker..."
+        sudo apt install -y mosquitto mosquitto-clients || handle_error "Mosquitto installation"
+        
+        log "INFO" "Configuring Mosquitto MQTT broker..."
+        
+        # Create password file
+        sudo mosquitto_passwd -c /etc/mosquitto/passwd "$MQTT_USERNAME" << EOF
+$MQTT_PASSWORD
+$MQTT_PASSWORD
+EOF
 
-    sed -e "s|__MQTT_PORT__|$MQTT_PORT|" \
-        "$BASE_DIR/config/mosquitto.conf.j2" > "/etc/mosquitto/conf.d/$PROJECT_NAME.conf" || handle_error "Mosquitto config processing"
+        # Create configuration file
+        sudo mkdir -p /etc/mosquitto/conf.d
+        cat << EOF | sudo tee /etc/mosquitto/conf.d/$PROJECT_NAME.conf
+# $PROJECT_NAME MQTT Configuration
+listener $MQTT_PORT
+protocol mqtt
 
-    sudo systemctl enable mosquitto
-    sudo systemctl restart mosquitto || handle_error "Mosquitto service restart"
+# Authentication
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+
+# Security and performance
+persistence true
+persistence_location /var/lib/mosquitto/
+log_dest file /var/log/mosquitto/mosquitto.log
+EOF
+
+        sudo systemctl enable mosquitto
+        sudo systemctl restart mosquitto || handle_error "Mosquitto service restart"
+        log "INFO" "Mosquitto configured successfully."
+    else
+        log "INFO" "Skipping Mosquitto installation and configuration."
+    fi
 }
 
 # Configure VictoriaMetrics
 configure_victoriametrics() {
-    log "INFO" "Configuring VictoriaMetrics..."
-    sudo useradd -r -s /bin/false "$VICTORIA_METRICS_USER" 2>/dev/null || true
-    sudo groupadd "$VICTORIA_METRICS_GROUP" 2>/dev/null || true
-    sudo usermod -a -G "$VICTORIA_METRICS_GROUP" "$VICTORIA_METRICS_USER"
+    if ask_yes_no "Install and configure VictoriaMetrics?" "Y"; then
+        log "INFO" "Configuring VictoriaMetrics..."
+        sudo useradd -r -s /bin/false "$VICTORIA_METRICS_USER" 2>/dev/null || true
+        sudo groupadd "$VICTORIA_METRICS_GROUP" 2>/dev/null || true
+        sudo usermod -a -G "$VICTORIA_METRICS_GROUP" "$VICTORIA_METRICS_USER"
 
-    sudo mkdir -p "$VICTORIA_METRICS_DATA_DIR"
-    sudo chown "$VICTORIA_METRICS_USER:$VICTORIA_METRICS_GROUP" "$VICTORIA_METRICS_DATA_DIR"
+        sudo mkdir -p "$VICTORIA_METRICS_DATA_DIR"
+        sudo chown "$VICTORIA_METRICS_USER:$VICTORIA_METRICS_GROUP" "$VICTORIA_METRICS_DATA_DIR"
 
-    log "INFO" "Downloading VictoriaMetrics v$VICTORIA_METRICS_VERSION..."
-    wget "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/$VICTORIA_METRICS_VERSION/victoria-metrics-linux-arm64-$VICTORIA_METRICS_VERSION.tar.gz" -O /tmp/vm.tar.gz || handle_error "VictoriaMetrics download"
-    sudo tar -xzf /tmp/vm.tar.gz -C /usr/local/bin
-    sudo mv /usr/local/bin/victoria-metrics-prod /usr/local/bin/victoria-metrics
-    sudo chmod +x /usr/local/bin/victoria-metrics
+        log "INFO" "Downloading VictoriaMetrics v$VICTORIA_METRICS_VERSION..."
+        wget "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/$VICTORIA_METRICS_VERSION/victoria-metrics-linux-arm64-$VICTORIA_METRICS_VERSION.tar.gz" -O /tmp/vm.tar.gz || handle_error "VictoriaMetrics download"
+        sudo tar -xzf /tmp/vm.tar.gz -C /usr/local/bin
+        sudo mv /usr/local/bin/victoria-metrics-prod /usr/local/bin/victoria-metrics
+        sudo chmod +x /usr/local/bin/victoria-metrics
 
-    cat << EOF | sudo tee /etc/systemd/system/victoriametrics.service
+        cat << EOF | sudo tee /etc/systemd/system/victoriametrics.service
 [Unit]
 Description=VictoriaMetrics Time Series Database
 After=network.target
@@ -220,31 +314,47 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable victoriametrics
-    sudo systemctl restart victoriametrics || handle_error "VictoriaMetrics service restart"
+        sudo systemctl daemon-reload
+        sudo systemctl enable victoriametrics
+        sudo systemctl restart victoriametrics || handle_error "VictoriaMetrics service restart"
+        log "INFO" "VictoriaMetrics configured successfully."
+    else
+        log "INFO" "Skipping VictoriaMetrics installation and configuration."
+    fi
 }
 
 # Configure Node-RED
 configure_nodered() {
-    log "INFO" "Configuring Node-RED..."
-    sudo npm install -g --unsafe-perm node-red
-    mkdir -p "$BASE_DIR/.node-red"
-    sed -e "s|__BASE_DIR__|$BASE_DIR|" \
-        -e "s|__NODE_RED_USERNAME__|$NODE_RED_USERNAME|" \
-        -e "s|__NODE_RED_PASSWORD_HASH__|$NODE_RED_PASSWORD_HASH|" \
-        "$BASE_DIR/.node-red/settings.js" > "$BASE_DIR/.node-red/settings.js.tmp" && mv "$BASE_DIR/.node-red/settings.js.tmp" "$BASE_DIR/.node-red/settings.js" || handle_error "Node-RED settings processing"
+    if ask_yes_no "Install and configure Node-RED?" "Y"; then
+        log "INFO" "Installing and configuring Node-RED..."
+        sudo npm install -g --unsafe-perm node-red
+        mkdir -p "$BASE_DIR/.node-red"
+        
+        # Check if settings.js file exists
+        if [ -f "$BASE_DIR/.node-red/settings.js" ]; then
+            sed -e "s|__BASE_DIR__|$BASE_DIR|" \
+                -e "s|__NODE_RED_USERNAME__|$NODE_RED_USERNAME|" \
+                -e "s|__NODE_RED_PASSWORD_HASH__|$NODE_RED_PASSWORD_HASH|" \
+                "$BASE_DIR/.node-red/settings.js" > "$BASE_DIR/.node-red/settings.js.tmp" && mv "$BASE_DIR/.node-red/settings.js.tmp" "$BASE_DIR/.node-red/settings.js" || handle_error "Node-RED settings processing"
+        else
+            log "WARNING" "settings.js not found at $BASE_DIR/.node-red/settings.js"
+        fi
 
-    sed -e "s|__MQTT_TOPIC__|$MQTT_TOPIC|" \
-        -e "s|__HOSTNAME__|$HOSTNAME|" \
-        -e "s|__VICTORIA_METRICS_PORT__|$VICTORIA_METRICS_PORT|" \
-        -e "s|__MQTT_PORT__|$MQTT_PORT|" \
-        -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
-        -e "s|__MQTT_USERNAME__|$MQTT_USERNAME|" \
-        -e "s|__MQTT_PASSWORD__|$MQTT_PASSWORD|" \
-        "$BASE_DIR/.node-red/flows.json" > "$BASE_DIR/.node-red/flows.json.tmp" && mv "$BASE_DIR/.node-red/flows.json.tmp" "$BASE_DIR/.node-red/flows.json" || handle_error "Node-RED flows processing"
+        # Check if flows.json file exists
+        if [ -f "$BASE_DIR/.node-red/flows.json" ]; then
+            sed -e "s|__MQTT_TOPIC__|$MQTT_TOPIC|" \
+                -e "s|__HOSTNAME__|$HOSTNAME|" \
+                -e "s|__VICTORIA_METRICS_PORT__|$VICTORIA_METRICS_PORT|" \
+                -e "s|__MQTT_PORT__|$MQTT_PORT|" \
+                -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
+                -e "s|__MQTT_USERNAME__|$MQTT_USERNAME|" \
+                -e "s|__MQTT_PASSWORD__|$MQTT_PASSWORD|" \
+                "$BASE_DIR/.node-red/flows.json" > "$BASE_DIR/.node-red/flows.json.tmp" && mv "$BASE_DIR/.node-red/flows.json.tmp" "$BASE_DIR/.node-red/flows.json" || handle_error "Node-RED flows processing"
+        else
+            log "WARNING" "flows.json not found at $BASE_DIR/.node-red/flows.json"
+        fi
 
-    cat << EOF | sudo tee /etc/systemd/system/nodered.service
+        cat << EOF | sudo tee /etc/systemd/system/nodered.service
 [Unit]
 Description=Node-RED
 After=network.target
@@ -260,15 +370,20 @@ Environment=NODE_RED_HOME=$BASE_DIR/.node-red
 WantedBy=multi-user.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable nodered
-    sudo systemctl restart nodered || handle_error "Node-RED service restart"
+        sudo systemctl daemon-reload
+        sudo systemctl enable nodered
+        sudo systemctl restart nodered || handle_error "Node-RED service restart"
+        log "INFO" "Node-RED configured successfully."
+    else
+        log "INFO" "Skipping Node-RED installation and configuration."
+    fi
 }
 
 # Configure Data Processor
 configure_data_processor() {
-    log "INFO" "Configuring Data Processor..."
-    cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-processor.service
+    if ask_yes_no "Configure Data Processor service?" "Y"; then
+        log "INFO" "Configuring Data Processor..."
+        cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-processor.service
 [Unit]
 Description=$PROJECT_NAME Data Processor
 After=network.target mosquitto.service victoriametrics.service
@@ -283,15 +398,20 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable "$PROJECT_NAME"-processor
-    sudo systemctl restart "$PROJECT_NAME"-processor || handle_error "Data Processor service restart"
+        sudo systemctl daemon-reload
+        sudo systemctl enable "$PROJECT_NAME"-processor
+        sudo systemctl restart "$PROJECT_NAME"-processor || handle_error "Data Processor service restart"
+        log "INFO" "Data Processor configured successfully."
+    else
+        log "INFO" "Skipping Data Processor configuration."
+    fi
 }
 
 # Configure Alerter
 configure_alerter() {
-    log "INFO" "Configuring Alerter..."
-    cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-alerter.service
+    if ask_yes_no "Configure Alerter service?" "Y"; then
+        log "INFO" "Configuring Alerter..."
+        cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-alerter.service
 [Unit]
 Description=$PROJECT_NAME Alerter
 After=network.target victoriametrics.service
@@ -306,18 +426,31 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable "$PROJECT_NAME"-alerter
-    sudo systemctl restart "$PROJECT_NAME"-alerter || handle_error "Alerter service restart"
+        sudo systemctl daemon-reload
+        sudo systemctl enable "$PROJECT_NAME"-alerter
+        sudo systemctl restart "$PROJECT_NAME"-alerter || handle_error "Alerter service restart"
+        log "INFO" "Alerter configured successfully."
+    else
+        log "INFO" "Skipping Alerter configuration."
+    fi
 }
 
 # Configure Flask Dashboard
 configure_dashboard() {
-    log "INFO" "Configuring Flask Dashboard..."
-    sed -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
-        "$BASE_DIR/src/static/index.html" > "$BASE_DIR/src/static/index.html.tmp" && mv "$BASE_DIR/src/static/index.html.tmp" "$BASE_DIR/src/static/index.html" || handle_error "Index.html processing"
+    if ask_yes_no "Configure Flask Dashboard service?" "Y"; then
+        log "INFO" "Configuring Flask Dashboard..."
+        # Ensure the static directory exists
+        mkdir -p "$BASE_DIR/src/static"
+        
+        # Check if index.html file exists
+        if [ -f "$BASE_DIR/src/static/index.html" ]; then
+            sed -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
+                "$BASE_DIR/src/static/index.html" > "$BASE_DIR/src/static/index.html.tmp" && mv "$BASE_DIR/src/static/index.html.tmp" "$BASE_DIR/src/static/index.html" || handle_error "Index.html processing"
+        else
+            log "WARNING" "index.html not found at $BASE_DIR/src/static/index.html"
+        fi
 
-    cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-dashboard.service
+        cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-dashboard.service
 [Unit]
 Description=$PROJECT_NAME Flask Dashboard
 After=network.target
@@ -332,18 +465,29 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable "$PROJECT_NAME"-dashboard
-    sudo systemctl restart "$PROJECT_NAME"-dashboard || handle_error "Dashboard service restart"
+        sudo systemctl daemon-reload
+        sudo systemctl enable "$PROJECT_NAME"-dashboard
+        sudo systemctl restart "$PROJECT_NAME"-dashboard || handle_error "Dashboard service restart"
+        log "INFO" "Dashboard configured successfully."
+    else
+        log "INFO" "Skipping Dashboard configuration."
+    fi
 }
 
 # Configure Health Check
 configure_health_check() {
-    log "INFO" "Configuring Health Check..."
-    sed -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
-        "$BASE_DIR/scripts/health_check.sh" > "$BASE_DIR/scripts/health_check.sh.tmp" && mv "$BASE_DIR/scripts/health_check.sh.tmp" "$BASE_DIR/scripts/health_check.sh" || handle_error "Health check processing"
+    if ask_yes_no "Configure Health Check service?" "Y"; then
+        log "INFO" "Configuring Health Check..."
+        # Check if health_check.sh file exists
+        if [ -f "$BASE_DIR/scripts/health_check.sh" ]; then
+            sed -e "s|__PROJECT_NAME__|$PROJECT_NAME|" \
+                "$BASE_DIR/scripts/health_check.sh" > "$BASE_DIR/scripts/health_check.sh.tmp" && mv "$BASE_DIR/scripts/health_check.sh.tmp" "$BASE_DIR/scripts/health_check.sh" || handle_error "Health check processing"
+            chmod +x "$BASE_DIR/scripts/health_check.sh"
+        else
+            log "WARNING" "health_check.sh not found at $BASE_DIR/scripts/health_check.sh"
+        fi
 
-    cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-healthcheck.service
+        cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-healthcheck.service
 [Unit]
 Description=$PROJECT_NAME Health Check
 After=network.target
@@ -358,15 +502,43 @@ User=$SUDO_USER
 WantedBy=multi-user.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable "$PROJECT_NAME"-healthcheck
-    sudo systemctl restart "$PROJECT_NAME"-healthcheck || handle_error "Health Check service restart"
+        sudo systemctl daemon-reload
+        sudo systemctl enable "$PROJECT_NAME"-healthcheck
+        sudo systemctl restart "$PROJECT_NAME"-healthcheck || handle_error "Health Check service restart"
+        log "INFO" "Health Check configured successfully."
+    else
+        log "INFO" "Skipping Health Check configuration."
+    fi
+}
+
+# Configure backup cron job
+configure_backup() {
+    if ask_yes_no "Configure automated backups?" "Y"; then
+        log "INFO" "Setting up backup cron job..."
+        
+        # Ensure backup directory exists
+        mkdir -p "$BASE_DIR/$BACKUP_DIR"
+        
+        # Add cron job for daily backups
+        (crontab -l 2>/dev/null || echo "") | grep -v "$BASE_DIR/scripts/setup.sh backup" | echo "0 0 * * * /bin/bash $BASE_DIR/scripts/setup.sh backup" | crontab -
+        
+        log "INFO" "Backup cron job configured successfully."
+    else
+        log "INFO" "Skipping backup configuration."
+    fi
 }
 
 # Main setup function
 main() {
-    fix_locale
     log "INFO" "Starting $PROJECT_NAME setup..."
+    echo "========================================"
+    echo "  $PROJECT_NAME Installation Script"
+    echo "========================================"
+    echo "This script will set up various components for your IoT system."
+    echo "You can choose which components to install."
+    echo ""
+
+    fix_locale
     check_internet
     install_dependencies
     configure_wifi
@@ -377,18 +549,64 @@ main() {
     configure_alerter
     configure_dashboard
     configure_health_check
-
-    # Setup cron for backups
-    echo "0 0 * * * /bin/bash $BASE_DIR/scripts/setup.sh backup" | crontab -
+    configure_backup
 
     log "INFO" "Setup completed successfully!"
-    log "INFO" "Access dashboard at http://$HOSTNAME:$DASHBOARD_PORT"
+    echo ""
+    echo "========================================"
+    echo "  Installation Complete!"
+    echo "========================================"
+    echo "You can access the dashboard at: http://$HOSTNAME:$DASHBOARD_PORT"
+    echo "Node-RED interface is available at: http://$HOSTNAME:$NODE_RED_PORT"
+    echo ""
 }
 
 # Backup function
 backup() {
     log "INFO" "Creating backup..."
-    tar -czf "$BASE_DIR/$BACKUP_DIR/backup-$(date +%F).tar.gz" "$BASE_DIR/config" "$BASE_DIR/src" "$BASE_DIR/.node-red" || handle_error "Backup creation"
+    
+    # Ensure backup directory exists
+    mkdir -p "$BASE_DIR/$BACKUP_DIR"
+    
+    # Create backup with timestamp
+    BACKUP_FILE="$BASE_DIR/$BACKUP_DIR/backup-$(date +%F).tar.gz"
+    tar -czf "$BACKUP_FILE" "$BASE_DIR/config" "$BASE_DIR/src" "$BASE_DIR/.node-red" > /dev/null 2>&1 || handle_error "Backup creation"
+    
+    log "INFO" "Backup created at: $BACKUP_FILE"
+}
+
+# Show info function
+show_info() {
+    echo "========================================"
+    echo "  $PROJECT_NAME System Information"
+    echo "========================================"
+    echo "Project Name: $PROJECT_NAME"
+    echo "Installation Directory: $BASE_DIR"
+    echo "Hostname: $HOSTNAME"
+    
+    # Check service status
+    echo ""
+    echo "Services Status:"
+    for service in mosquitto victoriametrics nodered "$PROJECT_NAME"-processor "$PROJECT_NAME"-alerter "$PROJECT_NAME"-dashboard "$PROJECT_NAME"-healthcheck; do
+        if systemctl is-active --quiet "$service"; then
+            echo "  $service: RUNNING"
+        else
+            echo "  $service: STOPPED"
+        fi
+    done
+    
+    # Show URLs
+    echo ""
+    echo "Access URLs:"
+    echo "  Dashboard: http://$HOSTNAME:$DASHBOARD_PORT"
+    echo "  Node-RED: http://$HOSTNAME:$NODE_RED_PORT"
+    echo "  VictoriaMetrics: http://$HOSTNAME:$VICTORIA_METRICS_PORT"
+    
+    # Show credentials
+    echo ""
+    echo "Credentials:"
+    echo "  MQTT Username: $MQTT_USERNAME"
+    echo "  Node-RED Username: $NODE_RED_USERNAME"
 }
 
 # Handle script arguments
@@ -399,8 +617,16 @@ case "$1" in
     backup)
         backup
         ;;
+    info)
+        show_info
+        ;;
     *)
-        echo "Usage: $0 {setup|backup}"
+        echo "Usage: $0 {setup|backup|info}"
+        echo ""
+        echo "Commands:"
+        echo "  setup    Install and configure the system"
+        echo "  backup   Create a backup of configuration files"
+        echo "  info     Display system information"
         exit 1
         ;;
 esac
