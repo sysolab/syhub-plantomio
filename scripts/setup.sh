@@ -441,6 +441,8 @@ configure_dashboard() {
         log "INFO" "Configuring Flask Dashboard..."
         # Ensure the static directory exists
         mkdir -p "$BASE_DIR/src/static"
+        mkdir -p "/var/log/$PROJECT_NAME" "/var/run/$PROJECT_NAME"
+        sudo chown -R "$SUDO_USER:$SUDO_USER" "/var/log/$PROJECT_NAME" "/var/run/$PROJECT_NAME"
         
         # Check if index.html file exists
         if [ -f "$BASE_DIR/src/static/index.html" ]; then
@@ -450,16 +452,74 @@ configure_dashboard() {
             log "WARNING" "index.html not found at $BASE_DIR/src/static/index.html"
         fi
 
+        # Create Gunicorn configuration file
+        log "INFO" "Creating Gunicorn configuration file..."
+        cat << EOF > "$BASE_DIR/src/gunicorn.conf.py"
+# Gunicorn configuration file for $PROJECT_NAME
+import multiprocessing
+import os
+
+# Server socket
+bind = "0.0.0.0:$DASHBOARD_PORT"
+backlog = 2048
+
+# Worker processes - better CPU utilization
+workers = multiprocessing.cpu_count() * 2 + 1
+worker_class = 'gthread'
+threads = 2
+worker_connections = 1000
+timeout = 30
+keepalive = 2
+
+# Process naming
+proc_name = '$PROJECT_NAME-dashboard'
+pythonpath = '$BASE_DIR/src'
+
+# Logging
+accesslog = '/var/log/$PROJECT_NAME/access.log'
+errorlog = '/var/log/$PROJECT_NAME/error.log'
+loglevel = 'info'
+access_log_format = '%({X-Real-IP}i)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'
+
+# Server mechanics
+daemon = False
+pidfile = '/var/run/$PROJECT_NAME/gunicorn.pid'
+umask = 0o27
+user = '$SUDO_USER'
+group = '$SUDO_USER'
+
+# Max requests
+max_requests = 1000
+max_requests_jitter = 50
+
+# Environment variables
+raw_env = [
+    "PYTHONUNBUFFERED=1",
+    "WEB_CONCURRENCY=2"
+]
+
+# Ensure directories exist
+os.makedirs('/var/log/$PROJECT_NAME', exist_ok=True)
+os.makedirs('/var/run/$PROJECT_NAME', exist_ok=True)
+EOF
+
+        # Create the systemd service file
         cat << EOF | sudo tee /etc/systemd/system/$PROJECT_NAME-dashboard.service
 [Unit]
 Description=$PROJECT_NAME Flask Dashboard
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 -m gunicorn --workers $DASHBOARD_WORKERS --bind 0.0.0.0:$DASHBOARD_PORT app:app
-WorkingDirectory=$BASE_DIR/src
-Restart=always
 User=$SUDO_USER
+Group=$SUDO_USER
+WorkingDirectory=$BASE_DIR/src
+ExecStart=/usr/bin/python3 -m gunicorn --config gunicorn.conf.py app:app
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=$PROJECT_NAME-dashboard
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
@@ -468,7 +528,7 @@ EOF
         sudo systemctl daemon-reload
         sudo systemctl enable "$PROJECT_NAME"-dashboard
         sudo systemctl restart "$PROJECT_NAME"-dashboard || handle_error "Dashboard service restart"
-        log "INFO" "Dashboard configured successfully."
+        log "INFO" "Dashboard configured successfully with optimized Gunicorn settings."
     else
         log "INFO" "Skipping Dashboard configuration."
     fi
