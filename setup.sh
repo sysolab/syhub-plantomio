@@ -591,9 +591,32 @@ EOF
   log_message "VictoriaMetrics setup completed"
 }
 
-# Setup Mosquitto MQTT broker
-setup_mqtt() {
-  log_message "Setting up Mosquitto MQTT broker"
+# Install Mosquitto MQTT broker packages
+install_mqtt_packages() {
+  log_message "Installing Mosquitto MQTT broker packages"
+  
+  apt install -y mosquitto mosquitto-clients || {
+    log_message "Error installing Mosquitto packages. Check your internet connection."
+    exit 1
+  }
+  
+  # Make Mosquitto auto start when the Raspberry Pi boots
+  systemctl enable mosquitto.service
+  
+  log_message "Mosquitto MQTT broker packages installed successfully"
+}
+
+# Configure Mosquitto MQTT broker
+configure_mqtt() {
+  log_message "Configuring Mosquitto MQTT broker"
+  
+  # Ensure directories exist
+  for dir in "/etc/mosquitto" "/var/log/mosquitto" "/run/mosquitto" "/var/lib/mosquitto"; do
+    if [ ! -d "$dir" ]; then
+      log_message "Creating directory: $dir"
+      mkdir -p "$dir"
+    fi
+  done
   
   # Backup existing config if it exists
   if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
@@ -618,8 +641,8 @@ persistence_location /var/lib/mosquitto/
 
 log_dest file /var/log/mosquitto/mosquitto.log
 
-allow_anonymous false
-listener $MQTT_PORT  
+allow_anonymous false 
+listener $MQTT_PORT 0.0.0.0
 password_file /etc/mosquitto/passwd
 EOF
     
@@ -639,13 +662,13 @@ EOF
       fi
     done
   fi
-
+  
   # Create password file with user
   log_message "Setting up MQTT credentials for user: $MQTT_USERNAME"
   
   # Make sure we're creating a new password file if needed
   if [ ! -f "/etc/mosquitto/passwd" ]; then
-  touch /etc/mosquitto/passwd
+    touch /etc/mosquitto/passwd
     chown mosquitto:mosquitto /etc/mosquitto/passwd
     log_message "Created new password file"
   else
@@ -752,7 +775,7 @@ EOF
     log_message "Mosquitto MQTT broker started successfully"
   fi
   
-  log_message "MQTT broker setup completed"
+  log_message "MQTT broker configuration completed"
 }
 
 # Setup Node.js
@@ -802,7 +825,7 @@ setup_nodered() {
   
   # Install required Node-RED nodes
   log_message "Installing Node-RED nodes"
-  NODE_PACKAGES="node-red-dashboard node-red-node-ui-table"
+  NODE_PACKAGES="node-red-dashboard node-red-node-ui-table node-red-contrib-ui-led"
   
   for package in $NODE_PACKAGES; do
     log_message "Installing Node-RED package: $package"
@@ -1508,13 +1531,19 @@ main() {
   
   # Setup MQTT
   if should_process_component "mqtt" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
-    if confirm_install "Mosquitto MQTT broker"; then
-  setup_mqtt
+    if confirm_install "Mosquitto MQTT broker packages"; then
+      install_mqtt_packages
       
-      # Verify MQTT setup
-      if [ -f "$BASE_DIR/scripts/verify_mqtt.sh" ]; then
-        log_message "Verifying MQTT setup"
-        bash "$BASE_DIR/scripts/verify_mqtt.sh" | tee -a "$LOG_FILE"
+      if confirm_install "Mosquitto MQTT broker configuration"; then
+        configure_mqtt
+        
+        # Verify MQTT setup
+        if [ -f "$BASE_DIR/scripts/verify_mqtt.sh" ]; then
+          log_message "Verifying MQTT setup"
+          bash "$BASE_DIR/scripts/verify_mqtt.sh" | tee -a "$LOG_FILE"
+        fi
+      else
+        log_message "Skipping Mosquitto configuration"
       fi
     else
       log_message "Skipping MQTT installation"

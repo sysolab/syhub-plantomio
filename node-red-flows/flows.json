@@ -17,10 +17,10 @@
                 "p": "payload"
             }
         ],
-        "repeat": "",
+        "repeat": "60",
         "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
+        "once": true,
+        "onceDelay": "3",
         "topic": "",
         "payload": "",
         "payloadType": "date",
@@ -37,7 +37,7 @@
         "type": "function",
         "z": "query-flow",
         "name": "Prepare Query",
-        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Get VictoriaMetrics configuration from global context\nconst config = global.get('config') || {};\nconst vmHost = config.vm?.host || 'plantomio.local';\nconst vmPort = config.vm?.port || 8428;\n\n// Project-specific metric name with prefix\nconst metricPrefix = 'plnt_'; // From config.yml project.metrics_prefix\nconst deviceId = 'plt-404cca470da0';\n\n// Create query parameters\nmsg.url = `http://${vmHost}:${vmPort}/api/v1/query?query=${metricPrefix}temperature{device=\"${deviceId}\"}&start=${oneHourAgo}&end=${now}`;\n\n// For debugging\nmsg.query_info = {\n    metricName: `${metricPrefix}temperature`,\n    deviceId: deviceId,\n    timeRange: `${new Date(oneHourAgo*1000).toISOString()} to ${new Date(now*1000).toISOString()}`\n};\n\nreturn msg;",
+        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Get VictoriaMetrics configuration from global context\nconst config = global.get('config') || {};\nconst vmHost = config.vm?.host || 'plantomio.local';\nconst vmPort = config.vm?.port || 8428;\n\n// Project-specific metric name with prefix\nconst metricPrefix = 'plnt_'; // From config.yml project.metrics_prefix\nconst deviceId = 'plt-404cca470da0';\n\n// Create query parameters\nmsg.url = `http://${vmHost}:${vmPort}/api/v1/query_range?query=${metricPrefix}temperature{device=\"${deviceId}\"}&start=${oneHourAgo}&end=${now}&step=60`;\n\n// For debugging\nmsg.query_info = {\n    metricName: `${metricPrefix}temperature`,\n    deviceId: deviceId,\n    timeRange: `${new Date(oneHourAgo*1000).toISOString()} to ${new Date(now*1000).toISOString()}`\n};\n\nreturn msg;",
         "outputs": 1,
         "x": 300,
         "y": 120,
@@ -67,7 +67,8 @@
         "y": 120,
         "wires": [
             [
-                "query-debug"
+                "query-debug",
+                "format-for-chart"
             ]
         ]
     },
@@ -85,8 +86,85 @@
         "statusVal": "",
         "statusType": "auto",
         "x": 710,
-        "y": 120,
+        "y": 60,
         "wires": []
+    },
+    {
+        "id": "format-for-chart",
+        "type": "function",
+        "z": "query-flow",
+        "name": "Format for Chart",
+        "func": "// Format data for chart display\nlet chartData = { labels: [], datasets: [{ data: [], label: 'Temperature' }] };\n\n// Handle various response formats\nif (msg.payload && msg.payload.data && msg.payload.data.result && msg.payload.data.result.length > 0) {\n    const result = msg.payload.data.result[0];  // Take first result series\n    \n    if (result.values) {\n        // Handle query_range format\n        result.values.forEach(point => {\n            let timestamp = new Date(point[0] * 1000).toLocaleTimeString();\n            let value = parseFloat(point[1]);\n            chartData.labels.push(timestamp);\n            chartData.datasets[0].data.push(value);\n        });\n    } else if (result.value) {\n        // Handle instant query format\n        let timestamp = new Date(result.value[0] * 1000).toLocaleTimeString();\n        let value = parseFloat(result.value[1]);\n        chartData.labels.push(timestamp);\n        chartData.datasets[0].data.push(value);\n    }\n}\n\n// If no data, show a message\nif (chartData.labels.length === 0) {\n    chartData = { noData: true };\n    node.status({fill:\"yellow\",shape:\"ring\",text:\"No data returned\"});\n} else {\n    node.status({fill:\"green\",shape:\"dot\",text:`${chartData.labels.length} points`});\n}\n\nreturn { payload: chartData };",
+        "outputs": 1,
+        "x": 710,
+        "y": 120,
+        "wires": [
+            [
+                "temperature-chart"
+            ]
+        ]
+    },
+    {
+        "id": "temperature-chart",
+        "type": "ui_chart",
+        "z": "query-flow",
+        "name": "Temperature Chart",
+        "group": "dashboard-main",
+        "order": 1,
+        "width": "12",
+        "height": "6",
+        "label": "Temperature",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "No Data Available",
+        "dot": false,
+        "ymin": "",
+        "ymax": "",
+        "removeOlder": "12",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "x": 910,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "dashboard-main",
+        "type": "ui_group",
+        "name": "Main Sensors",
+        "tab": "dashboard-tab",
+        "order": 1,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "dashboard-tab",
+        "type": "ui_tab",
+        "name": "Plantomio",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
     },
     {
         "id": "mqtt-flow",
@@ -128,7 +206,8 @@
         "y": 120,
         "wires": [
             [
-                "mqtt-debug"
+                "mqtt-debug",
+                "format-for-victoriametrics"
             ]
         ]
     },
@@ -146,6 +225,86 @@
         "statusVal": "",
         "statusType": "auto",
         "x": 650,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "format-for-victoriametrics",
+        "type": "function",
+        "z": "mqtt-flow",
+        "name": "Format for VictoriaMetrics",
+        "func": "// Add metric prefix from global config\nconst config = global.get('config') || {};\nconst metricPrefix = 'plnt_'; // Default if not in config\n\n// Format in OpenMetrics format\nconst lines = [];\nconst deviceId = msg.payload.deviceID || 'unknown';\n\nfor (const key in msg.payload) {\n    if (key !== \"deviceID\" && key !== \"timestamp\" && key !== \"topic\") {\n        const value = parseFloat(msg.payload[key]);\n        if (!isNaN(value) && isFinite(value)) {\n            // Format as OpenMetrics line with prefix\n            lines.push(`${metricPrefix}${key}{device=\"${deviceId}\"} ${value}`);\n        }\n    }\n}\n\n// Add required EOF marker for OpenMetrics\nlines.push(\"# EOF\");\n\nmsg.payload = lines.join('\\n');\nreturn msg;",
+        "outputs": 1,
+        "x": 670,
+        "y": 120,
+        "wires": [
+            [
+                "victoriametrics-post",
+                "format-debug"
+            ]
+        ]
+    },
+    {
+        "id": "victoriametrics-post",
+        "type": "http request",
+        "z": "mqtt-flow",
+        "name": "Send to VictoriaMetrics",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8428/api/v1/import/prometheus",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "keyType": "Content-Type",
+                "keyValue": "Content-Type",
+                "valueType": "text",
+                "valueValue": "application/openmetrics-text"
+            }
+        ],
+        "x": 940,
+        "y": 120,
+        "wires": [
+            [
+                "victoriametrics-debug"
+            ]
+        ]
+    },
+    {
+        "id": "format-debug",
+        "type": "debug",
+        "z": "mqtt-flow",
+        "name": "OpenMetrics Format",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 940,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "victoriametrics-debug",
+        "type": "debug",
+        "z": "mqtt-flow",
+        "name": "VM Response",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1170,
         "y": 120,
         "wires": []
     },
@@ -174,5 +333,102 @@
         "willPayload": "",
         "willMsg": {},
         "sessionExpiry": ""
+    },
+    {
+        "id": "ui_base",
+        "type": "ui_base",
+        "theme": {
+            "name": "theme-light",
+            "lightTheme": {
+                "default": "#0094CE",
+                "baseColor": "#0094CE",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": true,
+                "reset": false
+            },
+            "darkTheme": {
+                "default": "#097479",
+                "baseColor": "#097479",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": false
+            },
+            "customTheme": {
+                "name": "Untitled Theme 1",
+                "default": "#4B7930",
+                "baseColor": "#4B7930",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+            },
+            "themeState": {
+                "base-color": {
+                    "default": "#0094CE",
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-titlebar-backgroundColor": {
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-backgroundColor": {
+                    "value": "#fafafa",
+                    "edited": false
+                },
+                "page-sidebar-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-textColor": {
+                    "value": "#1bbfff",
+                    "edited": false
+                },
+                "group-borderColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "widget-textColor": {
+                    "value": "#111111",
+                    "edited": false
+                },
+                "widget-backgroundColor": {
+                    "value": "#0094ce",
+                    "edited": false
+                },
+                "widget-borderColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "base-font": {
+                    "value": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+                }
+            },
+            "angularTheme": {
+                "primary": "indigo",
+                "accents": "blue",
+                "warn": "red",
+                "background": "grey",
+                "palette": "light"
+            }
+        },
+        "site": {
+            "name": "Plantomio Dashboard",
+            "hideToolbar": "false",
+            "allowSwipe": "false",
+            "lockMenu": "false",
+            "allowTempTheme": "true",
+            "dateFormat": "DD/MM/YYYY",
+            "sizes": {
+                "sx": 48,
+                "sy": 48,
+                "gx": 6,
+                "gy": 6,
+                "cx": 6,
+                "cy": 6,
+                "px": 0,
+                "py": 0
+            }
+        }
     }
 ]
