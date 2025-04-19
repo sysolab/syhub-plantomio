@@ -1,6 +1,6 @@
 [
     {
-        "id": "query-flow",
+        "id": "e57902b9099bf50d",
         "type": "tab",
         "label": "VictoriaMetrics Query",
         "disabled": false,
@@ -8,9 +8,44 @@
         "env": []
     },
     {
-        "id": "query-inject",
+        "id": "217e15ddb3f3fb95",
+        "type": "tab",
+        "label": "Plantomio Telemetry Flow",
+        "disabled": false,
+        "info": "Flow to receive MQTT telemetry data and send to VictoriaMetrics using OpenMetrics format",
+        "env": []
+    },
+    {
+        "id": "mqtt_broker",
+        "type": "mqtt-broker",
+        "name": "Plantomio MQTT Broker",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "nodered_plantomio",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": false,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "df7abedbcd1eeffe",
         "type": "inject",
-        "z": "query-flow",
+        "z": "e57902b9099bf50d",
         "name": "Query Data",
         "props": [
             {
@@ -28,14 +63,14 @@
         "y": 120,
         "wires": [
             [
-                "query-function"
+                "7c67a4ba1ccfa554"
             ]
         ]
     },
     {
-        "id": "query-function",
+        "id": "7c67a4ba1ccfa554",
         "type": "function",
-        "z": "query-flow",
+        "z": "e57902b9099bf50d",
         "name": "Prepare Query",
         "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Create query parameters\nmsg.url = `http://plantomio.local:8428/api/v1/query?query=temperature{device=\"plt-404cca470da0\"}&start=${oneHourAgo}&end=${now}`;\n\nreturn msg;",
         "outputs": 1,
@@ -43,14 +78,14 @@
         "y": 120,
         "wires": [
             [
-                "query-request"
+                "60409b2cd43894e8"
             ]
         ]
     },
     {
-        "id": "query-request",
+        "id": "60409b2cd43894e8",
         "type": "http request",
-        "z": "query-flow",
+        "z": "e57902b9099bf50d",
         "name": "Query VictoriaMetrics",
         "method": "GET",
         "ret": "obj",
@@ -67,14 +102,14 @@
         "y": 120,
         "wires": [
             [
-                "query-debug"
+                "f238b09242396517"
             ]
         ]
     },
     {
-        "id": "query-debug",
+        "id": "f238b09242396517",
         "type": "debug",
-        "z": "query-flow",
+        "z": "e57902b9099bf50d",
         "name": "Display Results",
         "active": true,
         "tosidebar": true,
@@ -86,6 +121,122 @@
         "statusType": "auto",
         "x": 710,
         "y": 120,
+        "wires": []
+    },
+    {
+        "id": "15869f201368979c",
+        "type": "mqtt in",
+        "z": "217e15ddb3f3fb95",
+        "name": "MQTT Telemetry Input",
+        "topic": "v1/devices/me/telemetry",
+        "qos": "2",
+        "datatype": "json",
+        "broker": "mqtt_broker",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 120,
+        "y": 100,
+        "wires": [
+            [
+                "1319742384cb9668",
+                "debug_mqtt"
+            ]
+        ]
+    },
+    {
+        "id": "1319742384cb9668",
+        "type": "function",
+        "z": "217e15ddb3f3fb95",
+        "name": "Format for OpenMetrics",
+        "func": "// Format in OpenMetrics format\nconst lines = [];\nconst deviceId = msg.payload.deviceID || 'unknown';\n\nfor (const key in msg.payload) {\n    if (key !== \"deviceID\" && key !== \"timestamp\") {\n        const value = parseFloat(msg.payload[key]);\n        if (!isNaN(value) && isFinite(value)) {\n            // Format as OpenMetrics line\n            lines.push(`${key}{device=\"${deviceId}\"} ${value}`);\n        }\n    }\n}\n\n// Add required EOF marker for OpenMetrics\nlines.push(\"# EOF\");\n\nmsg.payload = lines.join('\\n');\nreturn msg;",
+        "outputs": 1,
+        "x": 340,
+        "y": 100,
+        "wires": [
+            [
+                "22e5b1c2af90a8db",
+                "debug_format"
+            ]
+        ]
+    },
+    {
+        "id": "22e5b1c2af90a8db",
+        "type": "http request",
+        "z": "217e15ddb3f3fb95",
+        "name": "Send to VictoriaMetrics",
+        "method": "POST",
+        "paytoqs": "ignore",
+        "url": "http://plantomio.local:8428/api/v1/import/prometheus",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "key": "Content-Type",
+                "value": "application/openmetrics-text"
+            }
+        ],
+        "x": 560,
+        "y": 100,
+        "wires": [
+            [
+                "debug_victoria"
+            ]
+        ]
+    },
+    {
+        "id": "debug_mqtt",
+        "type": "debug",
+        "z": "217e15ddb3f3fb95",
+        "name": "MQTT Input Debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 340,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "debug_format",
+        "type": "debug",
+        "z": "217e15ddb3f3fb95",
+        "name": "Formatted Data Debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 560,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "debug_victoria",
+        "type": "debug",
+        "z": "217e15ddb3f3fb95",
+        "name": "VictoriaMetrics Response Debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 780,
+        "y": 100,
         "wires": []
     }
 ]
