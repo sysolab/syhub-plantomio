@@ -16,8 +16,8 @@ backup_directory: backups     # Relative to base_dir for config/data backups
 # --- Service Names ---
 service_names:
   mosquitto_conf: mqtt_config  # Name for Mosquitto config file
-  nginx_site: iot_dashboard    # Name for Nginx site config
-  flow_id: iot_flow           # Node-RED flow ID
+  nginx_site: plantomio    # Name for Nginx site config
+  flow_id: plantomio-flow           # Node-RED flow ID
 
 # --- Network Configuration ---
 # Set to false to skip AP+STA setup entirely (e.g., if using Ethernet or manual config)
