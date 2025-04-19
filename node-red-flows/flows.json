@@ -4,7 +4,7 @@
         "type": "tab",
         "label": "VictoriaMetrics Query",
         "disabled": false,
-        "info": "",
+        "info": "This flow demonstrates querying VictoriaMetrics for temperature data",
         "env": []
     },
     {
@@ -37,7 +37,7 @@
         "type": "function",
         "z": "query-flow",
         "name": "Prepare Query",
-        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Create query parameters\nmsg.url = `http://plantomio.local:8428/api/v1/query?query=temperature{device=\"plt-404cca470da0\"}&start=${oneHourAgo}&end=${now}`;\n\nreturn msg;",
+        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Get VictoriaMetrics configuration from global context\nconst config = global.get('config') || {};\nconst vmHost = config.vm?.host || 'plantomio.local';\nconst vmPort = config.vm?.port || 8428;\n\n// Project-specific metric name with prefix\nconst metricPrefix = 'plnt_'; // From config.yml project.metrics_prefix\nconst deviceId = 'plt-404cca470da0';\n\n// Create query parameters\nmsg.url = `http://${vmHost}:${vmPort}/api/v1/query?query=${metricPrefix}temperature{device=\"${deviceId}\"}&start=${oneHourAgo}&end=${now}`;\n\n// For debugging\nmsg.query_info = {\n    metricName: `${metricPrefix}temperature`,\n    deviceId: deviceId,\n    timeRange: `${new Date(oneHourAgo*1000).toISOString()} to ${new Date(now*1000).toISOString()}`\n};\n\nreturn msg;",
         "outputs": 1,
         "x": 300,
         "y": 120,
@@ -80,12 +80,99 @@
         "tosidebar": true,
         "console": false,
         "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
+        "complete": "true",
+        "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
         "x": 710,
         "y": 120,
         "wires": []
+    },
+    {
+        "id": "mqtt-flow",
+        "type": "tab",
+        "label": "MQTT Sensor Flow",
+        "disabled": false,
+        "info": "This flow demonstrates subscribing to MQTT sensor data",
+        "env": []
+    },
+    {
+        "id": "mqtt-in",
+        "type": "mqtt in",
+        "z": "mqtt-flow",
+        "name": "Subscribe to Sensor Data",
+        "topic": "v1/devices/me/telemetry",
+        "qos": "2",
+        "datatype": "json",
+        "broker": "mqtt-broker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 180,
+        "y": 120,
+        "wires": [
+            [
+                "mqtt-process"
+            ]
+        ]
+    },
+    {
+        "id": "mqtt-process",
+        "type": "function",
+        "z": "mqtt-flow",
+        "name": "Process Sensor Data",
+        "func": "// Add timestamp if not present\nif (!msg.payload.timestamp) {\n    msg.payload.timestamp = new Date().toISOString();\n}\n\n// Add topic information\nmsg.payload.topic = msg.topic;\n\n// Forward to debug and potentially to database\nreturn msg;",
+        "outputs": 1,
+        "x": 420,
+        "y": 120,
+        "wires": [
+            [
+                "mqtt-debug"
+            ]
+        ]
+    },
+    {
+        "id": "mqtt-debug",
+        "type": "debug",
+        "z": "mqtt-flow",
+        "name": "Display Sensor Data",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 650,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "mqtt-broker",
+        "type": "mqtt-broker",
+        "name": "Plantomio MQTT Broker",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "plantomioX1",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "sessionExpiry": ""
     }
 ]
