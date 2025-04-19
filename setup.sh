@@ -595,51 +595,42 @@ EOF
 setup_mqtt() {
   log_message "Setting up Mosquitto MQTT broker"
   
-  # Ensure directories exist
-  if [ ! -d "/etc/mosquitto/conf.d" ]; then
-    log_message "Creating Mosquitto config directory"
-    mkdir -p /etc/mosquitto/conf.d
+  # Backup existing config if it exists
+  if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
+    mv "/etc/mosquitto/mosquitto.conf" "/etc/mosquitto/mosquitto.conf.backup"
+    log_message "Backed up existing mosquitto.conf"
   fi
   
-  # Check and fix main mosquitto.conf if needed
-  if [ ! -f "/etc/mosquitto/mosquitto.conf" ] || ! grep -q "include_dir /etc/mosquitto/conf.d" "/etc/mosquitto/mosquitto.conf"; then
-    log_message "Creating or updating main Mosquitto configuration file"
-    
-    # Backup existing config if it exists
-    if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
-      mv "/etc/mosquitto/mosquitto.conf" "/etc/mosquitto/mosquitto.conf.backup"
-      log_message "Backed up existing mosquitto.conf"
-    fi
-    
-    # Create a new main config file with include_dir directive
-    cat > "/etc/mosquitto/mosquitto.conf" << EOF
-# Mosquitto Broker config file
-# Basic configuration with defaults
+  # Create a clean main config file with all settings in one place
+  log_message "Creating Mosquitto configuration file"
+  cat > "/etc/mosquitto/mosquitto.conf" << EOF
+# Place your local configuration in /etc/mosquitto/conf.d/
+#
+# A full description of the configuration file is at
+# /usr/share/doc/mosquitto/examples/mosquitto.conf.example
+
+per_listener_settings true
+
 pid_file /run/mosquitto/mosquitto.pid
+
 persistence true
 persistence_location /var/lib/mosquitto/
+
 log_dest file /var/log/mosquitto/mosquitto.log
+
 include_dir /etc/mosquitto/conf.d
-EOF
-    
-    log_message "Created new main mosquitto.conf with include_dir directive"
-  else
-    log_message "Main mosquitto.conf already exists with include_dir directive"
-  fi
-  
-  # Configure our project-specific settings
-  log_message "Creating project-specific Mosquitto configuration"
-  cat > "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" << EOF
-# SyHub MQTT configuration
-per_listener_settings true
-listener $MQTT_PORT
-protocol mqtt
-allow_anonymous false
+allow_anonymous false 
+listener $MQTT_PORT  
 password_file /etc/mosquitto/passwd
 EOF
-
-  # Ensure the Mosquitto user has proper access to config files
-  chown mosquitto:mosquitto "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
+    
+  log_message "Created new mosquitto.conf with all required settings"
+  
+  # Ensure no conflicting config in conf.d directory
+  if [ -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" ]; then
+    log_message "Removing potential conflicting config in conf.d directory"
+    rm -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
+  fi
   
   # Create password file with user
   log_message "Setting up MQTT credentials for user: $MQTT_USERNAME"
@@ -678,7 +669,7 @@ EOF
   
   # Validate configuration before restarting
   log_message "Validating Mosquitto configuration"
-  if command -v mosquitto -v > /dev/null; then
+  if command -v mosquitto -t > /dev/null; then
     mosquitto -t -c /etc/mosquitto/mosquitto.conf || {
       log_message "Warning: Mosquitto configuration validation failed. Proceeding anyway."
     }
@@ -1119,9 +1110,15 @@ uninstall_victoriametrics() {
 uninstall_mqtt() {
   log_message "Uninstalling MQTT configuration"
   
-  # Don't actually uninstall Mosquitto, just remove our custom configs
+  # Don't actually uninstall Mosquitto, just restore original config if backup exists
+  if [ -f "/etc/mosquitto/mosquitto.conf.backup" ]; then
+    log_message "Restoring original Mosquitto configuration"
+    mv "/etc/mosquitto/mosquitto.conf.backup" "/etc/mosquitto/mosquitto.conf"
+  fi
+  
+  # Remove our custom config file in conf.d if it exists
   if [ -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" ]; then
-    log_message "Removing MQTT configuration file"
+    log_message "Removing MQTT configuration file in conf.d"
     rm -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
   fi
   
@@ -1134,7 +1131,7 @@ uninstall_mqtt() {
   # Restart Mosquitto to apply changes
   if systemctl is-active --quiet mosquitto; then
     log_message "Restarting Mosquitto service"
-    systemctl restart mosquitto
+    systemctl restart mosquitto || log_message "Warning: Failed to restart Mosquitto after configuration removal"
   fi
   
   log_message "MQTT configuration removed"
@@ -1409,6 +1406,12 @@ main() {
   if should_process_component "mqtt" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "Mosquitto MQTT broker"; then
       setup_mqtt
+      
+      # Verify MQTT setup
+      if [ -f "$BASE_DIR/scripts/verify_mqtt.sh" ]; then
+        log_message "Verifying MQTT setup"
+        bash "$BASE_DIR/scripts/verify_mqtt.sh" | tee -a "$LOG_FILE"
+      fi
     else
       log_message "Skipping MQTT installation"
     fi
