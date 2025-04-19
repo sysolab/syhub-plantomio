@@ -1,334 +1,56 @@
 [
     {
-        "id": "plantomio-flow",
+        "id": "query-flow",
         "type": "tab",
-        "label": "Plantomio Data Flow",
+        "label": "VictoriaMetrics Query",
         "disabled": false,
-        "info": "Main flow for Plantomio IoT data processing"
+        "info": "",
+        "env": []
     },
     {
-        "id": "mqtt-in",
-        "type": "mqtt in",
-        "z": "plantomio-flow",
-        "name": "MQTT Sensor Data",
-        "topic": "v1/devices/me/telemetry",
-        "qos": "2",
-        "datatype": "json",
-        "broker": "mqtt-broker",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 150,
-        "y": 120,
-        "wires": [
-            [
-                "process-data"
-            ]
-        ]
-    },
-    {
-        "id": "mqtt-broker",
-        "type": "mqtt-broker",
-        "name": "Local MQTT",
-        "broker": "localhost",
-        "port": "1883",
-        "clientid": "plantomioX1",
-        "autoConnect": true,
-        "usetls": false,
-        "protocolVersion": "4",
-        "keepalive": "60",
-        "cleansession": true,
-        "birthTopic": "",
-        "birthQos": "0",
-        "birthPayload": "",
-        "birthMsg": {},
-        "closeTopic": "",
-        "closeQos": "0",
-        "closePayload": "",
-        "closeMsg": {},
-        "willTopic": "",
-        "willQos": "0",
-        "willPayload": "",
-        "willMsg": {},
-        "sessionExpiry": ""
-    },
-    {
-        "id": "process-data",
-        "type": "function",
-        "z": "plantomio-flow",
-        "name": "Process Sensor Data",
-        "func": "// Get the current timestamp\nconst timestamp = Date.now();\n\n// Get the incoming sensor data\nconst sensorData = msg.payload;\n\n// Process distance to water level percentage if settings exist\nconst flow = flow.get('tankSettings') || { maxDistance: 100, minDistance: 0 };\nlet waterLevel = null;\n\nif (sensorData.distance !== undefined) {\n    const { maxDistance, minDistance } = flow;\n    const distance = parseFloat(sensorData.distance);\n    \n    // Calculate water level percentage (inverted: max distance = 0%, min distance = 100%)\n    const range = maxDistance - minDistance;\n    if (range > 0) {\n        // Constrain distance within the range\n        const clampedDistance = Math.max(minDistance, Math.min(maxDistance, distance));\n        waterLevel = 100 - ((clampedDistance - minDistance) / range * 100);\n        // Round to 1 decimal place\n        waterLevel = Math.round(waterLevel * 10) / 10;\n        \n        // Add waterLevel to payload\n        sensorData.waterLevel = waterLevel;\n    }\n}\n\n// Set global timestamp for UI to know when last update occurred\nflow.set('lastUpdate', timestamp);\n\n// Prepare metrics for VictoriaMetrics in Prometheus format\nlet metrics = [];\n\n// Loop through all sensor data and create metrics\nfor (const [key, value] of Object.entries(sensorData)) {\n    if (value !== null && value !== undefined && !isNaN(parseFloat(value))) {\n        metrics.push({\n            name: `plantomio_${key}`,\n            help: `${key} sensor value`,\n            type: 'gauge',\n            values: [{ value: parseFloat(value), timestamp }]\n        });\n    }\n}\n\n// Pass the processed data to VictoriaMetrics\nreturn { payload: metrics };\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 330,
-        "y": 120,
-        "wires": [
-            [
-                "victoria-metrics",
-                "sse-event"
-            ]
-        ]
-    },
-    {
-        "id": "victoria-metrics",
-        "type": "http request",
-        "z": "plantomio-flow",
-        "name": "Store in VictoriaMetrics",
-        "method": "POST",
-        "ret": "txt",
-        "paytoqs": "ignore",
-        "url": "http://localhost:8428/api/v1/write",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [
+        "id": "query-inject",
+        "type": "inject",
+        "z": "query-flow",
+        "name": "Query Data",
+        "props": [
             {
-                "keyType": "Content-Type",
-                "keyValue": "Content-Type",
-                "valueType": "text",
-                "valueValue": "application/json"
+                "p": "payload"
             }
         ],
-        "x": 550,
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
         "y": 120,
         "wires": [
             [
-                "vm-response"
+                "query-function"
             ]
         ]
     },
     {
-        "id": "vm-response",
-        "type": "debug",
-        "z": "plantomio-flow",
-        "name": "VictoriaMetrics Response",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 760,
+        "id": "query-function",
+        "type": "function",
+        "z": "query-flow",
+        "name": "Prepare Query",
+        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Create query parameters\nmsg.url = `http://plantomio.local:8428/api/v1/query?query=temperature{device=\"plt-404cca470da0\"}&start=${oneHourAgo}&end=${now}`;\n\nreturn msg;",
+        "outputs": 1,
+        "x": 300,
         "y": 120,
-        "wires": []
-    },
-    {
-        "id": "tank-settings",
-        "type": "http in",
-        "z": "plantomio-flow",
-        "name": "Tank Settings API",
-        "url": "/api/tank-settings",
-        "method": "post",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 150,
-        "y": 200,
         "wires": [
             [
-                "save-tank-settings"
+                "query-request"
             ]
         ]
     },
     {
-        "id": "save-tank-settings",
-        "type": "function",
-        "z": "plantomio-flow",
-        "name": "Save Tank Settings",
-        "func": "// Get the settings from request\nconst settings = msg.payload;\n\n// Validate settings\nif (settings && typeof settings.maxDistance === 'number' && \n    typeof settings.minDistance === 'number') {\n    \n    // Store settings in flow context\n    flow.set('tankSettings', {\n        maxDistance: settings.maxDistance,\n        minDistance: settings.minDistance\n    });\n    \n    return { payload: { success: true, message: \"Settings saved successfully\" } };\n} else {\n    return { payload: { success: false, message: \"Invalid settings format\" } };\n}\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 350,
-        "y": 200,
-        "wires": [
-            [
-                "tank-settings-response"
-            ]
-        ]
-    },
-    {
-        "id": "tank-settings-response",
-        "type": "http response",
-        "z": "plantomio-flow",
-        "name": "Settings Response",
-        "statusCode": "",
-        "headers": {
-            "content-type": "application/json"
-        },
-        "x": 550,
-        "y": 200,
-        "wires": []
-    },
-    {
-        "id": "get-tank-settings",
-        "type": "http in",
-        "z": "plantomio-flow",
-        "name": "Get Tank Settings",
-        "url": "/api/tank-settings",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 150,
-        "y": 260,
-        "wires": [
-            [
-                "fetch-tank-settings"
-            ]
-        ]
-    },
-    {
-        "id": "fetch-tank-settings",
-        "type": "function",
-        "z": "plantomio-flow",
-        "name": "Fetch Tank Settings",
-        "func": "// Get settings from flow context\nconst settings = flow.get('tankSettings') || { maxDistance: 100, minDistance: 0 };\n\n// Return settings\nreturn { payload: settings };\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 350,
-        "y": 260,
-        "wires": [
-            [
-                "tank-settings-get-response"
-            ]
-        ]
-    },
-    {
-        "id": "tank-settings-get-response",
-        "type": "http response",
-        "z": "plantomio-flow",
-        "name": "Settings Response",
-        "statusCode": "",
-        "headers": {
-            "content-type": "application/json"
-        },
-        "x": 550,
-        "y": 260,
-        "wires": []
-    },
-    {
-        "id": "sse-event",
-        "type": "function",
-        "z": "plantomio-flow",
-        "name": "Prepare SSE Event",
-        "func": "// Clone the input message payload\nconst sensorData = JSON.parse(JSON.stringify(msg.payload));\n\n// Prepare data for SSE\nconst sseData = {\n    event: 'sensor-update',\n    data: sensorData,\n    timestamp: Date.now()\n};\n\n// Set the message properties for the SSE node\nmsg.payload = sseData;\n\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 330,
-        "y": 320,
-        "wires": [
-            [
-                "sse-node"
-            ]
-        ]
-    },
-    {
-        "id": "sse-node",
-        "type": "http response",
-        "z": "plantomio-flow",
-        "name": "SSE Response",
-        "statusCode": "",
-        "headers": {
-            "content-type": "text/event-stream",
-            "cache-control": "no-cache",
-            "connection": "keep-alive"
-        },
-        "x": 520,
-        "y": 320,
-        "wires": []
-    },
-    {
-        "id": "sse-connect",
-        "type": "http in",
-        "z": "plantomio-flow",
-        "name": "SSE Connect",
-        "url": "/api/events",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 150,
-        "y": 320,
-        "wires": [
-            [
-                "sse-setup"
-            ]
-        ]
-    },
-    {
-        "id": "sse-setup",
-        "type": "function",
-        "z": "plantomio-flow",
-        "name": "Setup SSE",
-        "func": "// Initial SSE connection setup\nmsg.payload = {\n    event: 'connected',\n    data: { message: 'SSE connection established' },\n    timestamp: Date.now()\n};\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 330,
-        "y": 380,
-        "wires": [
-            [
-                "sse-node"
-            ]
-        ]
-    },
-    {
-        "id": "query-vm",
-        "type": "http in",
-        "z": "plantomio-flow",
-        "name": "Query API",
-        "url": "/api/query",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 150,
-        "y": 440,
-        "wires": [
-            [
-                "build-vm-query"
-            ]
-        ]
-    },
-    {
-        "id": "build-vm-query",
-        "type": "function",
-        "z": "plantomio-flow",
-        "name": "Build VM Query",
-        "func": "// Get query parameters\nconst query = msg.req.query;\nlet vmQuery = '';\n\n// Handle metric query requests\nif (query.metric) {\n    vmQuery = `http://localhost:8428/api/v1/query?query=${query.metric}`;\n    \n    // Add time range if specified\n    if (query.start && query.end) {\n        vmQuery = `http://localhost:8428/api/v1/query_range?query=${query.metric}&start=${query.start}&end=${query.end}&step=${query.step || '30s'}`;\n    }\n    \n    // Set up the HTTP request to VictoriaMetrics\n    msg.url = vmQuery;\n    return msg;\n} else {\n    // Return error for missing parameters\n    msg.statusCode = 400;\n    msg.payload = { error: \"Missing required parameters\" };\n    return msg;\n}\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 330,
-        "y": 440,
-        "wires": [
-            [
-                "vm-query-request"
-            ]
-        ]
-    },
-    {
-        "id": "vm-query-request",
+        "id": "query-request",
         "type": "http request",
-        "z": "plantomio-flow",
+        "z": "query-flow",
         "name": "Query VictoriaMetrics",
         "method": "GET",
         "ret": "obj",
@@ -341,74 +63,29 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "x": 540,
-        "y": 440,
+        "x": 510,
+        "y": 120,
         "wires": [
             [
-                "vm-query-response"
+                "query-debug"
             ]
         ]
     },
     {
-        "id": "vm-query-response",
-        "type": "http response",
-        "z": "plantomio-flow",
-        "name": "Query Response",
-        "statusCode": "",
-        "headers": {
-            "content-type": "application/json"
-        },
-        "x": 730,
-        "y": 440,
-        "wires": []
-    },
-    {
-        "id": "latest-data",
-        "type": "http in",
-        "z": "plantomio-flow",
-        "name": "Latest Data API",
-        "url": "/api/latest",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 150,
-        "y": 500,
-        "wires": [
-            [
-                "fetch-latest-data"
-            ]
-        ]
-    },
-    {
-        "id": "fetch-latest-data",
-        "type": "function",
-        "z": "plantomio-flow",
-        "name": "Fetch Latest Data",
-        "func": "// Metrics to query\nconst metrics = [\n    'plantomio_temperature',\n    'plantomio_pH',\n    'plantomio_ORP',\n    'plantomio_TDS',\n    'plantomio_EC',\n    'plantomio_distance',\n    'plantomio_waterLevel'\n];\n\n// Create parallel queries for each metric\nconst queryPromises = metrics.map(metric => {\n    return new Promise((resolve, reject) => {\n        const url = `http://localhost:8428/api/v1/query?query=${metric}`;\n        \n        // Use Node.js built-in http module for simplicity\n        const http = require('http');\n        http.get(url, (res) => {\n            let data = '';\n            res.on('data', (chunk) => { data += chunk; });\n            res.on('end', () => {\n                try {\n                    const result = JSON.parse(data);\n                    if (result.status === 'success' && \n                        result.data && \n                        result.data.result && \n                        result.data.result.length > 0) {\n                        \n                        const value = result.data.result[0].value[1];\n                        resolve({ metric: metric.replace('plantomio_', ''), value });\n                    } else {\n                        resolve({ metric: metric.replace('plantomio_', ''), value: null });\n                    }\n                } catch (e) {\n                    resolve({ metric: metric.replace('plantomio_', ''), value: null });\n                }\n            });\n        }).on('error', (err) => {\n            resolve({ metric: metric.replace('plantomio_', ''), value: null });\n        });\n    });\n});\n\n// Wait for all queries to complete\nPromise.all(queryPromises).then(results => {\n    // Convert array to object format\n    const latestData = {};\n    results.forEach(item => {\n        if (item.value !== null) {\n            latestData[item.metric] = parseFloat(item.value);\n        }\n    });\n    \n    // Add last update timestamp\n    latestData.lastUpdate = flow.get('lastUpdate') || Date.now();\n    \n    // Send response\n    node.send({ payload: latestData });\n}).catch(err => {\n    node.send({ payload: { error: 'Failed to fetch data' }, statusCode: 500 });\n});\n\n// Don't immediately return a message, wait for Promise.all\nreturn null;\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 350,
-        "y": 500,
-        "wires": [
-            [
-                "latest-data-response"
-            ]
-        ]
-    },
-    {
-        "id": "latest-data-response",
-        "type": "http response",
-        "z": "plantomio-flow",
-        "name": "Latest Data Response",
-        "statusCode": "",
-        "headers": {
-            "content-type": "application/json"
-        },
-        "x": 550,
-        "y": 500,
+        "id": "query-debug",
+        "type": "debug",
+        "z": "query-flow",
+        "name": "Display Results",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 120,
         "wires": []
     }
 ] 

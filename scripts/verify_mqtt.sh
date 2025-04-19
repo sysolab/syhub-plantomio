@@ -22,13 +22,6 @@ for setting in "${required_settings[@]}"; do
   fi
 done
 
-# Check if conflicting config exists in conf.d
-if [ -f "/etc/mosquitto/conf.d/mqtt_config.conf" ]; then
-  echo "WARNING: Potential conflicting config found in conf.d directory"
-  echo "Content of conflicting file:"
-  cat "/etc/mosquitto/conf.d/mqtt_config.conf"
-fi
-
 # Check if password file exists
 if [ ! -f "/etc/mosquitto/passwd" ]; then
   echo "ERROR: Password file not found at /etc/mosquitto/passwd"

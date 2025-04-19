@@ -280,29 +280,29 @@ load_config() {
       # Use our source function if yq is not available
       if [ -f "$BASE_DIR/scripts/utils.sh" ]; then
         source "$BASE_DIR/scripts/utils.sh"
-        # Source the parsed YAML
-        eval $(parse_yaml "$CONFIG_FILE" "config_")
-        PROJECT_NAME="${config_project_name}"
-        HOSTNAME="${config_hostname}"
+  # Source the parsed YAML
+  eval $(parse_yaml "$CONFIG_FILE" "config_")
+  PROJECT_NAME="${config_project_name}"
+  HOSTNAME="${config_hostname}"
         MOSQUITTO_CONF="${config_service_names_mosquitto_conf}"
         NGINX_SITE="${config_service_names_nginx_site}"
-        MQTT_PORT="${config_mqtt_port}"
-        MQTT_USERNAME="${config_mqtt_username}"
+  MQTT_PORT="${config_mqtt_port}"
+  MQTT_USERNAME="${config_mqtt_username}"
         MQTT_CLIENT_ID="${config_mqtt_client_id_base}"
-        MQTT_PASSWORD="${config_mqtt_password}"
-        VM_VERSION="${config_victoria_metrics_version}"
-        VM_PORT="${config_victoria_metrics_port}"
-        VM_DATA_DIR="${config_victoria_metrics_data_directory}"
-        VM_RETENTION="${config_victoria_metrics_retention_period}"
-        VM_USER="${config_victoria_metrics_service_user}"
-        VM_GROUP="${config_victoria_metrics_service_group}"
-        NODERED_PORT="${config_node_red_port}"
-        NODERED_MEMORY="${config_node_red_memory_limit_mb}"
-        NODERED_USERNAME="${config_node_red_username}"
-        NODERED_PASSWORD_HASH="${config_node_red_password_hash}"
-        DASHBOARD_PORT="${config_dashboard_port}"
-        DASHBOARD_WORKERS="${config_dashboard_workers}"
-        NODEJS_VERSION="${config_nodejs_install_version}"
+  MQTT_PASSWORD="${config_mqtt_password}"
+  VM_VERSION="${config_victoria_metrics_version}"
+  VM_PORT="${config_victoria_metrics_port}"
+  VM_DATA_DIR="${config_victoria_metrics_data_directory}"
+  VM_RETENTION="${config_victoria_metrics_retention_period}"
+  VM_USER="${config_victoria_metrics_service_user}"
+  VM_GROUP="${config_victoria_metrics_service_group}"
+  NODERED_PORT="${config_node_red_port}"
+  NODERED_MEMORY="${config_node_red_memory_limit_mb}"
+  NODERED_USERNAME="${config_node_red_username}"
+  NODERED_PASSWORD_HASH="${config_node_red_password_hash}"
+  DASHBOARD_PORT="${config_dashboard_port}"
+  DASHBOARD_WORKERS="${config_dashboard_workers}"
+  NODEJS_VERSION="${config_nodejs_install_version}"
         CONFIGURE_NETWORK="${config_configure_network}"
         WIFI_AP_SSID="${config_wifi_ap_ssid}"
         WIFI_AP_PASSWORD="${config_wifi_ap_password}"
@@ -383,11 +383,11 @@ install_dependencies() {
   # Set hostname
   if [ "$HOSTNAME" != "$(hostname)" ]; then
     log_message "Setting hostname to $HOSTNAME"
-    hostnamectl set-hostname "$HOSTNAME"
+  hostnamectl set-hostname "$HOSTNAME"
     
     # Add to hosts file if not already there
     if ! grep -q "$HOSTNAME" /etc/hosts; then
-      echo "127.0.1.1 $HOSTNAME" >> /etc/hosts
+  echo "127.0.1.1 $HOSTNAME" >> /etc/hosts
     fi
   else
     log_message "Hostname already set to $HOSTNAME"
@@ -418,7 +418,7 @@ setup_victoriametrics() {
   # Create data directory
   if [ ! -d "$VM_DATA_DIR" ]; then
     log_message "Creating data directory: $VM_DATA_DIR"
-    mkdir -p "$VM_DATA_DIR"
+  mkdir -p "$VM_DATA_DIR"
   fi
   
   # Set proper ownership
@@ -564,7 +564,7 @@ EOF
     fi
   else
     log_message "VictoriaMetrics service started successfully"
-    systemctl enable victoriametrics
+  systemctl enable victoriametrics
   fi
   
   # Test if the HTTP endpoint is available
@@ -618,26 +618,34 @@ persistence_location /var/lib/mosquitto/
 
 log_dest file /var/log/mosquitto/mosquitto.log
 
-include_dir /etc/mosquitto/conf.d
-allow_anonymous false 
+allow_anonymous false
 listener $MQTT_PORT  
 password_file /etc/mosquitto/passwd
 EOF
     
   log_message "Created new mosquitto.conf with all required settings"
   
-  # Ensure no conflicting config in conf.d directory
-  if [ -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" ]; then
-    log_message "Removing potential conflicting config in conf.d directory"
-    rm -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
-  fi
+  # Set correct file permissions
+  chown mosquitto:mosquitto "/etc/mosquitto/mosquitto.conf"
+  chmod 644 "/etc/mosquitto/mosquitto.conf"
   
+  # Remove any existing conf.d file that might cause conflicts
+  if [ -d "/etc/mosquitto/conf.d" ]; then
+    log_message "Checking conf.d directory for potential conflicts"
+    for conf_file in /etc/mosquitto/conf.d/*.conf; do
+      if [ -f "$conf_file" ]; then
+        log_message "Removing potential conflicting config: $conf_file"
+        mv "$conf_file" "${conf_file}.backup"
+      fi
+    done
+  fi
+
   # Create password file with user
   log_message "Setting up MQTT credentials for user: $MQTT_USERNAME"
   
   # Make sure we're creating a new password file if needed
   if [ ! -f "/etc/mosquitto/passwd" ]; then
-    touch /etc/mosquitto/passwd
+  touch /etc/mosquitto/passwd
     chown mosquitto:mosquitto /etc/mosquitto/passwd
     log_message "Created new password file"
   else
@@ -666,10 +674,11 @@ EOF
   
   # Set correct permissions
   chmod 600 /etc/mosquitto/passwd
+  chown mosquitto:mosquitto /etc/mosquitto/passwd
   
   # Validate configuration before restarting
   log_message "Validating Mosquitto configuration"
-  if command -v mosquitto -t > /dev/null; then
+  if command -v mosquitto > /dev/null; then
     mosquitto -t -c /etc/mosquitto/mosquitto.conf || {
       log_message "Warning: Mosquitto configuration validation failed. Proceeding anyway."
     }
@@ -678,36 +687,66 @@ EOF
   # Restart service with more robust error handling
   log_message "Restarting Mosquitto service"
   if ! systemctl restart mosquitto; then
-    log_message "Error restarting Mosquitto. Checking why it failed..."
+    log_message "Error restarting Mosquitto. Attempting automatic fix..."
     
-    # Get Mosquitto status for debugging
-    systemctl status mosquitto > /tmp/mosquitto_status.log 2>&1
-    log_message "Mosquitto status saved to /tmp/mosquitto_status.log"
-    
-    # Try to diagnose the issue
-    if grep -q "Permission denied" /tmp/mosquitto_status.log; then
-      log_message "Possible permission issue. Checking file permissions..."
-      ls -la /etc/mosquitto/ > /tmp/mosquitto_permissions.log
-      log_message "File permissions saved to /tmp/mosquitto_permissions.log"
-    fi
-    
-    # Show error info
-    log_message "Mosquitto failed to start. Please check:"
-    log_message "  - Run 'systemctl status mosquitto' for details"
-    log_message "  - Check logs with 'journalctl -xeu mosquitto.service'"
-    
-    # Ask if we should continue despite the error
-    if [ "$INTERACTIVE" = true ]; then
-      read -p "Mosquitto failed to start. Continue with setup anyway? [y/N]: " choice
-      case "$choice" in
-        y|Y) log_message "Continuing setup despite Mosquitto failure" ;;
-        *) 
-          log_message "Aborting setup due to Mosquitto failure"
-          exit 1
-          ;;
-      esac
+    # Try to fix it with our repair script
+    if [ -f "$BASE_DIR/scripts/fix_mosquitto.sh" ]; then
+      log_message "Running mosquitto fix script"
+      bash "$BASE_DIR/scripts/fix_mosquitto.sh"
+      
+      # Check if the fix worked
+      if ! systemctl is-active --quiet mosquitto; then
+        log_message "Automatic fix unsuccessful. Manual intervention required."
+        
+        # Get Mosquitto status for debugging
+        systemctl status mosquitto > /tmp/mosquitto_status.log 2>&1
+        log_message "Mosquitto status saved to /tmp/mosquitto_status.log"
+        
+        # Get logs for debugging
+        journalctl -u mosquitto --no-pager -n 50 > /tmp/mosquitto_journal.log 2>&1
+        log_message "Mosquitto logs saved to /tmp/mosquitto_journal.log"
+        
+        # Show error info
+        log_message "Mosquitto failed to start. Please check:"
+        log_message "  - Run 'systemctl status mosquitto' for details"
+        log_message "  - Check logs with 'journalctl -xeu mosquitto.service'"
+        
+        # Ask if we should continue despite the error
+        if [ "$INTERACTIVE" = true ]; then
+          read -p "Mosquitto failed to start. Continue with setup anyway? [y/N]: " choice
+          case "$choice" in
+            y|Y) log_message "Continuing setup despite Mosquitto failure" ;;
+            *) 
+              log_message "Aborting setup due to Mosquitto failure"
+              exit 1
+              ;;
+          esac
+        else
+          log_message "WARNING: Mosquitto setup failed but continuing with installation"
+        fi
+      else
+        log_message "Automatic fix successful! Mosquitto is now running."
+      fi
     else
-      log_message "WARNING: Mosquitto setup failed but continuing with installation"
+      log_message "Fix script not found. Manual intervention required."
+      
+      # Show more diagnostic info
+      systemctl status mosquitto
+      log_message "Please run 'journalctl -xeu mosquitto.service' to see detailed logs"
+      
+      # Ask if we should continue despite the error
+      if [ "$INTERACTIVE" = true ]; then
+        read -p "Mosquitto failed to start. Continue with setup anyway? [y/N]: " choice
+        case "$choice" in
+          y|Y) log_message "Continuing setup despite Mosquitto failure" ;;
+          *) 
+            log_message "Aborting setup due to Mosquitto failure"
+            exit 1
+            ;;
+        esac
+      else
+        log_message "WARNING: Mosquitto setup failed but continuing with installation"
+      fi
     fi
   else 
     log_message "Mosquitto MQTT broker started successfully"
@@ -757,21 +796,29 @@ setup_nodered() {
     log_message "Node-RED is already installed"
   fi
   
+  # Create Node-RED user directory
+  mkdir -p "/home/$SYSTEM_USER/.node-red"
+  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red"
+  
   # Install required Node-RED nodes
   log_message "Installing Node-RED nodes"
-  runuser -l "$SYSTEM_USER" -c 'mkdir -p ~/.node-red && cd ~/.node-red && npm install node-red-contrib-victoriam node-red-dashboard node-red-node-ui-table' || {
-    log_message "Error installing Node-RED nodes. Please check Node-RED installation."
-    exit 1
-  }
+  NODE_PACKAGES="node-red-dashboard node-red-node-ui-table"
+  
+  for package in $NODE_PACKAGES; do
+    log_message "Installing Node-RED package: $package"
+    runuser -l "$SYSTEM_USER" -c "cd ~/.node-red && npm install $package" || {
+      log_message "Warning: Failed to install $package. Node-RED may have limited functionality."
+    }
+  done
   
   # Create Node-RED settings file
   log_message "Creating Node-RED settings file"
-  mkdir -p "/home/$SYSTEM_USER/.node-red"
   cat > "/home/$SYSTEM_USER/.node-red/settings.js" << EOF
 module.exports = {
+    httpAdminRoot: '/admin',
+    httpNodeRoot: '/',
     uiPort: $NODERED_PORT,
-    mqttReconnectTime: 15000,
-    serialReconnectTime: 15000,
+    userDir: '/home/$SYSTEM_USER/.node-red',
     adminAuth: {
         type: "credentials",
         users: [{
@@ -800,14 +847,9 @@ module.exports = {
         origin: "*",
         methods: "GET,PUT,POST,DELETE"
     },
-    flowFilePretty: true,
-    editorTheme: {
-        projects: {
-            enabled: false
-        }
-    },
-    nodeMessageBufferMaxLength: 50,
-    ioMessageBufferMaxLength: 50,
+    editorTheme: { 
+        projects: { enabled: false }
+    }
 };
 EOF
 
@@ -834,40 +876,102 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-  # Update Node-RED flows with configurable prefix
-  if [ -f "$BASE_DIR/scripts/update_flows.sh" ]; then
-    log_message "Updating Node-RED flows with project configuration"
-    chmod +x "$BASE_DIR/scripts/update_flows.sh"
-    "$BASE_DIR/scripts/update_flows.sh" || {
-      log_message "Warning: Failed to update flows. Will use original flows."
-    }
-  else
-    log_message "Warning: update_flows.sh not found, skipping flow updates"
-  fi
-
-  # Check flows file exists before copying
-  if [ -f "$BASE_DIR/node-red-flows/flows.json" ]; then
-    log_message "Importing Node-RED flows"
-    mkdir -p "/home/$SYSTEM_USER/.node-red"
-    cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/flows.json"
-    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
-  else
-    log_message "Warning: flows.json not found at $BASE_DIR/node-red-flows/flows.json"
-    # Create an empty flows file if none exists
-    echo '[]' > "/home/$SYSTEM_USER/.node-red/flows.json"
-    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
-  fi
+  # Setup flows from node-red-flows directory
+  setup_nodered_flows
   
   # Reload, enable and start service
-  log_message "Starting Node-RED service"
+  log_message "Starting Node-RED service to apply flows..."
   systemctl daemon-reload
   systemctl enable nodered
-  systemctl restart nodered || {
-    log_message "Error starting Node-RED service. Check with: systemctl status nodered"
-    return 1
-  }
   
-  log_message "Node-RED setup completed"
+  # Completely stop Node-RED first to ensure a clean start
+  systemctl stop nodered 2>/dev/null || true
+  sleep 2
+  
+  # Start Node-RED and wait for it to initialize
+  systemctl start nodered
+  log_message "Waiting for Node-RED to start and apply flows (this may take a moment)..."
+  sleep 10
+  
+  # Check if Node-RED started successfully
+  if systemctl is-active --quiet nodered; then
+    log_message "✓ Node-RED started successfully with flows applied"
+    
+    # Perform additional verification
+    if [ -f "/home/$SYSTEM_USER/.node-red/.flows.json.backup" ] && [ -f "/home/$SYSTEM_USER/.node-red/flows.json" ]; then
+      log_message "✓ Flow files verified - flows are ready to use"
+    else
+      log_message "Warning: Flow backup files not found, flows may not be properly applied"
+    fi
+  else
+    log_message "Warning: Node-RED service didn't start properly. Checking status..."
+    systemctl status nodered
+    log_message "You can check logs with: journalctl -xeu nodered.service"
+    
+    # Ask if we should continue despite the error
+    if [ "$INTERACTIVE" = true ]; then
+      read -p "Node-RED failed to start. Continue with setup anyway? [y/N]: " choice
+      case "$choice" in
+        y|Y) log_message "Continuing setup despite Node-RED failure" ;;
+        *) 
+          log_message "Aborting setup due to Node-RED failure"
+          exit 1
+          ;;
+      esac
+    else
+      log_message "WARNING: Node-RED setup failed but continuing with installation"
+    fi
+  fi
+  
+  log_message "Node-RED setup completed with flows from node-red-flows"
+}
+
+# Setup Node-RED flows
+setup_nodered_flows() {
+  log_message "Setting up Node-RED flows"
+  
+  # Create Node-RED user directory
+  mkdir -p "/home/$SYSTEM_USER/.node-red"
+  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red"
+  
+  # Create node-red-flows directory if it doesn't exist
+  mkdir -p "$BASE_DIR/node-red-flows"
+  chown "$SYSTEM_USER:$SYSTEM_USER" "$BASE_DIR/node-red-flows"
+  
+  # Remove any flows.json from the root directory (we only use node-red-flows)
+  if [ -f "$BASE_DIR/flows.json" ]; then
+    log_message "Found flows.json in project root, moving to node-red-flows"
+    # If no flows exist in node-red-flows, move the root one there
+    if [ ! -f "$BASE_DIR/node-red-flows/flows.json" ]; then
+      mv "$BASE_DIR/flows.json" "$BASE_DIR/node-red-flows/flows.json"
+    else
+      # If flows exist in both places, backup the root one and remove it
+      mv "$BASE_DIR/flows.json" "$BASE_DIR/flows.json.bak"
+    fi
+    log_message "Removed flows.json from project root for cleaner structure"
+  fi
+  
+  # If no flows.json in node-red-flows, create a minimal empty one
+  if [ ! -f "$BASE_DIR/node-red-flows/flows.json" ]; then
+    log_message "No flows.json found in node-red-flows, creating minimal empty flow"
+    echo "[]" > "$BASE_DIR/node-red-flows/flows.json"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "$BASE_DIR/node-red-flows/flows.json"
+  fi
+  
+  # Copy flows from node-red-flows to Node-RED directory
+  log_message "Installing flows from node-red-flows to Node-RED"
+  cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/flows.json"
+  
+  # Create backup files needed by Node-RED
+  cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
+  cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
+  
+  # Set permissions
+  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
+  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
+  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
+  
+  log_message "Node-RED flows successfully installed"
 }
 
 # Setup Flask Dashboard
@@ -984,8 +1088,8 @@ setup_wifi() {
   
   # Check country code
   if [ -z "${config_wifi_country_code}" ]; then
-    log_message "Warning: WiFi country code not set. Using 'US' as default."
-    config_wifi_country_code="US"
+    log_message "Warning: WiFi country code not set. Using 'DE' as default."
+    config_wifi_country_code="DE"
   fi
   
   # Install necessary packages
@@ -1110,15 +1214,15 @@ uninstall_victoriametrics() {
 uninstall_mqtt() {
   log_message "Uninstalling MQTT configuration"
   
-  # Don't actually uninstall Mosquitto, just restore original config if backup exists
+  # Restore original config if backup exists
   if [ -f "/etc/mosquitto/mosquitto.conf.backup" ]; then
     log_message "Restoring original Mosquitto configuration"
     mv "/etc/mosquitto/mosquitto.conf.backup" "/etc/mosquitto/mosquitto.conf"
   fi
   
-  # Remove our custom config file in conf.d if it exists
+  # Clean up any potential remaining conf.d file
   if [ -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" ]; then
-    log_message "Removing MQTT configuration file in conf.d"
+    log_message "Removing any MQTT configuration in conf.d directory"
     rm -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
   fi
   
@@ -1387,7 +1491,7 @@ main() {
   # Always install basic dependencies unless component-specific mode
   if [ -z "$COMPONENTS_TO_UPDATE" ] || should_process_component "core"; then
     if confirm_install "basic dependencies (required)"; then
-      install_dependencies
+  install_dependencies
     else
       log_message "Basic dependencies are required for full installation. Continuing with limited setup."
     fi
@@ -1396,7 +1500,7 @@ main() {
   # Setup VictoriaMetrics
   if should_process_component "vm" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "VictoriaMetrics time series database"; then
-      setup_victoriametrics
+  setup_victoriametrics
     else
       log_message "Skipping VictoriaMetrics installation"
     fi
@@ -1405,7 +1509,7 @@ main() {
   # Setup MQTT
   if should_process_component "mqtt" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "Mosquitto MQTT broker"; then
-      setup_mqtt
+  setup_mqtt
       
       # Verify MQTT setup
       if [ -f "$BASE_DIR/scripts/verify_mqtt.sh" ]; then
@@ -1420,7 +1524,7 @@ main() {
   # Setup Node.js
   if should_process_component "nodejs" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "Node.js"; then
-      setup_nodejs
+  setup_nodejs
     else
       log_message "Skipping Node.js installation"
     fi
@@ -1429,7 +1533,7 @@ main() {
   # Setup Node-RED
   if should_process_component "nodered" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "Node-RED flow editor"; then
-      setup_nodered
+  setup_nodered
     else
       log_message "Skipping Node-RED installation"
     fi
@@ -1438,7 +1542,7 @@ main() {
   # Setup Dashboard
   if should_process_component "dashboard" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "Flask Dashboard"; then
-      setup_dashboard
+  setup_dashboard
     else
       log_message "Skipping Dashboard installation"
     fi
@@ -1447,7 +1551,7 @@ main() {
   # Setup Nginx
   if should_process_component "nginx" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "Nginx web server"; then
-      setup_nginx
+  setup_nginx
     else
       log_message "Skipping Nginx installation"
     fi
@@ -1468,23 +1572,85 @@ main() {
   
   log_message "Setup completed successfully!"
   
+  # Verify all services are running
+  log_message "Verifying services..."
+  services_status=""
+  
+  if systemctl is-active --quiet mosquitto; then
+    services_status="${services_status}✓ Mosquitto: RUNNING\n"
+  else
+    services_status="${services_status}× Mosquitto: NOT RUNNING\n"
+  fi
+  
+  if systemctl is-active --quiet victoriametrics; then
+    services_status="${services_status}✓ VictoriaMetrics: RUNNING\n"
+  else
+    services_status="${services_status}× VictoriaMetrics: NOT RUNNING\n"
+  fi
+  
+  if systemctl is-active --quiet nodered; then
+    services_status="${services_status}✓ Node-RED: RUNNING\n"
+  else
+    services_status="${services_status}× Node-RED: NOT RUNNING\n"
+  fi
+  
+  if systemctl is-active --quiet dashboard; then
+    services_status="${services_status}✓ Dashboard: RUNNING\n"
+  else
+    services_status="${services_status}× Dashboard: NOT RUNNING\n"
+  fi
+  
+  if systemctl is-active --quiet nginx; then
+    services_status="${services_status}✓ Nginx: RUNNING\n"
+  else
+    services_status="${services_status}× Nginx: NOT RUNNING\n"
+  fi
+  
+  log_message "Services status:\n${services_status}"
+  
   # Show access information
   echo "===================================================="
   echo "Installation complete! Access your services at:"
   
   if should_process_component "dashboard" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
-    echo "Dashboard: http://$HOSTNAME/"
+  echo "Dashboard: http://$HOSTNAME/"
   fi
   
   if should_process_component "nodered" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
-    echo "Node-RED: http://$HOSTNAME/node-red/"
+    echo "Node-RED: http://$HOSTNAME/node-red/admin"
   fi
   
   if should_process_component "vm" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
-    echo "VictoriaMetrics: http://$HOSTNAME/victoria/"
+    echo "VictoriaMetrics: http://$HOSTNAME:$VM_PORT"
   fi
   
+  echo ""
+  echo "MQTT Broker: $HOSTNAME:$MQTT_PORT"
+  echo "MQTT Username: $MQTT_USERNAME"
+  echo "MQTT Password: $MQTT_PASSWORD"
   echo "===================================================="
+  
+  # Suggest to run the verification scripts if any services failed
+  if [[ "$services_status" == *"NOT RUNNING"* ]]; then
+    echo ""
+    echo "ATTENTION: Some services failed to start. For detailed diagnostics, run:"
+    
+    if [[ "$services_status" == *"Mosquitto: NOT RUNNING"* ]]; then
+      echo "  sudo bash $BASE_DIR/scripts/fix_mosquitto.sh"
+    fi
+    
+    if [[ "$services_status" == *"Node-RED: NOT RUNNING"* ]]; then
+      echo "  sudo systemctl status nodered"
+      echo "  sudo journalctl -xeu nodered.service"
+    fi
+    
+    if [[ "$services_status" == *"VictoriaMetrics: NOT RUNNING"* ]]; then
+      echo "  sudo systemctl status victoriametrics"
+      echo "  sudo journalctl -xeu victoriametrics.service"
+    fi
+    
+    echo ""
+  fi
 }
 
 # Backup function (adapted from older script)
