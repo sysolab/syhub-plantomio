@@ -321,11 +321,46 @@ setup_victoriametrics() {
   mkdir -p "$VM_DATA_DIR"
   chown -R "$VM_USER":"$VM_GROUP" "$VM_DATA_DIR"
   
-  # Download VictoriaMetrics
-  VM_BINARY_URL="https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/$VM_VERSION/victoria-metrics-linux-arm-$VM_VERSION.tar.gz"
-  curl -L "$VM_BINARY_URL" | tar xz
-  mv victoria-metrics-linux-arm-* /usr/local/bin/victoria-metrics
+  # Determine architecture for correct download
+  ARCH=$(uname -m)
+  VM_ARCH="arm64"
+  
+  if [ "$ARCH" = "x86_64" ]; then
+    VM_ARCH="amd64"
+  elif [[ "$ARCH" == "arm"* ]] || [ "$ARCH" = "aarch64" ]; then
+    VM_ARCH="arm64"
+  else
+    log_message "Warning: Unsupported architecture: $ARCH. Trying arm64 version."
+    VM_ARCH="arm64"
+  fi
+  
+  log_message "Detected architecture: $ARCH, using VM architecture: $VM_ARCH"
+  
+  # Download VictoriaMetrics to a specific file
+  VM_FILENAME="victoria-metrics-$VM_ARCH"
+  VM_BINARY_URL="https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/$VM_VERSION/victoria-metrics-linux-$VM_ARCH-$VM_VERSION.tar.gz"
+  
+  log_message "Downloading VictoriaMetrics from $VM_BINARY_URL"
+  curl -L "$VM_BINARY_URL" -o /tmp/vm.tar.gz
+  
+  # Create a temporary directory for extraction
+  mkdir -p /tmp/vm_extract
+  tar -xzf /tmp/vm.tar.gz -C /tmp/vm_extract
+  
+  # Move the binary to the correct location
+  VM_BINARY=$(find /tmp/vm_extract -type f -executable | head -n 1)
+  
+  if [ -z "$VM_BINARY" ]; then
+    log_message "Error: VictoriaMetrics binary not found in the downloaded archive"
+    exit 1
+  fi
+  
+  log_message "Found VictoriaMetrics binary: $VM_BINARY"
+  cp "$VM_BINARY" /usr/local/bin/victoria-metrics
   chmod +x /usr/local/bin/victoria-metrics
+  
+  # Clean up
+  rm -rf /tmp/vm_extract /tmp/vm.tar.gz
   
   # Create systemd service
   cat > /etc/systemd/system/victoriametrics.service << EOF
@@ -357,19 +392,36 @@ EOF
 setup_mqtt() {
   log_message "Setting up Mosquitto MQTT broker"
   
+  # Ensure directories exist
+  if [ ! -d "/etc/mosquitto/conf.d" ]; then
+    mkdir -p /etc/mosquitto/conf.d
+    log_message "Created Mosquitto config directory"
+  fi
+  
   # Configure Mosquitto
-  cat > /etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf << EOF
+  log_message "Creating Mosquitto configuration: /etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
+  cat > "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" << EOF
 listener $MQTT_PORT
 allow_anonymous false
 password_file /etc/mosquitto/passwd
 EOF
 
   # Create password file with user
+  log_message "Setting up MQTT credentials for user: $MQTT_USERNAME"
   touch /etc/mosquitto/passwd
-  mosquitto_passwd -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD"
+  mosquitto_passwd -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD" || {
+    log_message "Error creating MQTT password entry. Check if mosquitto_passwd is available."
+    exit 1
+  }
+  
+  # Set correct permissions
+  chmod 600 /etc/mosquitto/passwd
   
   # Restart service
-  systemctl restart mosquitto
+  systemctl restart mosquitto || {
+    log_message "Error restarting Mosquitto. Check status with: systemctl status mosquitto"
+    exit 1
+  }
   
   log_message "MQTT broker setup completed"
 }
@@ -404,15 +456,28 @@ setup_nodejs() {
 setup_nodered() {
   log_message "Setting up Node-RED"
   
-  # Install Node-RED as global package
-  runuser -l $SYSTEM_USER -c 'npm install -g --unsafe-perm node-red'
+  # Check if Node-RED is already installed
+  if ! command -v node-red &> /dev/null; then
+    log_message "Installing Node-RED as global package"
+    runuser -l "$SYSTEM_USER" -c 'npm install -g --unsafe-perm node-red' || {
+      log_message "Error installing Node-RED. Please check npm installation."
+      exit 1
+    }
+  else
+    log_message "Node-RED is already installed"
+  fi
   
   # Install required Node-RED nodes
-  runuser -l $SYSTEM_USER -c 'cd ~/.node-red && npm install node-red-contrib-victoriam node-red-dashboard node-red-node-ui-table'
+  log_message "Installing Node-RED nodes"
+  runuser -l "$SYSTEM_USER" -c 'mkdir -p ~/.node-red && cd ~/.node-red && npm install node-red-contrib-victoriam node-red-dashboard node-red-node-ui-table' || {
+    log_message "Error installing Node-RED nodes. Please check Node-RED installation."
+    exit 1
+  }
   
   # Create Node-RED settings file
-  mkdir -p /home/$SYSTEM_USER/.node-red
-  cat > /home/$SYSTEM_USER/.node-red/settings.js << EOF
+  log_message "Creating Node-RED settings file"
+  mkdir -p "/home/$SYSTEM_USER/.node-red"
+  cat > "/home/$SYSTEM_USER/.node-red/settings.js" << EOF
 module.exports = {
     uiPort: $NODERED_PORT,
     mqttReconnectTime: 15000,
@@ -425,7 +490,22 @@ module.exports = {
             permissions: "*"
         }]
     },
-    functionGlobalContext: {},
+    functionGlobalContext: {
+        // Make project configuration available to functions
+        config: {
+            projectName: "$PROJECT_NAME",
+            mqtt: {
+                host: "localhost",
+                port: $MQTT_PORT,
+                username: "$MQTT_USERNAME",
+                password: "$MQTT_PASSWORD"
+            },
+            vm: {
+                host: "localhost",
+                port: $VM_PORT
+            }
+        }
+    },
     httpNodeCors: {
         origin: "*",
         methods: "GET,PUT,POST,DELETE"
@@ -441,7 +521,11 @@ module.exports = {
 };
 EOF
 
+  # Fix permissions on settings file
+  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/settings.js"
+
   # Create systemd service for Node-RED
+  log_message "Creating Node-RED systemd service"
   cat > /etc/systemd/system/nodered.service << EOF
 [Unit]
 Description=Node-RED
@@ -461,18 +545,37 @@ WantedBy=multi-user.target
 EOF
 
   # Update Node-RED flows with configurable prefix
-  log_message "Updating Node-RED flows with project configuration"
-  chmod +x "$BASE_DIR/scripts/update_flows.sh"
-  "$BASE_DIR/scripts/update_flows.sh"
+  if [ -f "$BASE_DIR/scripts/update_flows.sh" ]; then
+    log_message "Updating Node-RED flows with project configuration"
+    chmod +x "$BASE_DIR/scripts/update_flows.sh"
+    "$BASE_DIR/scripts/update_flows.sh" || {
+      log_message "Warning: Failed to update flows. Will use original flows."
+    }
+  else
+    log_message "Warning: update_flows.sh not found, skipping flow updates"
+  fi
 
-  # Import Node-RED flows
-  cp $BASE_DIR/node-red-flows/flows.json /home/$SYSTEM_USER/.node-red/flows.json
-  chown $SYSTEM_USER:$SYSTEM_USER /home/$SYSTEM_USER/.node-red/flows.json
+  # Check flows file exists before copying
+  if [ -f "$BASE_DIR/node-red-flows/flows.json" ]; then
+    log_message "Importing Node-RED flows"
+    mkdir -p "/home/$SYSTEM_USER/.node-red"
+    cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/flows.json"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
+  else
+    log_message "Warning: flows.json not found at $BASE_DIR/node-red-flows/flows.json"
+    # Create an empty flows file if none exists
+    echo '[]' > "/home/$SYSTEM_USER/.node-red/flows.json"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
+  fi
   
   # Reload, enable and start service
+  log_message "Starting Node-RED service"
   systemctl daemon-reload
   systemctl enable nodered
-  systemctl start nodered
+  systemctl restart nodered || {
+    log_message "Error starting Node-RED service. Check with: systemctl status nodered"
+    return 1
+  }
   
   log_message "Node-RED setup completed"
 }
