@@ -82,7 +82,7 @@ load_config() {
   if [ ! -f "$CONFIG_FILE" ]; then
     log_message "Error: Configuration file not found: $CONFIG_FILE"
     exit 1
-  }
+  fi
   
   # Source the parsed YAML
   eval $(parse_yaml "$CONFIG_FILE" "config_")
@@ -103,7 +103,7 @@ load_config() {
   if [ -z "$MOSQUITTO_CONF" ] || [ -z "$NGINX_SITE" ]; then
     log_message "Error: Missing required service name configuration values"
     exit 1
-  }
+  fi
   
   # Handle auto-configuration parameters
   
