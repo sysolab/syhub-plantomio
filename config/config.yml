@@ -2,9 +2,10 @@
 # Ensure 2-space indentation. Quote values starting with special characters like '!'
 
 project:
-  name: plantomio            # Project name, used in dashboard title etc.
+  name: iot_system            # Project name, used in dashboard title etc.
+  metrics_prefix: iot_system_  # Prefix for metrics in VictoriaMetrics
 
-hostname: plantomio.local     # mDNS hostname for accessing services (.local suffix)
+hostname: iot-system.local     # mDNS hostname for accessing services (.local suffix)
 
 # --- System Setup ---
 # system_user: Automatically detected from user running 'sudo ./setup.sh'
@@ -12,11 +13,18 @@ hostname: plantomio.local     # mDNS hostname for accessing services (.local suf
 log_file: ./log/syhub_setup.log # Path for the setup script's detailed log
 backup_directory: backups     # Relative to base_dir for config/data backups
 
+# --- Service Names ---
+service_names:
+  mosquitto_conf: mqtt_config  # Name for Mosquitto config file
+  nginx_site: iot_dashboard    # Name for Nginx site config
+  flow_id: iot_flow           # Node-RED flow ID
+
 # --- Network Configuration ---
 # Set to false to skip AP+STA setup entirely (e.g., if using Ethernet or manual config)
 configure_network: false
 
 # --- WiFi Access Point (AP) + Station (STA) Mode ---
+# AP SSID and password will use project name if not specified
 wifi:
   ap_interface: uap0
   ap_ip: 192.168.77.1
@@ -24,18 +32,19 @@ wifi:
   ap_dhcp_range_start: 192.168.77.100
   ap_dhcp_range_end: 192.168.77.150
   ap_dhcp_lease_time: 12h
-  ap_ssid: plantomio_ap
-  ap_password: plantomio123
-  country_code: "DE"
-  sta_ssid: "LiveLongAndRouter"
-  sta_password: "!Pirjo2diPirjo2diPirjo2di"
+  ap_ssid: auto              # Will use project_name + "_ap" if set to "auto"
+  ap_password: auto          # Will use project_name + "123" if set to "auto"
+  country_code: "US"         # Set this to your country code
+  sta_ssid: ""               # Your WiFi network SSID
+  sta_password: ""           # Your WiFi network password
 
 # --- MQTT Broker (Mosquitto) ---
+# Credentials will use project name if not specified
 mqtt:
   port: 1883
-  username: plantomioX1
-  client_id_base: plantomioX1
-  password: plantomioX1Pass
+  username: auto             # Will use project_name if set to "auto"
+  client_id_base: auto       # Will use project_name if set to "auto"
+  password: auto             # Will use project_name + "Pass" if set to "auto"
   topic_telemetry: "v1/devices/me/telemetry"
 
 # --- Time Series Database (VictoriaMetrics) ---

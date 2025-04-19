@@ -1,4 +1,4 @@
-# Plantomio IoT Dashboard
+# SyHub IoT Dashboard
 
 A lightweight, efficient IoT monitoring system optimized for Raspberry Pi 3B. This system collects sensor data via MQTT, stores it in VictoriaMetrics, and displays it in a responsive web dashboard.
 
@@ -10,6 +10,7 @@ A lightweight, efficient IoT monitoring system optimized for Raspberry Pi 3B. Th
 - **Water level visualization**: Shows water level in a tank with configurable settings
 - **Historical data trends**: View sensor data trends over various time periods
 - **Easy setup**: Simple installation script sets up the entire system
+- **Fully configurable**: All system components can be configured from a single YAML file
 
 ## System Requirements
 
@@ -21,26 +22,30 @@ A lightweight, efficient IoT monitoring system optimized for Raspberry Pi 3B. Th
 ## Quick Installation
 
 1. Clone or download this repository to your Raspberry Pi
-2. Make the setup script executable: `chmod +x setup.sh`
-3. Run the setup script as root: `sudo ./setup.sh`
-4. Wait for the installation to complete (5-10 minutes)
+2. Edit `config/config.yml` to customize your setup
+3. Make the setup script executable: `chmod +x setup.sh`
+4. Run the setup script as root: `sudo ./setup.sh`
+5. Wait for the installation to complete (5-10 minutes)
 
 ## Accessing the Dashboard
 
 After installation, you can access the various services:
 
-- **Dashboard**: `http://plantomio.local:5000/` or `http://<your-pi-ip>:5000/`
-- **Node-RED**: `http://plantomio.local:1880/` or `http://<your-pi-ip>:1880/`
-- **VictoriaMetrics**: `http://plantomio.local:8428/` or `http://<your-pi-ip>:8428/`
+- **Dashboard**: `http://<your-hostname>/` or `http://<your-pi-ip>/`
+- **Node-RED**: `http://<your-hostname>/node-red/` or `http://<your-pi-ip>/node-red/`
+- **VictoriaMetrics**: `http://<your-hostname>/victoria/` or `http://<your-pi-ip>/victoria/`
+
+The default hostname is set in your `config.yml` file.
 
 ## Configuration
 
-The system configuration is stored in `/home/<your-user>/syhub/config/config.yml`. You can modify this file to adjust settings such as:
+The system configuration is stored in `config/config.yml`. You can modify this file to adjust settings such as:
 
+- Project name and hostname
 - MQTT broker credentials
 - Web dashboard port
 - Data retention period
-- System hostname
+- WiFi access point settings (optional)
 
 ## MQTT Data Format
 
@@ -57,7 +62,7 @@ The system expects sensor data in the following JSON format:
 }
 ```
 
-Publish this data to the topic `v1/devices/me/telemetry`.
+Publish this data to the topic defined in your config file (default: `v1/devices/me/telemetry`).
 
 ## Tank Level Configuration
 
