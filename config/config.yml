@@ -2,10 +2,10 @@
 # Ensure 2-space indentation. Quote values starting with special characters like '!'
 
 project:
-  name: iot_system            # Project name, used in dashboard title etc.
-  metrics_prefix: iot_system_  # Prefix for metrics in VictoriaMetrics
+  name: plantomio            # Project name, used in dashboard title etc.
+  metrics_prefix: plnt_  # Prefix for metrics in VictoriaMetrics
 
-hostname: iot-system.local     # mDNS hostname for accessing services (.local suffix)
+hostname: plantomio.local     # mDNS hostname for accessing services (.local suffix)
 
 # --- System Setup ---
 # system_user: Automatically detected from user running 'sudo ./setup.sh'
@@ -42,9 +42,9 @@ wifi:
 # Credentials will use project name if not specified
 mqtt:
   port: 1883
-  username: auto             # Will use project_name if set to "auto"
-  client_id_base: auto       # Will use project_name if set to "auto"
-  password: auto             # Will use project_name + "Pass" if set to "auto"
+  username: plantomioX1             # Will use project_name if set to "auto"
+  client_id_base: plantomioX1       # Will use project_name if set to "auto"
+  password: plantomioX1Pass            # Will use project_name + "Pass" if set to "auto"
   topic_telemetry: "v1/devices/me/telemetry"
 
 # --- Time Series Database (VictoriaMetrics) ---
