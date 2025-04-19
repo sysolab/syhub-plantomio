@@ -1,13 +1,52 @@
-PROJECT_NAME IoT Monitoring System
-An IoT solution for monitoring plant-related telemetry data (temperature, pH, ORP, TDS, EC, distance) on a Raspberry Pi 3B. Features WiFi AP+STA, MQTT broker (Mosquitto), time-series storage (VictoriaMetrics), data processing (Node-RED and Python), alerting, health checks, and a Flask-based dashboard with Chart.js.
-Prerequisites
+# Plantomio IoT Dashboard
 
-Raspberry Pi 3B with Raspberry Pi OS 64-bit Lite (Bookworm).
-MicroSD card (8GB+).
-Temporary internet access (Ethernet or WiFi).
+A lightweight, efficient IoT monitoring system optimized for Raspberry Pi 3B. This system collects sensor data via MQTT, stores it in VictoriaMetrics, and displays it in a responsive web dashboard.
 
-Telemetry Data Format
-Publish JSON data to the MQTT topic __MQTT_TOPIC__:
+## Features
+
+- **Real-time updates**: Uses Server-Sent Events (SSE) for efficient real-time data updates
+- **Responsive design**: Works on mobile, tablet, and desktop
+- **Resource-efficient**: Optimized for Raspberry Pi 3B's limited resources
+- **Water level visualization**: Shows water level in a tank with configurable settings
+- **Historical data trends**: View sensor data trends over various time periods
+- **Easy setup**: Simple installation script sets up the entire system
+
+## System Requirements
+
+- Raspberry Pi 3B or better
+- Raspberry Pi OS 64-bit (Bookworm)
+- At least 1GB of free disk space
+- Internet connection for initial setup
+
+## Quick Installation
+
+1. Clone or download this repository to your Raspberry Pi
+2. Make the setup script executable: `chmod +x setup.sh`
+3. Run the setup script as root: `sudo ./setup.sh`
+4. Wait for the installation to complete (5-10 minutes)
+
+## Accessing the Dashboard
+
+After installation, you can access the various services:
+
+- **Dashboard**: `http://plantomio.local:5000/` or `http://<your-pi-ip>:5000/`
+- **Node-RED**: `http://plantomio.local:1880/` or `http://<your-pi-ip>:1880/`
+- **VictoriaMetrics**: `http://plantomio.local:8428/` or `http://<your-pi-ip>:8428/`
+
+## Configuration
+
+The system configuration is stored in `/home/<your-user>/syhub/config/config.yml`. You can modify this file to adjust settings such as:
+
+- MQTT broker credentials
+- Web dashboard port
+- Data retention period
+- System hostname
+
+## MQTT Data Format
+
+The system expects sensor data in the following JSON format:
+
+```json
 {
   "temperature": 25.0,
   "pH": 7.0,
@@ -16,86 +55,23 @@ Publish JSON data to the MQTT topic __MQTT_TOPIC__:
   "EC": 1.0,
   "distance": 50.0
 }
+```
 
-Setup Instructions
+Publish this data to the topic `v1/devices/me/telemetry`.
 
-Prepare SD Card:
+## Tank Level Configuration
 
-Flash Raspberry Pi OS 64-bit Lite to the SD card.
-Boot the Pi and ensure the user is __SYSTEM_USER__.
+Configure your tank's water level calculation in the Settings page of the dashboard:
 
+1. Set Maximum Distance (Empty Tank): Distance sensor reading when tank is empty (0% level)
+2. Set Minimum Distance (Full Tank): Distance sensor reading when tank is full (100% level)
 
-Create Project Structure:
+## Troubleshooting
 
-Create directories: mkdir -p __BASE_DIR__/{config,scripts,src/static/css,.node-red,backups}
-Add files as specified.
+- **Dashboard not loading**: Check if the dashboard service is running: `systemctl status dashboard`
+- **No data updates**: Verify MQTT broker is running: `systemctl status mosquitto`
+- **Charts not displaying**: Check if VictoriaMetrics is running: `systemctl status victoriametrics`
 
+## License
 
-Configure:
-
-Edit config/config.yml with your settings (WiFi, MQTT, email, etc.).
-
-
-Run Setup Script:
-chmod +x scripts/setup.sh
-sudo bash scripts/setup.sh setup
-
-
-Access System:
-
-Connect to WiFi AP (__WIFI_AP_SSID__) if configured.
-Verify STA mode: iwconfig wlan0.
-Access Node-RED: http://__HOSTNAME__:__NODE_RED_PORT__/admin.
-Access dashboard: http://__HOSTNAME__:__DASHBOARD_PORT__.
-
-
-
-Usage
-
-Setup: sudo bash scripts/setup.sh setup
-Backup: sudo bash scripts/setup.sh backup
-Check Logs: cat __LOG_FILE__, cat /tmp/syhub_processor.log, cat /tmp/syhub_alerter.log, cat /tmp/syhub_health.log
-Service Status: sudo systemctl status mosquitto victoriametrics nodered __PROJECT_NAME__-processor __PROJECT_NAME__-alerter __PROJECT_NAME__-dashboard __PROJECT_NAME__-healthcheck
-
-Troubleshooting
-
-Mosquitto:
-Logs: journalctl -xeu mosquitto.service
-Config: cat /etc/mosquitto/conf.d/__PROJECT_NAME__.conf
-
-
-VictoriaMetrics:
-Status: sudo systemctl status victoriametrics
-Test: curl http://__HOSTNAME__:__VICTORIA_METRICS_PORT__/api/v1/query?query=telemetry
-
-
-Node-RED:
-Access: http://__HOSTNAME__:__NODE_RED_PORT__/admin
-Flows: cat __BASE_DIR__/.node-red/flows.json
-
-
-Data Processor:
-Logs: cat /tmp/syhub_processor.log
-
-
-Alerter:
-Logs: cat /tmp/syhub_alerter.log
-
-
-Dashboard:
-Status: sudo systemctl status __PROJECT_NAME__-dashboard
-
-
-Health Check:
-Logs: cat /tmp/syhub_health.log
-
-
-
-Resource Optimization
-
-Node-RED: Limited to NODE_RED_MEMORY_LIMIT MB.
-VictoriaMetrics: Efficient storage in VICTORIA_METRICS_DATA_DIR.
-Flask: DASHBOARD_WORKERS workers.
-Data Processor and Alerter: ~50MB each.
-Mosquitto: Minimal overhead with authentication.
-
+This project is open source and available under the MIT License. 

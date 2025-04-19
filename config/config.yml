@@ -1,4 +1,3 @@
-# /home/<YOUR_USER>/syhub/config/config.yml
 # --- SyHub Configuration ---
 # Ensure 2-space indentation. Quote values starting with special characters like '!'
 
@@ -60,14 +59,6 @@ dashboard:
   port: 5000
   workers: 2
 
-# --- Email Alerts ---
-email:
-  sender: "plantomio@example.com"
-  password: "your-email-password"
-  receiver: "admin@example.com"
-  smtp_server: "smtp.gmail.com"
-  smtp_port: 587
-
 # --- Node.js Installation ---
 nodejs:
-  install_version: "lts"
+  install_version: "lts" 

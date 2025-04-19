@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project_name }} - Trends</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/images/favicon.ico">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <h1>{{ project_name }}</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="/">Dashboard</a></li>
+                    <li><a href="/trends" class="active">Trends</a></li>
+                    <li><a href="/settings">Settings</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="trends-container">
+                <div class="time-controls">
+                    <h2>Historical Data</h2>
+                    <div class="time-range-selector">
+                        <button class="time-btn active" data-range="1h">1h</button>
+                        <button class="time-btn" data-range="6h">6h</button>
+                        <button class="time-btn" data-range="24h">24h</button>
+                        <button class="time-btn" data-range="7d">7d</button>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <!-- Temperature Chart -->
+                    <div class="card chart-full">
+                        <h3>Temperature (°C)</h3>
+                        <div class="chart-container">
+                            <canvas id="temperature-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- pH Chart -->
+                    <div class="card chart-full">
+                        <h3>pH</h3>
+                        <div class="chart-container">
+                            <canvas id="ph-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- EC Chart -->
+                    <div class="card chart-full">
+                        <h3>EC (mS/cm)</h3>
+                        <div class="chart-container">
+                            <canvas id="ec-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- ORP Chart -->
+                    <div class="card chart-full">
+                        <h3>ORP (mV)</h3>
+                        <div class="chart-container">
+                            <canvas id="orp-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- TDS Chart -->
+                    <div class="card chart-full">
+                        <h3>TDS (ppm)</h3>
+                        <div class="chart-container">
+                            <canvas id="tds-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Water Level Chart -->
+                    <div class="card chart-full">
+                        <h3>Water Level (%)</h3>
+                        <div class="chart-container">
+                            <canvas id="water-level-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
+        </footer>
+    </div>
+
+    <!-- Load Chart.js -->
+    <script src="/static/js/chart.min.js"></script>
+    <script src="/static/js/trends.js"></script>
+</body>
+</html> 

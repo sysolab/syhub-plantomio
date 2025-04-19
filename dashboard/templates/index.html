@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project_name }} Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/images/favicon.ico">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <h1>{{ project_name }}</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="/" class="active">Dashboard</a></li>
+                    <li><a href="/trends">Trends</a></li>
+                    <li><a href="/settings">Settings</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <div class="dashboard-grid">
+                <!-- Tank Level Visualization -->
+                <div class="card tank-card">
+                    <h2>Water Level</h2>
+                    <div class="tank-container">
+                        <div class="tank-visualization">
+                            <div class="tank-level" id="tank-level"></div>
+                        </div>
+                        <div class="tank-info">
+                            <p><span id="water-level-value">--</span>%</p>
+                            <p>Distance: <span id="distance-value">--</span> cm</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Metrics -->
+                <div class="card metrics-card">
+                    <h2>Key Metrics</h2>
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div class="metric-value" id="temperature-value">--</div>
+                            <div class="metric-label">Temperature (°C)</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="ph-value">--</div>
+                            <div class="metric-label">pH</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="ec-value">--</div>
+                            <div class="metric-label">EC (mS/cm)</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="tds-value">--</div>
+                            <div class="metric-label">TDS (ppm)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- pH & EC Chart -->
+                <div class="card chart-card">
+                    <h2>pH & EC Trends</h2>
+                    <div class="chart-container">
+                        <canvas id="ph-ec-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="card status-card">
+                    <h2>System Status</h2>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="status-label">Dashboard:</span>
+                            <span class="status-value" id="dashboard-status"><span class="status-dot online"></span> Online</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Node-RED:</span>
+                            <span class="status-value" id="nodered-status"><span class="status-dot"></span> --</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">VictoriaMetrics:</span>
+                            <span class="status-value" id="vm-status"><span class="status-dot"></span> --</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Last Update:</span>
+                            <span class="status-value" id="last-update">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
+        </footer>
+    </div>
+
+    <!-- Lazy-load Chart.js only when needed -->
+    <script src="/static/js/chart.min.js" defer></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html> 

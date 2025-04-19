@@ -1,8 +1,0 @@
-interface __WIFI_AP_INTERFACE__
-static ip_address=__WIFI_AP_IP__/__WIFI_AP_SUBNET_MASK__
-nohook wpa_supplicant
-
-profile __WIFI_STA_SSID__
-interface wlan0
-ssid __WIFI_STA_SSID__
-psk __WIFI_STA_PASSWORD__
