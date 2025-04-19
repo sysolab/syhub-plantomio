@@ -5,6 +5,58 @@
 
 set -e  # Exit on any error
 
+# Interactive mode flag
+INTERACTIVE=false
+
+# Command to run
+COMMAND="setup"
+
+# Parse command line arguments
+for arg in "$@"; do
+  case $arg in
+    --interactive|-i)
+      INTERACTIVE=true
+      shift
+      ;;
+    setup|backup|info)
+      COMMAND="$arg"
+      shift
+      ;;
+    *)
+      # Unknown option
+      echo "Unknown option: $arg"
+      echo "Usage: $0 [--interactive|-i] [setup|backup|info]"
+      exit 1
+      ;;
+  esac
+done
+
+# Function to ask for confirmation in interactive mode
+confirm_install() {
+  local component=$1
+  local default=${2:-Y}
+  
+  if [ "$INTERACTIVE" = true ]; then
+    local prompt="Install $component? [Y/n]: "
+    [ "$default" = "N" ] && prompt="Install $component? [y/N]: "
+    
+    read -p "$prompt" choice
+    choice=${choice:-$default}
+    
+    case "$choice" in
+      y|Y) return 0 ;;
+      n|N) return 1 ;;
+      *) 
+        echo "Invalid choice. Please enter Y or N."
+        confirm_install "$component" "$default"
+        ;;
+    esac
+  else
+    # In non-interactive mode, always install
+    return 0
+  fi
+}
+
 # Detect if script is run with sudo
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root: sudo $0"
@@ -20,10 +72,6 @@ fi
 
 # Base directory determination
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Source utilities if available
-if [ -f "$SCRIPT_DIR/scripts/utils.sh" ]; then
-  source "$SCRIPT_DIR/scripts/utils.sh"
-fi
 BASE_DIR="/home/$SYSTEM_USER/syhub"
 CONFIG_FILE="$BASE_DIR/config/config.yml"
 LOG_FILE="$BASE_DIR/log/syhub_setup.log"
@@ -31,14 +79,44 @@ LOG_FILE="$BASE_DIR/log/syhub_setup.log"
 # Create log directory
 mkdir -p "$BASE_DIR/log"
 
-# Logging wrapper that uses the utils log function if available
+# Logging function 
 log_message() {
-  if type log >/dev/null 2>&1; then
-    log "$1" "$LOG_FILE"
-  else
-    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-    echo "[$timestamp] $1" | tee -a "$LOG_FILE"
+  local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+  echo "[$timestamp] $1" | tee -a "$LOG_FILE"
+}
+
+# Install yq if not available
+install_yq() {
+  if ! command -v yq &> /dev/null; then
+    log_message "Installing yq YAML processor..."
+    YQ_VERSION="v4.40.5"
+    ARCH=$(uname -m)
+    
+    case "$ARCH" in
+      arm*|aarch64)
+        wget "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_arm64" -O /tmp/yq || { 
+          log_message "Error downloading yq. Please check your internet connection."
+          return 1
+        }
+        ;;
+      x86_64)
+        wget "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -O /tmp/yq || {
+          log_message "Error downloading yq. Please check your internet connection."
+          return 1
+        }
+        ;;
+      *)
+        log_message "Unsupported architecture: $ARCH"
+        return 1
+        ;;
+    esac
+    
+    chmod +x /tmp/yq
+    mv /tmp/yq /usr/local/bin/yq
+    log_message "yq installed successfully."
+    return 0
   fi
+  return 0
 }
 
 # Handle installation from different locations
@@ -66,13 +144,8 @@ if [ "$SCRIPT_DIR" != "$BASE_DIR" ]; then
   log_message "Files copied successfully. Launching setup..."
   
   # Execute the script in the target location
-  exec "$BASE_DIR/setup.sh"
+  exec "$BASE_DIR/setup.sh" "$@"
   exit 0
-fi
-
-# Source the utilities again, now that we're in the right directory
-if [ -f "$BASE_DIR/scripts/utils.sh" ]; then
-  source "$BASE_DIR/scripts/utils.sh"
 fi
 
 # Load configuration
@@ -84,83 +157,131 @@ load_config() {
     exit 1
   fi
   
-  # Source the parsed YAML
-  eval $(parse_yaml "$CONFIG_FILE" "config_")
-  
-  # Check required configuration values
-  if [ -z "${config_project_name}" ]; then
-    log_message "Error: Missing required configuration value: project.name"
-    exit 1
+  # Try to use yq for better YAML parsing
+  if command -v yq &> /dev/null; then
+    log_message "Using yq for YAML parsing"
+    
+    # Parse config.yml with yq
+    PROJECT_NAME=$(yq e '.project.name' "$CONFIG_FILE" 2>/dev/null)
+    HOSTNAME=$(yq e '.hostname' "$CONFIG_FILE" 2>/dev/null)
+    
+    # Service names
+    MOSQUITTO_CONF=$(yq e '.service_names.mosquitto_conf' "$CONFIG_FILE" 2>/dev/null)
+    NGINX_SITE=$(yq e '.service_names.nginx_site' "$CONFIG_FILE" 2>/dev/null)
+    
+    # WiFi AP settings
+    WIFI_AP_SSID=$(yq e '.wifi.ap_ssid' "$CONFIG_FILE" 2>/dev/null)
+    WIFI_AP_PASSWORD=$(yq e '.wifi.ap_password' "$CONFIG_FILE" 2>/dev/null)
+    
+    # MQTT settings
+    MQTT_PORT=$(yq e '.mqtt.port' "$CONFIG_FILE" 2>/dev/null)
+    MQTT_USERNAME=$(yq e '.mqtt.username' "$CONFIG_FILE" 2>/dev/null)
+    MQTT_CLIENT_ID=$(yq e '.mqtt.client_id_base' "$CONFIG_FILE" 2>/dev/null)
+    MQTT_PASSWORD=$(yq e '.mqtt.password' "$CONFIG_FILE" 2>/dev/null)
+    
+    # VictoriaMetrics config
+    VM_VERSION=$(yq e '.victoria_metrics.version' "$CONFIG_FILE" 2>/dev/null)
+    VM_PORT=$(yq e '.victoria_metrics.port' "$CONFIG_FILE" 2>/dev/null)
+    VM_DATA_DIR=$(yq e '.victoria_metrics.data_directory' "$CONFIG_FILE" 2>/dev/null)
+    VM_RETENTION=$(yq e '.victoria_metrics.retention_period' "$CONFIG_FILE" 2>/dev/null)
+    VM_USER=$(yq e '.victoria_metrics.service_user' "$CONFIG_FILE" 2>/dev/null)
+    VM_GROUP=$(yq e '.victoria_metrics.service_group' "$CONFIG_FILE" 2>/dev/null)
+    
+    # Node-RED config
+    NODERED_PORT=$(yq e '.node_red.port' "$CONFIG_FILE" 2>/dev/null)
+    NODERED_MEMORY=$(yq e '.node_red.memory_limit_mb' "$CONFIG_FILE" 2>/dev/null)
+    NODERED_USERNAME=$(yq e '.node_red.username' "$CONFIG_FILE" 2>/dev/null)
+    NODERED_PASSWORD_HASH=$(yq e '.node_red.password_hash' "$CONFIG_FILE" 2>/dev/null)
+    
+    # Dashboard config
+    DASHBOARD_PORT=$(yq e '.dashboard.port' "$CONFIG_FILE" 2>/dev/null)
+    DASHBOARD_WORKERS=$(yq e '.dashboard.workers' "$CONFIG_FILE" 2>/dev/null)
+    
+    # Node.js config
+    NODEJS_VERSION=$(yq e '.nodejs.install_version' "$CONFIG_FILE" 2>/dev/null)
+    
+    # Network config
+    CONFIGURE_NETWORK=$(yq e '.configure_network' "$CONFIG_FILE" 2>/dev/null)
+  else
+    log_message "WARNING: yq not found, trying to install..."
+    if ! install_yq; then
+      log_message "WARNING: yq installation failed, falling back to basic YAML parsing"
+      # Use our source function if yq is not available
+      if [ -f "$BASE_DIR/scripts/utils.sh" ]; then
+        source "$BASE_DIR/scripts/utils.sh"
+        # Source the parsed YAML
+        eval $(parse_yaml "$CONFIG_FILE" "config_")
+        PROJECT_NAME="${config_project_name}"
+        HOSTNAME="${config_hostname}"
+        MOSQUITTO_CONF="${config_service_names_mosquitto_conf}"
+        NGINX_SITE="${config_service_names_nginx_site}"
+        MQTT_PORT="${config_mqtt_port}"
+        MQTT_USERNAME="${config_mqtt_username}"
+        MQTT_CLIENT_ID="${config_mqtt_client_id_base}"
+        MQTT_PASSWORD="${config_mqtt_password}"
+        VM_VERSION="${config_victoria_metrics_version}"
+        VM_PORT="${config_victoria_metrics_port}"
+        VM_DATA_DIR="${config_victoria_metrics_data_directory}"
+        VM_RETENTION="${config_victoria_metrics_retention_period}"
+        VM_USER="${config_victoria_metrics_service_user}"
+        VM_GROUP="${config_victoria_metrics_service_group}"
+        NODERED_PORT="${config_node_red_port}"
+        NODERED_MEMORY="${config_node_red_memory_limit_mb}"
+        NODERED_USERNAME="${config_node_red_username}"
+        NODERED_PASSWORD_HASH="${config_node_red_password_hash}"
+        DASHBOARD_PORT="${config_dashboard_port}"
+        DASHBOARD_WORKERS="${config_dashboard_workers}"
+        NODEJS_VERSION="${config_nodejs_install_version}"
+        CONFIGURE_NETWORK="${config_configure_network}"
+        WIFI_AP_SSID="${config_wifi_ap_ssid}"
+        WIFI_AP_PASSWORD="${config_wifi_ap_password}"
+      else
+        log_message "ERROR: utils.sh not found, cannot parse YAML"
+        exit 1
+      fi
+    else
+      # Try again with yq
+      load_config
+      return
+    fi
   fi
   
-  PROJECT_NAME="${config_project_name}"
-  HOSTNAME="${config_hostname}"
+  log_message "Checking project name: '$PROJECT_NAME'"
   
-  # Service names
-  MOSQUITTO_CONF="${config_service_names_mosquitto_conf}"
-  NGINX_SITE="${config_service_names_nginx_site}"
-  
-  if [ -z "$MOSQUITTO_CONF" ] || [ -z "$NGINX_SITE" ]; then
-    log_message "Error: Missing required service name configuration values"
+  # Check required configuration values
+  if [ -z "$PROJECT_NAME" ]; then
+    log_message "Error: Missing required configuration value: project.name"
     exit 1
   fi
   
   # Handle auto-configuration parameters
   
   # WiFi AP settings
-  WIFI_AP_SSID="${config_wifi_ap_ssid}"
   if [ "$WIFI_AP_SSID" = "auto" ]; then
     WIFI_AP_SSID="${PROJECT_NAME}_ap"
     log_message "Auto-configured WiFi AP SSID: $WIFI_AP_SSID"
   fi
   
-  WIFI_AP_PASSWORD="${config_wifi_ap_password}"
   if [ "$WIFI_AP_PASSWORD" = "auto" ]; then
     WIFI_AP_PASSWORD="${PROJECT_NAME}123"
     log_message "Auto-configured WiFi AP password: $WIFI_AP_PASSWORD"
   fi
   
   # MQTT settings
-  MQTT_PORT="${config_mqtt_port}"
-  
-  MQTT_USERNAME="${config_mqtt_username}"
   if [ "$MQTT_USERNAME" = "auto" ]; then
     MQTT_USERNAME="${PROJECT_NAME}"
     log_message "Auto-configured MQTT username: $MQTT_USERNAME"
   fi
   
-  MQTT_CLIENT_ID="${config_mqtt_client_id_base}"
   if [ "$MQTT_CLIENT_ID" = "auto" ]; then
     MQTT_CLIENT_ID="${PROJECT_NAME}"
     log_message "Auto-configured MQTT client ID: $MQTT_CLIENT_ID"
   fi
   
-  MQTT_PASSWORD="${config_mqtt_password}"
   if [ "$MQTT_PASSWORD" = "auto" ]; then
     MQTT_PASSWORD="${PROJECT_NAME}Pass"
     log_message "Auto-configured MQTT password: $MQTT_PASSWORD"
   fi
-  
-  # VictoriaMetrics config
-  VM_VERSION="${config_victoria_metrics_version}"
-  VM_PORT="${config_victoria_metrics_port}"
-  VM_DATA_DIR="${config_victoria_metrics_data_directory}"
-  VM_RETENTION="${config_victoria_metrics_retention_period}"
-  VM_USER="${config_victoria_metrics_service_user}"
-  VM_GROUP="${config_victoria_metrics_service_group}"
-  
-  # Node-RED config
-  NODERED_PORT="${config_node_red_port}"
-  NODERED_MEMORY="${config_node_red_memory_limit_mb}"
-  NODERED_USERNAME="${config_node_red_username}"
-  NODERED_PASSWORD_HASH="${config_node_red_password_hash}"
-  
-  # Dashboard config
-  DASHBOARD_PORT="${config_dashboard_port}"
-  DASHBOARD_WORKERS="${config_dashboard_workers}"
-  
-  # Node.js config
-  NODEJS_VERSION="${config_nodejs_install_version}"
   
   log_message "Configuration loaded successfully"
 }
@@ -559,6 +680,11 @@ EOF
 main() {
   log_message "Starting SyHub setup"
   
+  # Interactive mode notice
+  if [ "$INTERACTIVE" = true ]; then
+    log_message "Running in interactive mode. You will be prompted before each component installation."
+  fi
+  
   # Download frontend dependencies if not already done
   if [ ! -f "$BASE_DIR/dashboard/static/js/chart.min.js" ]; then
     log_message "Downloading frontend dependencies"
@@ -568,15 +694,69 @@ main() {
     }
   fi
   
+  # Always load configuration
   load_config
-  install_dependencies
-  setup_victoriametrics
-  setup_mqtt
-  setup_nodejs
-  setup_nodered
-  setup_dashboard
-  setup_nginx
-  setup_wifi
+  
+  # Always install basic dependencies
+  if confirm_install "basic dependencies (required)"; then
+    install_dependencies
+  else
+    log_message "Basic dependencies are required. Exiting."
+    exit 1
+  fi
+  
+  # Setup VictoriaMetrics
+  if confirm_install "VictoriaMetrics time series database"; then
+    setup_victoriametrics
+  else
+    log_message "Skipping VictoriaMetrics installation"
+  fi
+  
+  # Setup MQTT
+  if confirm_install "Mosquitto MQTT broker"; then
+    setup_mqtt
+  else
+    log_message "Skipping MQTT installation"
+  fi
+  
+  # Setup Node.js
+  if confirm_install "Node.js"; then
+    setup_nodejs
+  else
+    log_message "Skipping Node.js installation"
+  fi
+  
+  # Setup Node-RED
+  if confirm_install "Node-RED flow editor"; then
+    setup_nodered
+  else
+    log_message "Skipping Node-RED installation"
+  fi
+  
+  # Setup Dashboard
+  if confirm_install "Flask Dashboard"; then
+    setup_dashboard
+  else
+    log_message "Skipping Dashboard installation"
+  fi
+  
+  # Setup Nginx
+  if confirm_install "Nginx web server"; then
+    setup_nginx
+  else
+    log_message "Skipping Nginx installation"
+  fi
+  
+  # Setup WiFi
+  if [ "$CONFIGURE_NETWORK" = "true" ]; then
+    if confirm_install "WiFi in AP+STA mode" "N"; then
+      setup_wifi
+    else
+      log_message "Skipping WiFi setup"
+    fi
+  else
+    log_message "Network configuration disabled in config"
+  fi
   
   log_message "Setup completed successfully!"
   
@@ -589,5 +769,74 @@ main() {
   echo "===================================================="
 }
 
-# Execute main function
-main 
+# Backup function (adapted from older script)
+backup() {
+  log_message "Creating backup..."
+  
+  # Ensure backup directory exists
+  BACKUP_DIR="backups"
+  mkdir -p "$BASE_DIR/$BACKUP_DIR"
+  
+  # Create backup with timestamp
+  BACKUP_FILE="$BASE_DIR/$BACKUP_DIR/backup-$(date +%F).tar.gz"
+  tar -czf "$BACKUP_FILE" "$BASE_DIR/config" "$BASE_DIR/dashboard" "$BASE_DIR/node-red-flows" > /dev/null 2>&1 || { 
+    log_message "Error creating backup"
+    return 1
+  }
+  
+  log_message "Backup created at: $BACKUP_FILE"
+}
+
+# Show info function
+show_info() {
+  echo "========================================"
+  echo "  $PROJECT_NAME System Information"
+  echo "========================================"
+  echo "Project Name: $PROJECT_NAME"
+  echo "Installation Directory: $BASE_DIR"
+  echo "Hostname: $HOSTNAME"
+  
+  # Check service status
+  echo ""
+  echo "Services Status:"
+  for service in mosquitto victoriametrics nodered dashboard; do
+    if systemctl is-active --quiet "$service"; then
+      echo "  $service: RUNNING"
+    else
+      echo "  $service: STOPPED"
+    fi
+  done
+  
+  # Show URLs
+  echo ""
+  echo "Access URLs:"
+  echo "  Dashboard: http://$HOSTNAME:$DASHBOARD_PORT"
+  echo "  Node-RED: http://$HOSTNAME:$NODERED_PORT"
+  echo "  VictoriaMetrics: http://$HOSTNAME:$VM_PORT"
+  
+  # Show credentials
+  echo ""
+  echo "Credentials:"
+  echo "  MQTT Username: $MQTT_USERNAME"
+  echo "  Node-RED Username: $NODERED_USERNAME"
+}
+
+# Handle command
+case "$COMMAND" in
+  setup)
+    main
+    ;;
+  backup)
+    load_config
+    backup
+    ;;
+  info)
+    load_config
+    show_info
+    ;;
+  *)
+    echo "Unknown command: $COMMAND"
+    echo "Usage: $0 [--interactive|-i] [setup|backup|info]"
+    exit 1
+    ;;
+esac 

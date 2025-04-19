@@ -13,16 +13,36 @@ get_base_dir() {
   echo "$(dirname "$script_dir")"
 }
 
-# Parse YAML function
+# Parse YAML function - improved for nested structures
 parse_yaml() {
   local yaml_file=$1
   local prefix=$2
-  cat "$yaml_file" | \
-  grep -v "^#" | \
-  sed -e 's/:[^:\/\/]/="/g' \
-      -e 's/$/"/g' \
-      -e 's/ *=/=/g' \
-  | grep "^[a-zA-Z0-9_]*="
+  local s
+  local w
+  local fs
+
+  s='[[:space:]]*'
+  w='[a-zA-Z0-9_]*'
+  fs="$(echo @|tr @ '\034')"
+  
+  # Debug
+  echo "# Debug: Parsing YAML file: $yaml_file" >&2
+  
+  sed -n -e "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
+         -e "s|^\($s\)\($w\)$s[:-]$s\(.*\)$s\$|\1$fs\2$fs\3|p" "$yaml_file" |
+  awk -F"$fs" '{
+    indent = length($1)/2;
+    if (indent == 0) {
+      vname[indent] = $2;
+    } else {
+      vname[indent] = vname[indent-1]"_"$2;
+    }
+    if (length($3) > 0) {
+      vn = vname[indent];
+      gsub(/[^a-zA-Z0-9_]/, "_", vn);
+      printf("%s%s=\"%s\"\n", "'$prefix'", vn, $3);
+    }
+  }' | grep -v "^#"
 }
 
 # Load configuration
