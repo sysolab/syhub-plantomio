@@ -5,31 +5,102 @@
 
 set -e  # Exit on any error
 
-# Interactive mode flag
+# Flags
 INTERACTIVE=false
+SKIP_APT_UPDATE=false
+UNINSTALL=false
+FACTORY_RESET=false
+COMPONENTS_TO_UPDATE=""
 
 # Command to run
 COMMAND="setup"
 
+# Help function
+show_help() {
+  echo "Usage: $0 [OPTIONS] [COMMAND]"
+  echo ""
+  echo "Options:"
+  echo "  -i, --interactive     : Interactive mode, ask before each step"
+  echo "  -s, --skip-apt-update : Skip apt update during installation"
+  echo "  -u, --uninstall       : Uninstall specified components"
+  echo "  -f, --factory-reset   : Completely remove all installations"
+  echo "  -c, --components=LIST : Comma-separated list of components to install/uninstall"
+  echo "                           Available: vm,mqtt,nodejs,nodered,dashboard,nginx,wifi"
+  echo ""
+  echo "Commands:"
+  echo "  setup   : Install components (default)"
+  echo "  backup  : Create a backup of configuration files"
+  echo "  info    : Display system information"
+  echo ""
+  echo "Examples:"
+  echo "  $0 -i                        : Interactive installation"
+  echo "  $0 --components=vm,mqtt      : Install only VictoriaMetrics and MQTT"
+  echo "  $0 -u --components=dashboard : Uninstall only the dashboard"
+  echo "  $0 -f                        : Factory reset (remove everything)"
+  echo "  $0 info                      : Show system information"
+  exit 0
+}
+
 # Parse command line arguments
-for arg in "$@"; do
-  case $arg in
-    --interactive|-i)
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help)
+      show_help
+      ;;
+    -i|--interactive)
       INTERACTIVE=true
       shift
       ;;
+    -s|--skip-apt-update)
+      SKIP_APT_UPDATE=true
+      shift
+      ;;
+    -u|--uninstall)
+      UNINSTALL=true
+      shift
+      ;;
+    -f|--factory-reset)
+      FACTORY_RESET=true
+      shift
+      ;;
+    -c=*|--components=*)
+      COMPONENTS_TO_UPDATE="${1#*=}"
+      shift
+      ;;
+    -c|--components)
+      if [[ -n "$2" && "$2" != -* ]]; then
+        COMPONENTS_TO_UPDATE="$2"
+        shift 2
+      else
+        echo "Error: --components requires an argument"
+        exit 1
+      fi
+      ;;
     setup|backup|info)
-      COMMAND="$arg"
+      COMMAND="$1"
       shift
       ;;
     *)
-      # Unknown option
-      echo "Unknown option: $arg"
-      echo "Usage: $0 [--interactive|-i] [setup|backup|info]"
+      echo "Unknown option: $1"
+      echo "Use --help to see available options"
       exit 1
       ;;
   esac
 done
+
+# Function to check if a component should be processed
+should_process_component() {
+  local component=$1
+  
+  # If no specific components are specified, process all
+  if [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    return 0
+  fi
+  
+  # Check if the component is in the list
+  echo "$COMPONENTS_TO_UPDATE" | tr ',' '\n' | grep -q "^$component$"
+  return $?
+}
 
 # Function to ask for confirmation in interactive mode
 confirm_install() {
@@ -288,12 +359,20 @@ load_config() {
 
 # Update and install dependencies
 install_dependencies() {
-  log_message "Updating package lists and installing dependencies"
-  apt update || {
-    log_message "Error updating package lists. Check your internet connection."
-    exit 1
-  }
+  log_message "Installing dependencies"
   
+  # Run apt update unless skipped
+  if [ "$SKIP_APT_UPDATE" = false ]; then
+    log_message "Updating package lists"
+    apt update || {
+      log_message "Error updating package lists. Check your internet connection."
+      exit 1
+    }
+  else
+    log_message "Skipping apt update as requested"
+  fi
+  
+  log_message "Installing required packages"
   apt install -y python3 python3-pip python3-venv mosquitto mosquitto-clients \
     avahi-daemon nginx git curl build-essential procps \
     net-tools libavahi-compat-libdnssd-dev || {
@@ -302,8 +381,17 @@ install_dependencies() {
   }
 
   # Set hostname
-  hostnamectl set-hostname "$HOSTNAME"
-  echo "127.0.1.1 $HOSTNAME" >> /etc/hosts
+  if [ "$HOSTNAME" != "$(hostname)" ]; then
+    log_message "Setting hostname to $HOSTNAME"
+    hostnamectl set-hostname "$HOSTNAME"
+    
+    # Add to hosts file if not already there
+    if ! grep -q "$HOSTNAME" /etc/hosts; then
+      echo "127.0.1.1 $HOSTNAME" >> /etc/hosts
+    fi
+  else
+    log_message "Hostname already set to $HOSTNAME"
+  fi
   
   log_message "Basic dependencies installed"
 }
@@ -312,13 +400,28 @@ install_dependencies() {
 setup_victoriametrics() {
   log_message "Setting up VictoriaMetrics $VM_VERSION"
   
+  # Stop existing service if running
+  if systemctl is-active --quiet victoriametrics; then
+    log_message "Stopping existing VictoriaMetrics service"
+    systemctl stop victoriametrics
+    
+    # Wait for service to fully stop
+    sleep 2
+  fi
+  
   # Create service user if doesn't exist
   if ! id "$VM_USER" &>/dev/null; then
+    log_message "Creating service user: $VM_USER"
     useradd -rs /bin/false "$VM_USER"
   fi
   
   # Create data directory
-  mkdir -p "$VM_DATA_DIR"
+  if [ ! -d "$VM_DATA_DIR" ]; then
+    log_message "Creating data directory: $VM_DATA_DIR"
+    mkdir -p "$VM_DATA_DIR"
+  fi
+  
+  # Set proper ownership
   chown -R "$VM_USER":"$VM_GROUP" "$VM_DATA_DIR"
   
   # Determine architecture for correct download
@@ -336,37 +439,86 @@ setup_victoriametrics() {
   
   log_message "Detected architecture: $ARCH, using VM architecture: $VM_ARCH"
   
-  # Download VictoriaMetrics to a specific file
-  VM_FILENAME="victoria-metrics-$VM_ARCH"
+  # Prepare temporary directory for download
+  TEMP_DIR=$(mktemp -d)
+  log_message "Using temporary directory: $TEMP_DIR"
+  
+  # Download VictoriaMetrics
   VM_BINARY_URL="https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/$VM_VERSION/victoria-metrics-linux-$VM_ARCH-$VM_VERSION.tar.gz"
   
   log_message "Downloading VictoriaMetrics from $VM_BINARY_URL"
-  curl -L "$VM_BINARY_URL" -o /tmp/vm.tar.gz
+  if ! curl -L "$VM_BINARY_URL" -o "$TEMP_DIR/vm.tar.gz"; then
+    log_message "Error: Failed to download VictoriaMetrics. Check your internet connection."
+    rm -rf "$TEMP_DIR"
+    return 1
+  fi
   
-  # Create a temporary directory for extraction
-  mkdir -p /tmp/vm_extract
-  tar -xzf /tmp/vm.tar.gz -C /tmp/vm_extract
+  # Verify the download
+  if [ ! -s "$TEMP_DIR/vm.tar.gz" ]; then
+    log_message "Error: Downloaded file is empty or not found."
+    rm -rf "$TEMP_DIR"
+    return 1
+  fi
   
-  # Move the binary to the correct location
-  VM_BINARY=$(find /tmp/vm_extract -type f -executable | head -n 1)
+  # Extracting the file
+  log_message "Extracting VictoriaMetrics"
+  mkdir -p "$TEMP_DIR/extract"
+  if ! tar -xzf "$TEMP_DIR/vm.tar.gz" -C "$TEMP_DIR/extract"; then
+    log_message "Error: Failed to extract VictoriaMetrics archive."
+    rm -rf "$TEMP_DIR"
+    return 1
+  fi
+  
+  # Find and copy the binary
+  VM_BINARY=$(find "$TEMP_DIR/extract" -type f -executable | head -n 1)
   
   if [ -z "$VM_BINARY" ]; then
     log_message "Error: VictoriaMetrics binary not found in the downloaded archive"
-    exit 1
+    rm -rf "$TEMP_DIR"
+    return 1
   fi
   
   log_message "Found VictoriaMetrics binary: $VM_BINARY"
-  cp "$VM_BINARY" /usr/local/bin/victoria-metrics
+  
+  # Stop any running processes that might be using the binary
+  if pgrep -f "victoria-metrics" > /dev/null; then
+    log_message "Stopping existing VictoriaMetrics processes"
+    pkill -f "victoria-metrics" || true
+    sleep 3
+  fi
+  
+  # Remove existing binary if it exists
+  if [ -f /usr/local/bin/victoria-metrics ]; then
+    log_message "Removing existing VictoriaMetrics binary"
+    rm -f /usr/local/bin/victoria-metrics
+    
+    # If the file is still there (possibly due to being in use), try alternative approach
+    if [ -f /usr/local/bin/victoria-metrics ]; then
+      log_message "Binary is busy. Moving to a backup and installing new version."
+      mv /usr/local/bin/victoria-metrics /usr/local/bin/victoria-metrics.old || true
+    fi
+  fi
+  
+  # Copy the new binary
+  log_message "Installing VictoriaMetrics binary"
+  if ! cp "$VM_BINARY" /usr/local/bin/victoria-metrics; then
+    log_message "Error: Failed to copy VictoriaMetrics binary to /usr/local/bin/"
+    rm -rf "$TEMP_DIR"
+    return 1
+  fi
+  
   chmod +x /usr/local/bin/victoria-metrics
   
   # Clean up
-  rm -rf /tmp/vm_extract /tmp/vm.tar.gz
+  rm -rf "$TEMP_DIR"
   
   # Create systemd service
+  log_message "Creating VictoriaMetrics service"
   cat > /etc/systemd/system/victoriametrics.service << EOF
 [Unit]
 Description=VictoriaMetrics Time Series Database
 After=network.target
+Wants=network-online.target
 
 [Service]
 User=$VM_USER
@@ -375,15 +527,66 @@ Type=simple
 ExecStart=/usr/local/bin/victoria-metrics -storageDataPath=$VM_DATA_DIR -retentionPeriod=$VM_RETENTION -httpListenAddr=:$VM_PORT -search.maxUniqueTimeseries=1000 -memory.allowedPercent=30
 Restart=always
 RestartSec=5
+LimitNOFILE=65536
+TimeoutStopSec=20
+SendSIGKILL=no
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
   # Reload, enable and start service
+  log_message "Starting VictoriaMetrics service"
   systemctl daemon-reload
-  systemctl enable victoriametrics
-  systemctl restart victoriametrics
+  
+  # Test if we can start the service
+  if ! systemctl start victoriametrics; then
+    log_message "Error: Failed to start VictoriaMetrics service"
+    systemctl status victoriametrics > /tmp/vm_status.log 2>&1
+    log_message "VictoriaMetrics status saved to /tmp/vm_status.log"
+    
+    # Ask if we should continue despite the error
+    if [ "$INTERACTIVE" = true ]; then
+      read -p "VictoriaMetrics failed to start. Continue with setup anyway? [y/N]: " choice
+      case "$choice" in
+        y|Y) 
+          log_message "Continuing setup despite VictoriaMetrics failure"
+          systemctl enable victoriametrics || true
+          ;;
+        *) 
+          log_message "Aborting setup due to VictoriaMetrics failure"
+          return 1
+          ;;
+      esac
+    else
+      log_message "WARNING: VictoriaMetrics setup failed but continuing with installation"
+      systemctl enable victoriametrics || true
+    fi
+  else
+    log_message "VictoriaMetrics service started successfully"
+    systemctl enable victoriametrics
+  fi
+  
+  # Test if the HTTP endpoint is available
+  log_message "Testing VictoriaMetrics HTTP endpoint"
+  if command -v curl &> /dev/null; then
+    RETRY_COUNT=0
+    MAX_RETRIES=3
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+      if curl -s "http://localhost:$VM_PORT/health" | grep -q "VictoriaMetrics"; then
+        log_message "VictoriaMetrics HTTP endpoint is responding correctly"
+        break
+      else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+          log_message "VictoriaMetrics endpoint not responding yet, retrying in 2 seconds..."
+          sleep 2
+        else
+          log_message "WARNING: VictoriaMetrics endpoint not responding after $MAX_RETRIES attempts"
+        fi
+      fi
+    done
+  fi
   
   log_message "VictoriaMetrics setup completed"
 }
@@ -394,34 +597,130 @@ setup_mqtt() {
   
   # Ensure directories exist
   if [ ! -d "/etc/mosquitto/conf.d" ]; then
+    log_message "Creating Mosquitto config directory"
     mkdir -p /etc/mosquitto/conf.d
-    log_message "Created Mosquitto config directory"
   fi
   
-  # Configure Mosquitto
-  log_message "Creating Mosquitto configuration: /etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
+  # Check and fix main mosquitto.conf if needed
+  if [ ! -f "/etc/mosquitto/mosquitto.conf" ] || ! grep -q "include_dir /etc/mosquitto/conf.d" "/etc/mosquitto/mosquitto.conf"; then
+    log_message "Creating or updating main Mosquitto configuration file"
+    
+    # Backup existing config if it exists
+    if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
+      mv "/etc/mosquitto/mosquitto.conf" "/etc/mosquitto/mosquitto.conf.backup"
+      log_message "Backed up existing mosquitto.conf"
+    fi
+    
+    # Create a new main config file with include_dir directive
+    cat > "/etc/mosquitto/mosquitto.conf" << EOF
+# Mosquitto Broker config file
+# Basic configuration with defaults
+pid_file /run/mosquitto/mosquitto.pid
+persistence true
+persistence_location /var/lib/mosquitto/
+log_dest file /var/log/mosquitto/mosquitto.log
+include_dir /etc/mosquitto/conf.d
+EOF
+    
+    log_message "Created new main mosquitto.conf with include_dir directive"
+  else
+    log_message "Main mosquitto.conf already exists with include_dir directive"
+  fi
+  
+  # Configure our project-specific settings
+  log_message "Creating project-specific Mosquitto configuration"
   cat > "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" << EOF
+# SyHub MQTT configuration
+per_listener_settings true
 listener $MQTT_PORT
+protocol mqtt
 allow_anonymous false
 password_file /etc/mosquitto/passwd
 EOF
 
+  # Ensure the Mosquitto user has proper access to config files
+  chown mosquitto:mosquitto "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
+  
   # Create password file with user
   log_message "Setting up MQTT credentials for user: $MQTT_USERNAME"
-  touch /etc/mosquitto/passwd
+  
+  # Make sure we're creating a new password file if needed
+  if [ ! -f "/etc/mosquitto/passwd" ]; then
+    touch /etc/mosquitto/passwd
+    chown mosquitto:mosquitto /etc/mosquitto/passwd
+    log_message "Created new password file"
+  else
+    # Backup existing password file
+    cp "/etc/mosquitto/passwd" "/etc/mosquitto/passwd.backup"
+    log_message "Backed up existing password file"
+  fi
+  
+  # Create password entry (this overwrites existing entries with same username)
   mosquitto_passwd -b /etc/mosquitto/passwd "$MQTT_USERNAME" "$MQTT_PASSWORD" || {
-    log_message "Error creating MQTT password entry. Check if mosquitto_passwd is available."
-    exit 1
+    log_message "Error creating MQTT password entry. Trying alternative method..."
+    
+    # If mosquitto_passwd fails, try a different approach
+    # First check if we have the required tools
+    if command -v openssl > /dev/null; then
+      log_message "Using OpenSSL to create password hash"
+      # Create password hash using OpenSSL
+      PASS_HASH=$(echo -n "$MQTT_PASSWORD" | openssl passwd -6 -stdin)
+      echo "$MQTT_USERNAME:$PASS_HASH" > "/etc/mosquitto/passwd"
+      chown mosquitto:mosquitto "/etc/mosquitto/passwd"
+      chmod 600 "/etc/mosquitto/passwd"
+    else
+      log_message "ERROR: Cannot create MQTT password. Please set up manually after installation."
+    fi
   }
   
   # Set correct permissions
   chmod 600 /etc/mosquitto/passwd
   
-  # Restart service
-  systemctl restart mosquitto || {
-    log_message "Error restarting Mosquitto. Check status with: systemctl status mosquitto"
-    exit 1
-  }
+  # Validate configuration before restarting
+  log_message "Validating Mosquitto configuration"
+  if command -v mosquitto -v > /dev/null; then
+    mosquitto -t -c /etc/mosquitto/mosquitto.conf || {
+      log_message "Warning: Mosquitto configuration validation failed. Proceeding anyway."
+    }
+  fi
+  
+  # Restart service with more robust error handling
+  log_message "Restarting Mosquitto service"
+  if ! systemctl restart mosquitto; then
+    log_message "Error restarting Mosquitto. Checking why it failed..."
+    
+    # Get Mosquitto status for debugging
+    systemctl status mosquitto > /tmp/mosquitto_status.log 2>&1
+    log_message "Mosquitto status saved to /tmp/mosquitto_status.log"
+    
+    # Try to diagnose the issue
+    if grep -q "Permission denied" /tmp/mosquitto_status.log; then
+      log_message "Possible permission issue. Checking file permissions..."
+      ls -la /etc/mosquitto/ > /tmp/mosquitto_permissions.log
+      log_message "File permissions saved to /tmp/mosquitto_permissions.log"
+    fi
+    
+    # Show error info
+    log_message "Mosquitto failed to start. Please check:"
+    log_message "  - Run 'systemctl status mosquitto' for details"
+    log_message "  - Check logs with 'journalctl -xeu mosquitto.service'"
+    
+    # Ask if we should continue despite the error
+    if [ "$INTERACTIVE" = true ]; then
+      read -p "Mosquitto failed to start. Continue with setup anyway? [y/N]: " choice
+      case "$choice" in
+        y|Y) log_message "Continuing setup despite Mosquitto failure" ;;
+        *) 
+          log_message "Aborting setup due to Mosquitto failure"
+          exit 1
+          ;;
+      esac
+    else
+      log_message "WARNING: Mosquitto setup failed but continuing with installation"
+    fi
+  else 
+    log_message "Mosquitto MQTT broker started successfully"
+  fi
   
   log_message "MQTT broker setup completed"
 }
@@ -779,6 +1078,289 @@ EOF
   return 0
 }
 
+# Uninstall VictoriaMetrics
+uninstall_victoriametrics() {
+  log_message "Uninstalling VictoriaMetrics"
+  
+  # Stop and disable service
+  if systemctl is-active --quiet victoriametrics; then
+    log_message "Stopping VictoriaMetrics service"
+    systemctl stop victoriametrics
+  fi
+  
+  if systemctl is-enabled --quiet victoriametrics; then
+    log_message "Disabling VictoriaMetrics service"
+    systemctl disable victoriametrics
+  fi
+  
+  # Remove service file
+  if [ -f /etc/systemd/system/victoriametrics.service ]; then
+    log_message "Removing VictoriaMetrics service file"
+    rm -f /etc/systemd/system/victoriametrics.service
+  fi
+  
+  # Remove binary
+  if [ -f /usr/local/bin/victoria-metrics ]; then
+    log_message "Removing VictoriaMetrics binary"
+    rm -f /usr/local/bin/victoria-metrics
+  fi
+  
+  # Optionally remove data directory
+  if [ "$FACTORY_RESET" = true ] && [ -d "$VM_DATA_DIR" ]; then
+    log_message "Removing VictoriaMetrics data directory"
+    rm -rf "$VM_DATA_DIR"
+  fi
+  
+  systemctl daemon-reload
+  log_message "VictoriaMetrics uninstalled"
+}
+
+# Uninstall MQTT
+uninstall_mqtt() {
+  log_message "Uninstalling MQTT configuration"
+  
+  # Don't actually uninstall Mosquitto, just remove our custom configs
+  if [ -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf" ]; then
+    log_message "Removing MQTT configuration file"
+    rm -f "/etc/mosquitto/conf.d/${MOSQUITTO_CONF}.conf"
+  fi
+  
+  # Reset password file only on factory reset
+  if [ "$FACTORY_RESET" = true ] && [ -f "/etc/mosquitto/passwd" ]; then
+    log_message "Removing MQTT password file"
+    rm -f "/etc/mosquitto/passwd"
+  fi
+  
+  # Restart Mosquitto to apply changes
+  if systemctl is-active --quiet mosquitto; then
+    log_message "Restarting Mosquitto service"
+    systemctl restart mosquitto
+  fi
+  
+  log_message "MQTT configuration removed"
+}
+
+# Uninstall Node-RED
+uninstall_nodered() {
+  log_message "Uninstalling Node-RED"
+  
+  # Stop and disable service
+  if systemctl is-active --quiet nodered; then
+    log_message "Stopping Node-RED service"
+    systemctl stop nodered
+  fi
+  
+  if systemctl is-enabled --quiet nodered; then
+    log_message "Disabling Node-RED service"
+    systemctl disable nodered
+  fi
+  
+  # Remove service file
+  if [ -f /etc/systemd/system/nodered.service ]; then
+    log_message "Removing Node-RED service file"
+    rm -f /etc/systemd/system/nodered.service
+  fi
+  
+  # Optionally remove Node-RED installation on factory reset
+  if [ "$FACTORY_RESET" = true ]; then
+    log_message "Removing Node-RED installation"
+    runuser -l "$SYSTEM_USER" -c 'npm uninstall -g node-red' || true
+    
+    # Remove .node-red directory
+    if [ -d "/home/$SYSTEM_USER/.node-red" ]; then
+      log_message "Removing Node-RED user directory"
+      rm -rf "/home/$SYSTEM_USER/.node-red"
+    fi
+  fi
+  
+  systemctl daemon-reload
+  log_message "Node-RED uninstalled"
+}
+
+# Uninstall Dashboard
+uninstall_dashboard() {
+  log_message "Uninstalling Dashboard"
+  
+  # Stop and disable service
+  if systemctl is-active --quiet dashboard; then
+    log_message "Stopping Dashboard service"
+    systemctl stop dashboard
+  fi
+  
+  if systemctl is-enabled --quiet dashboard; then
+    log_message "Disabling Dashboard service"
+    systemctl disable dashboard
+  fi
+  
+  # Remove service file
+  if [ -f /etc/systemd/system/dashboard.service ]; then
+    log_message "Removing Dashboard service file"
+    rm -f /etc/systemd/system/dashboard.service
+  fi
+  
+  # Optionally remove dashboard files on factory reset
+  if [ "$FACTORY_RESET" = true ] && [ -d "$BASE_DIR/dashboard" ]; then
+    log_message "Removing Dashboard files"
+    rm -rf "$BASE_DIR/dashboard"
+  fi
+  
+  systemctl daemon-reload
+  log_message "Dashboard uninstalled"
+}
+
+# Uninstall Nginx configuration
+uninstall_nginx() {
+  log_message "Uninstalling Nginx configuration"
+  
+  # Remove site configuration
+  if [ -f "/etc/nginx/sites-available/${NGINX_SITE}" ]; then
+    log_message "Removing Nginx site configuration"
+    rm -f "/etc/nginx/sites-available/${NGINX_SITE}"
+  fi
+  
+  # Remove symbolic link if it exists
+  if [ -f "/etc/nginx/sites-enabled/${NGINX_SITE}" ]; then
+    log_message "Removing Nginx site symlink"
+    rm -f "/etc/nginx/sites-enabled/${NGINX_SITE}"
+  fi
+  
+  # Restart Nginx to apply changes
+  if systemctl is-active --quiet nginx; then
+    log_message "Restarting Nginx service"
+    systemctl restart nginx
+  fi
+  
+  log_message "Nginx configuration removed"
+}
+
+# Uninstall WiFi configuration
+uninstall_wifi() {
+  log_message "Uninstalling WiFi configuration"
+  
+  # Stop and disable services
+  for service in hostapd dnsmasq ap-sta; do
+    if systemctl is-active --quiet $service; then
+      log_message "Stopping $service service"
+      systemctl stop $service
+    fi
+    
+    if systemctl is-enabled --quiet $service; then
+      log_message "Disabling $service service"
+      systemctl disable $service
+    fi
+  done
+  
+  # Remove configuration files
+  if [ -f /etc/systemd/network/25-ap.network ]; then
+    log_message "Removing network configuration"
+    rm -f /etc/systemd/network/25-ap.network
+  fi
+  
+  if [ -f /etc/hostapd/hostapd.conf ]; then
+    log_message "Removing hostapd configuration"
+    rm -f /etc/hostapd/hostapd.conf
+  fi
+  
+  if [ -f /etc/systemd/system/ap-sta.service ]; then
+    log_message "Removing AP+STA service"
+    rm -f /etc/systemd/system/ap-sta.service
+  fi
+  
+  if [ -f /usr/local/bin/setup-ap-sta ]; then
+    log_message "Removing AP+STA script"
+    rm -f /usr/local/bin/setup-ap-sta
+  fi
+  
+  # Reset network forwarding
+  if [ -f /etc/sysctl.d/10-network-forwarding.conf ]; then
+    log_message "Removing network forwarding configuration"
+    rm -f /etc/sysctl.d/10-network-forwarding.conf
+    sysctl -p || true
+  fi
+  
+  systemctl daemon-reload
+  log_message "WiFi configuration removed"
+}
+
+# Factory reset - uninstall everything
+factory_reset() {
+  log_message "Performing factory reset"
+  
+  # Set factory reset flag to true for complete removal
+  FACTORY_RESET=true
+  
+  # Load configuration to get paths and service names
+  load_config
+  
+  # Uninstall each component
+  if should_process_component "vm" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    uninstall_victoriametrics
+  fi
+  
+  if should_process_component "mqtt" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    uninstall_mqtt
+  fi
+  
+  if should_process_component "nodered" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    uninstall_nodered
+  fi
+  
+  if should_process_component "dashboard" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    uninstall_dashboard
+  fi
+  
+  if should_process_component "nginx" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    uninstall_nginx
+  fi
+  
+  if should_process_component "wifi" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    uninstall_wifi
+  fi
+  
+  # Remove base directory if completely factory resetting
+  if [ -z "$COMPONENTS_TO_UPDATE" ] && [ -d "$BASE_DIR" ]; then
+    log_message "Removing base directory: $BASE_DIR"
+    rm -rf "$BASE_DIR"
+  fi
+  
+  log_message "Factory reset completed"
+}
+
+# Uninstall selected components
+uninstall_components() {
+  log_message "Uninstalling selected components"
+  
+  # Load configuration to get paths and service names
+  load_config
+  
+  # Uninstall specified components
+  if should_process_component "vm"; then
+    uninstall_victoriametrics
+  fi
+  
+  if should_process_component "mqtt"; then
+    uninstall_mqtt
+  fi
+  
+  if should_process_component "nodered"; then
+    uninstall_nodered
+  fi
+  
+  if should_process_component "dashboard"; then
+    uninstall_dashboard
+  fi
+  
+  if should_process_component "nginx"; then
+    uninstall_nginx
+  fi
+  
+  if should_process_component "wifi"; then
+    uninstall_wifi
+  fi
+  
+  log_message "Uninstallation completed"
+}
+
 # Main execution flow
 main() {
   log_message "Starting SyHub setup"
@@ -788,8 +1370,13 @@ main() {
     log_message "Running in interactive mode. You will be prompted before each component installation."
   fi
   
-  # Download frontend dependencies if not already done
-  if [ ! -f "$BASE_DIR/dashboard/static/js/chart.min.js" ]; then
+  # Component-specific mode notice
+  if [ -n "$COMPONENTS_TO_UPDATE" ]; then
+    log_message "Installing only specified components: $COMPONENTS_TO_UPDATE"
+  fi
+  
+  # Download frontend dependencies if not already done and dashboard will be installed
+  if ([ -z "$COMPONENTS_TO_UPDATE" ] || should_process_component "dashboard") && [ ! -f "$BASE_DIR/dashboard/static/js/chart.min.js" ]; then
     log_message "Downloading frontend dependencies"
     "$BASE_DIR/scripts/download_deps.sh" || {
       log_message "Error downloading dependencies. Please check your internet connection."
@@ -800,65 +1387,80 @@ main() {
   # Always load configuration
   load_config
   
-  # Always install basic dependencies
-  if confirm_install "basic dependencies (required)"; then
-    install_dependencies
-  else
-    log_message "Basic dependencies are required. Exiting."
-    exit 1
+  # Always install basic dependencies unless component-specific mode
+  if [ -z "$COMPONENTS_TO_UPDATE" ] || should_process_component "core"; then
+    if confirm_install "basic dependencies (required)"; then
+      install_dependencies
+    else
+      log_message "Basic dependencies are required for full installation. Continuing with limited setup."
+    fi
   fi
   
   # Setup VictoriaMetrics
-  if confirm_install "VictoriaMetrics time series database"; then
-    setup_victoriametrics
-  else
-    log_message "Skipping VictoriaMetrics installation"
+  if should_process_component "vm" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    if confirm_install "VictoriaMetrics time series database"; then
+      setup_victoriametrics
+    else
+      log_message "Skipping VictoriaMetrics installation"
+    fi
   fi
   
   # Setup MQTT
-  if confirm_install "Mosquitto MQTT broker"; then
-    setup_mqtt
-  else
-    log_message "Skipping MQTT installation"
+  if should_process_component "mqtt" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    if confirm_install "Mosquitto MQTT broker"; then
+      setup_mqtt
+    else
+      log_message "Skipping MQTT installation"
+    fi
   fi
   
   # Setup Node.js
-  if confirm_install "Node.js"; then
-    setup_nodejs
-  else
-    log_message "Skipping Node.js installation"
+  if should_process_component "nodejs" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    if confirm_install "Node.js"; then
+      setup_nodejs
+    else
+      log_message "Skipping Node.js installation"
+    fi
   fi
   
   # Setup Node-RED
-  if confirm_install "Node-RED flow editor"; then
-    setup_nodered
-  else
-    log_message "Skipping Node-RED installation"
+  if should_process_component "nodered" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    if confirm_install "Node-RED flow editor"; then
+      setup_nodered
+    else
+      log_message "Skipping Node-RED installation"
+    fi
   fi
   
   # Setup Dashboard
-  if confirm_install "Flask Dashboard"; then
-    setup_dashboard
-  else
-    log_message "Skipping Dashboard installation"
+  if should_process_component "dashboard" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    if confirm_install "Flask Dashboard"; then
+      setup_dashboard
+    else
+      log_message "Skipping Dashboard installation"
+    fi
   fi
   
   # Setup Nginx
-  if confirm_install "Nginx web server"; then
-    setup_nginx
-  else
-    log_message "Skipping Nginx installation"
+  if should_process_component "nginx" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    if confirm_install "Nginx web server"; then
+      setup_nginx
+    else
+      log_message "Skipping Nginx installation"
+    fi
   fi
   
   # Setup WiFi
-  if [ "$CONFIGURE_NETWORK" = "true" ]; then
-    if confirm_install "WiFi in AP+STA mode" "N"; then
-      setup_wifi
+  if should_process_component "wifi" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    if [ "$CONFIGURE_NETWORK" = "true" ]; then
+      if confirm_install "WiFi in AP+STA mode" "N"; then
+        setup_wifi
+      else
+        log_message "Skipping WiFi setup"
+      fi
     else
-      log_message "Skipping WiFi setup"
+      log_message "Network configuration disabled in config"
     fi
-  else
-    log_message "Network configuration disabled in config"
   fi
   
   log_message "Setup completed successfully!"
@@ -866,9 +1468,19 @@ main() {
   # Show access information
   echo "===================================================="
   echo "Installation complete! Access your services at:"
-  echo "Dashboard: http://$HOSTNAME/"
-  echo "Node-RED: http://$HOSTNAME/node-red/"
-  echo "VictoriaMetrics: http://$HOSTNAME/victoria/"
+  
+  if should_process_component "dashboard" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    echo "Dashboard: http://$HOSTNAME/"
+  fi
+  
+  if should_process_component "nodered" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    echo "Node-RED: http://$HOSTNAME/node-red/"
+  fi
+  
+  if should_process_component "vm" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
+    echo "VictoriaMetrics: http://$HOSTNAME/victoria/"
+  fi
+  
   echo "===================================================="
 }
 
@@ -927,7 +1539,17 @@ show_info() {
 # Handle command
 case "$COMMAND" in
   setup)
-    main
+    if [ "$FACTORY_RESET" = true ]; then
+      # Factory reset before setup
+      factory_reset
+      main
+    elif [ "$UNINSTALL" = true ]; then
+      # Uninstall specified components
+      uninstall_components
+    else
+      # Normal setup
+      main
+    fi
     ;;
   backup)
     load_config
@@ -939,7 +1561,8 @@ case "$COMMAND" in
     ;;
   *)
     echo "Unknown command: $COMMAND"
-    echo "Usage: $0 [--interactive|-i] [setup|backup|info]"
+    echo "Usage: $0 [OPTIONS] [COMMAND]"
+    echo "Use --help to see available options"
     exit 1
     ;;
 esac 

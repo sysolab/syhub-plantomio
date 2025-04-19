@@ -34,7 +34,7 @@ wifi:
   ap_dhcp_lease_time: 12h
   ap_ssid: auto              # Will use project_name + "_ap" if set to "auto"
   ap_password: auto          # Will use project_name + "123" if set to "auto"
-  country_code: "US"         # Set this to your country code
+  country_code: "DE"         # Set this to your country code
   sta_ssid: ""               # Your WiFi network SSID
   sta_password: ""           # Your WiFi network password
 
