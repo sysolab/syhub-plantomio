@@ -25,7 +25,9 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
                     </svg>
                 </div>
             </div>
@@ -182,7 +184,7 @@
                     </div>
                     <div class="trends-container">
                         <!-- Chart will be inserted here by JavaScript -->
-                        <div id="trends-chart" class="trends-chart"></div>
+                        <canvas id="trends-chart" class="trends-chart"></canvas>
                     </div>
                 </div>
                 
@@ -251,7 +253,7 @@
     </div>
 
     <!-- Lazy-load Chart.js only when needed -->
-    <script src="/static/js/chart.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="/static/js/dashboard.js"></script>
     <script>
         // Mobile sidebar toggle
@@ -268,7 +270,7 @@
             document.getElementById('tank-settings-panel').classList.remove('active');
         });
         
-        // Save tank settings
+        // Save tank settings and apply immediately
         document.getElementById('save-tank-settings').addEventListener('click', function() {
             const minLevel = parseFloat(document.getElementById('min-level').value) || 0;
             const maxLevel = parseFloat(document.getElementById('max-level').value) || 10;
@@ -292,7 +294,102 @@
             document.getElementById('tank-settings-panel').classList.remove('active');
         });
         
-        // Load saved tank settings
+        // Apply tank settings on load
+        function applyTankSettings() {
+            const savedSettings = localStorage.getItem('tankSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                document.getElementById('min-level').value = settings.min;
+                document.getElementById('max-level').value = settings.max;
+                
+                const currentLevel = parseFloat(document.getElementById('water-level-value').innerText);
+                const percentage = Math.round(((currentLevel - settings.min) / (settings.max - settings.min)) * 100);
+                const clampedPercentage = Math.min(Math.max(percentage, 0), 100);
+                
+                document.getElementById('water-level-percent').innerText = clampedPercentage;
+                document.querySelector('.tank-level').style.height = clampedPercentage + '%';
+            }
+        }
+        
+        // Initialize charts and load settings
+        document.addEventListener('DOMContentLoaded', function() {
+            // Apply saved tank settings
+            applyTankSettings();
+            
+            // Initialize chart if the element exists
+            const chartCanvas = document.getElementById('trends-chart');
+            if (chartCanvas) {
+                const ctx = chartCanvas.getContext('2d');
+                
+                // Mock data (24 hours of data points)
+                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+                const temperatureData = Array.from({length: 24}, () => Math.random() * 5 + 18);
+                const phData = Array.from({length: 24}, () => Math.random() * 2 + 6);
+                const ecData = Array.from({length: 24}, () => Math.random() * 20 + 20);
+                
+                // Chart configuration
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Temperature (°C)',
+                                data: temperatureData,
+                                borderColor: '#4e73df',
+                                backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false
+                            },
+                            {
+                                label: 'pH',
+                                data: phData,
+                                borderColor: '#e74a3b',
+                                backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false
+                            },
+                            {
+                                label: 'EC (μS/cm)',
+                                data: ecData,
+                                borderColor: '#36b9cc',
+                                backgroundColor: 'rgba(54, 185, 204, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html> Load saved tank settings
         document.addEventListener('DOMContentLoaded', function() {
             // Load tank settings
             const savedSettings = localStorage.getItem('tankSettings');

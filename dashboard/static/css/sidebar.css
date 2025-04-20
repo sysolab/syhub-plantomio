@@ -1,156 +1,156 @@
 /* Sidebar styles - Narrow with icons */
 :root {
-    --sidebar-width: 70px;
-    --sidebar-bg: #212529;
-    --sidebar-hover: rgba(255, 255, 255, 0.1);
-    --sidebar-active: rgba(255, 255, 255, 0.15);
-    --sidebar-text: #f8f9fc;
-    --sidebar-icon: #b0b5c3;
-    --transition-speed: 0.3s;
-  }
-  
-  /* Sidebar base */
+  --sidebar-width: 70px;
+  --sidebar-bg: #212529;
+  --sidebar-hover: rgba(255, 255, 255, 0.1);
+  --sidebar-active: rgba(255, 255, 255, 0.15);
+  --sidebar-text: #f8f9fc;
+  --sidebar-icon: #b0b5c3;
+  --transition-speed: 0.3s;
+}
+
+/* Sidebar base */
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  height: 100vh;
+  background-color: var(--sidebar-bg);
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  transition: transform var(--transition-speed);
+  overflow-x: hidden;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Sidebar header - Logo section */
+.sidebar-header {
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0.5rem 0;
+}
+
+.logo {
+  color: var(--sidebar-text);
+  font-size: 1.5rem;
+  transition: all var(--transition-speed) ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo svg {
+  width: 30px;
+  height: 30px;
+  stroke: var(--primary-color);
+}
+
+/* Navigation items */
+.sidebar-nav {
+  padding: 1rem 0;
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav li {
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 0;
+  color: var(--sidebar-icon);
+  text-decoration: none;
+  transition: all var(--transition-speed) ease;
+  position: relative;
+}
+
+.sidebar-nav a::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background-color: var(--primary-color);
+  transform: scaleY(0);
+  transition: transform 0.2s;
+}
+
+.sidebar-nav a:hover {
+  color: var(--sidebar-text);
+  background-color: var(--sidebar-hover);
+}
+
+.sidebar-nav a:hover::before {
+  transform: scaleY(0.6);
+}
+
+.sidebar-nav a.active {
+  color: var(--primary-color);
+  background-color: var(--sidebar-active);
+}
+
+.sidebar-nav a.active::before {
+  transform: scaleY(1);
+}
+
+.sidebar-nav a i {
+  font-size: 1.25rem;
+}
+
+/* Tooltip for sidebar items */
+.sidebar-nav a::after {
+  content: attr(title);
+  position: absolute;
+  left: 70px;
+  padding: 0.5rem;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  transform: translateX(-20px);
+  z-index: 1001;
+}
+
+.sidebar-nav a:hover::after {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Responsive sidebar behavior */
+@media (max-width: 768px) {
   .sidebar {
-    width: var(--sidebar-width);
-    min-width: var(--sidebar-width);
-    height: 100vh;
-    background-color: var(--sidebar-bg);
-    position: fixed;
-    left: 0;
-    top: 0;
-    z-index: 1000;
-    transition: transform var(--transition-speed);
-    overflow-x: hidden;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    transform: translateX(-100%);
   }
   
-  /* Sidebar header - Logo section */
-  .sidebar-header {
-    height: 70px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 0.5rem 0;
-  }
-  
-  .logo {
-    color: var(--sidebar-text);
-    font-size: 1.5rem;
-    transition: all var(--transition-speed) ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .logo svg {
-    width: 30px;
-    height: 30px;
-    stroke: var(--primary-color);
-  }
-  
-  /* Navigation items */
-  .sidebar-nav {
-    padding: 1rem 0;
-  }
-  
-  .sidebar-nav ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-  
-  .sidebar-nav li {
-    margin-bottom: 0.5rem;
-  }
-  
-  .sidebar-nav a {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.75rem 0;
-    color: var(--sidebar-icon);
-    text-decoration: none;
-    transition: all var(--transition-speed) ease;
-    position: relative;
-  }
-  
-  .sidebar-nav a::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 3px;
-    background-color: var(--primary-color);
-    transform: scaleY(0);
-    transition: transform 0.2s;
-  }
-  
-  .sidebar-nav a:hover {
-    color: var(--sidebar-text);
-    background-color: var(--sidebar-hover);
-  }
-  
-  .sidebar-nav a:hover::before {
-    transform: scaleY(0.6);
-  }
-  
-  .sidebar-nav a.active {
-    color: var(--primary-color);
-    background-color: var(--sidebar-active);
-  }
-  
-  .sidebar-nav a.active::before {
-    transform: scaleY(1);
-  }
-  
-  .sidebar-nav a i {
-    font-size: 1.25rem;
-  }
-  
-  /* Tooltip for sidebar items */
-  .sidebar-nav a::after {
-    content: attr(title);
-    position: absolute;
-    left: 70px;
-    padding: 0.5rem;
-    background-color: rgba(0, 0, 0, 0.8);
-    color: white;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: all 0.2s ease;
-    transform: translateX(-20px);
-    z-index: 1001;
-  }
-  
-  .sidebar-nav a:hover::after {
-    opacity: 1;
+  .sidebar.active {
     transform: translateX(0);
   }
   
-  /* Responsive sidebar behavior */
-  @media (max-width: 768px) {
-    .sidebar {
-      transform: translateX(-100%);
-    }
-    
-    .sidebar.active {
-      transform: translateX(0);
-    }
-    
-    /* When sidebar is active, add overlay */
-    .sidebar.active::after {
-      content: "";
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.4);
-      z-index: -1;
-    }
+  /* When sidebar is active, add overlay */
+  .sidebar.active::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: -1;
   }
+}
