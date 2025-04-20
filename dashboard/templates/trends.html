@@ -5,35 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ project_name }} - Trends</title>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/sidebar.css">
     <link rel="icon" href="/static/images/favicon.ico">
 </head>
 <body>
-    <div class="app-container">
-        <header>
-            <div class="logo">
+    <!-- Mobile menu toggle button -->
+    <button class="mobile-toggle" id="mobile-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    </button>
+
+    <div class="app-wrapper">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
                 <h1>{{ project_name }}</h1>
             </div>
-            <nav>
+            <nav class="sidebar-nav">
                 <ul>
                     <li><a href="/">Dashboard</a></li>
                     <li><a href="/trends" class="active">Trends</a></li>
                     <li><a href="/settings">Settings</a></li>
                 </ul>
             </nav>
-        </header>
+        </aside>
 
-        <main>
-            <div class="trends-container">
-                <div class="time-controls">
-                    <h2>Historical Data</h2>
-                    <div class="time-range-selector">
-                        <button class="time-btn active" data-range="1h">1h</button>
-                        <button class="time-btn" data-range="6h">6h</button>
-                        <button class="time-btn" data-range="24h">24h</button>
-                        <button class="time-btn" data-range="7d">7d</button>
-                    </div>
+        <!-- Main Content -->
+        <div class="main-content">
+            <header class="main-header">
+                <h2>Trends</h2>
+                <div class="time-range-selector">
+                    <button class="time-btn active" data-range="1h">1h</button>
+                    <button class="time-btn" data-range="6h">6h</button>
+                    <button class="time-btn" data-range="24h">24h</button>
+                    <button class="time-btn" data-range="7d">7d</button>
                 </div>
+            </header>
 
+            <div class="page-content">
                 <div class="charts-grid">
                     <!-- Temperature Chart -->
                     <div class="card chart-full">
@@ -84,15 +96,24 @@
                     </div>
                 </div>
             </div>
-        </main>
 
-        <footer>
-            <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
-        </footer>
+            <footer>
+                <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
+            </footer>
+        </div>
     </div>
 
     <!-- Load Chart.js -->
     <script src="/static/js/chart.min.js"></script>
     <script src="/static/js/trends.js"></script>
+    <script>
+        // Mobile sidebar toggle
+        document.getElementById('mobile-toggle').addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+    </script>
 </body>
 </html> 

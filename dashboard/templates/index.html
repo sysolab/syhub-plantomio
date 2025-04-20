@@ -5,102 +5,126 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ project_name }} Dashboard</title>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/sidebar.css">
     <link rel="icon" href="/static/images/favicon.ico">
 </head>
 <body>
-    <div class="app-container">
-        <header>
-            <div class="logo">
+    <!-- Mobile menu toggle button -->
+    <button class="mobile-toggle" id="mobile-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    </button>
+
+    <div class="app-wrapper">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
                 <h1>{{ project_name }}</h1>
             </div>
-            <nav>
+            <nav class="sidebar-nav">
                 <ul>
                     <li><a href="/" class="active">Dashboard</a></li>
                     <li><a href="/trends">Trends</a></li>
                     <li><a href="/settings">Settings</a></li>
                 </ul>
             </nav>
-        </header>
+        </aside>
 
-        <main>
-            <div class="dashboard-grid">
-                <!-- Tank Level Visualization -->
-                <div class="card tank-card">
-                    <h2>Water Level</h2>
-                    <div class="tank-container">
-                        <div class="tank-visualization">
-                            <div class="tank-level" id="tank-level"></div>
-                        </div>
-                        <div class="tank-info">
-                            <p><span id="water-level-value">--</span>%</p>
-                            <p>Distance: <span id="distance-value">--</span> cm</p>
+        <!-- Main Content -->
+        <div class="main-content">
+            <header class="main-header">
+                <h2>Dashboard</h2>
+                <div id="last-updated">Last updated: <span id="last-update">--</span></div>
+            </header>
+
+            <div class="page-content">
+                <div class="dashboard-grid">
+                    <!-- Tank Level Visualization -->
+                    <div class="card tank-card">
+                        <h3>Water Level</h3>
+                        <div class="tank-container">
+                            <div class="tank-visualization">
+                                <div class="tank-level" id="tank-level"></div>
+                            </div>
+                            <div class="tank-info">
+                                <p><span id="water-level-value">--</span>%</p>
+                                <p>Distance: <span id="distance-value">--</span> cm</p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Key Metrics -->
-                <div class="card metrics-card">
-                    <h2>Key Metrics</h2>
-                    <div class="metrics-grid">
-                        <div class="metric">
-                            <div class="metric-value" id="temperature-value">--</div>
-                            <div class="metric-label">Temperature (°C)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="ph-value">--</div>
-                            <div class="metric-label">pH</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="ec-value">--</div>
-                            <div class="metric-label">EC (mS/cm)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-value" id="tds-value">--</div>
-                            <div class="metric-label">TDS (ppm)</div>
+                    <!-- Key Metrics -->
+                    <div class="card metrics-card">
+                        <h3>Key Metrics</h3>
+                        <div class="metrics-grid">
+                            <div class="metric">
+                                <div class="metric-value" id="temperature-value">--</div>
+                                <div class="metric-label">Temperature (°C)</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value" id="ph-value">--</div>
+                                <div class="metric-label">pH</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value" id="ec-value">--</div>
+                                <div class="metric-label">EC (mS/cm)</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value" id="tds-value">--</div>
+                                <div class="metric-label">TDS (ppm)</div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- pH & EC Chart -->
-                <div class="card chart-card">
-                    <h2>pH & EC Trends</h2>
-                    <div class="chart-container">
-                        <canvas id="ph-ec-chart"></canvas>
+                    <!-- pH & EC Chart -->
+                    <div class="card chart-card">
+                        <h3>pH & EC Trends</h3>
+                        <div class="chart-container">
+                            <canvas id="ph-ec-chart"></canvas>
+                        </div>
                     </div>
-                </div>
 
-                <!-- System Status -->
-                <div class="card status-card">
-                    <h2>System Status</h2>
-                    <div class="status-grid">
-                        <div class="status-item">
-                            <span class="status-label">Dashboard:</span>
-                            <span class="status-value" id="dashboard-status"><span class="status-dot online"></span> Online</span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">Node-RED:</span>
-                            <span class="status-value" id="nodered-status"><span class="status-dot"></span> --</span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">VictoriaMetrics:</span>
-                            <span class="status-value" id="vm-status"><span class="status-dot"></span> --</span>
-                        </div>
-                        <div class="status-item">
-                            <span class="status-label">Last Update:</span>
-                            <span class="status-value" id="last-update">--</span>
+                    <!-- System Status -->
+                    <div class="card status-card">
+                        <h3>System Status</h3>
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <span class="status-label">Dashboard:</span>
+                                <span class="status-value" id="dashboard-status"><span class="status-dot online"></span> Online</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Node-RED:</span>
+                                <span class="status-value" id="nodered-status"><span class="status-dot"></span> --</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">VictoriaMetrics:</span>
+                                <span class="status-value" id="vm-status"><span class="status-dot"></span> --</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </main>
 
-        <footer>
-            <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
-        </footer>
+            <footer>
+                <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
+            </footer>
+        </div>
     </div>
 
     <!-- Lazy-load Chart.js only when needed -->
     <script src="/static/js/chart.min.js" defer></script>
     <script src="/static/js/dashboard.js"></script>
+    <script>
+        // Mobile sidebar toggle
+        document.getElementById('mobile-toggle').addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+
+        // Set current year in footer
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+    </script>
 </body>
 </html> 
