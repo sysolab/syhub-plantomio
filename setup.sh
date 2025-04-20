@@ -6,86 +6,90 @@
 set -e  # Exit on any error
 
 # Flags
-INTERACTIVE=false
+INTERACTIVE=true
 SKIP_APT_UPDATE=false
 UNINSTALL=false
 FACTORY_RESET=false
 COMPONENTS_TO_UPDATE=""
+SETUP_MODE="full"
+SKIP_MQTT=false
+SKIP_NODERED=false
+SKIP_DASHBOARD=false
+SKIP_VM=false
+DISABLE_NODERED_AUTH=false  # New option to disable Node-RED authentication
 
 # Command to run
 COMMAND="setup"
 
 # Help function
 show_help() {
-  echo "Usage: $0 [OPTIONS] [COMMAND]"
+  echo "SyHub Installer"
+  echo "=============="
+  echo ""
+  echo "Usage: $0 [OPTIONS]"
   echo ""
   echo "Options:"
-  echo "  -i, --interactive     : Interactive mode, ask before each step"
-  echo "  -s, --skip-apt-update : Skip apt update during installation"
-  echo "  -u, --uninstall       : Uninstall specified components"
+  echo "  -n, --non-interactive : Run in non-interactive mode using default values"
+  echo "  -s, --skip-mqtt       : Skip MQTT broker installation"
+  echo "  -r, --skip-nodered    : Skip Node-RED installation"
+  echo "  -d, --skip-dashboard  : Skip dashboard installation"
+  echo "  -v, --skip-vm         : Skip VictoriaMetrics installation"
   echo "  -f, --factory-reset   : Completely remove all installations"
-  echo "  -c, --components=LIST : Comma-separated list of components to install/uninstall"
-  echo "                           Available: vm,mqtt,nodejs,nodered,dashboard,nginx,wifi"
-  echo ""
-  echo "Commands:"
-  echo "  setup   : Install components (default)"
-  echo "  backup  : Create a backup of configuration files"
-  echo "  info    : Display system information"
-  echo "  update  : Restart specific services"
+  echo "  -a, --disable-nodered-auth : Install Node-RED without authentication"
+  echo "  -h, --help            : Display this help message"
   echo ""
   echo "Examples:"
-  echo "  $0 -i                        : Interactive installation"
-  echo "  $0 --components=vm,mqtt      : Install only VictoriaMetrics and MQTT"
-  echo "  $0 -u --components=dashboard : Uninstall only the dashboard"
+  echo "  $0                          : Interactive setup"
+  echo "  $0 -n                       : Non-interactive setup (use defaults)"
+  echo "  $0 -s -r                    : Skip MQTT and Node-RED installation"
   echo "  $0 -f                        : Factory reset (remove everything)"
-  echo "  $0 info                      : Show system information"
+  echo "  $0 -a                        : Install without Node-RED authentication"
+  echo ""
   exit 0
 }
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
-  case $1 in
-    -h|--help)
-      show_help
-      ;;
-    -i|--interactive)
-      INTERACTIVE=true
-      shift
-      ;;
-    -s|--skip-apt-update)
-      SKIP_APT_UPDATE=true
-      shift
-      ;;
-    -u|--uninstall)
-      UNINSTALL=true
-      shift
-      ;;
+  key="$1"
+  case $key in
+    -n|--non-interactive)
+    INTERACTIVE=false
+    shift
+    ;;
+    -s|--skip-mqtt)
+    SKIP_MQTT=true
+    shift
+    ;;
+    -r|--skip-nodered)
+    SKIP_NODERED=true
+    shift
+    ;;
+    -d|--skip-dashboard)
+    SKIP_DASHBOARD=true
+    shift
+    ;;
+    -v|--skip-vm)
+    SKIP_VM=true
+    shift
+    ;;
     -f|--factory-reset)
-      FACTORY_RESET=true
-      shift
-      ;;
-    -c=*|--components=*)
-      COMPONENTS_TO_UPDATE="${1#*=}"
-      shift
-      ;;
-    -c|--components)
-      if [[ -n "$2" && "$2" != -* ]]; then
-        COMPONENTS_TO_UPDATE="$2"
-        shift 2
-      else
-        echo "Error: --components requires an argument"
-        exit 1
-      fi
-      ;;
-    setup|backup|info|update)
-      COMMAND="$1"
-      shift
-      ;;
+    FACTORY_RESET=true
+    shift
+    ;;
+    -a|--disable-nodered-auth)  # New option to disable Node-RED authentication
+    DISABLE_NODERED_AUTH=true
+    shift
+    ;;
+    -h|--help)
+    show_help
+    exit 0
+    ;;
     *)
-      echo "Unknown option: $1"
-      echo "Use --help to see available options"
-      exit 1
-      ;;
+    # Unknown option
+    echo "Unknown option: $key"
+    show_help
+    exit 1
+    ;;
   esac
 done
 
@@ -809,7 +813,28 @@ setup_nodejs() {
 setup_nodered() {
   log_message "Setting up Node-RED"
   
-  # Check if Node-RED is already installed
+  # Set up authentication variables based on whether auth is disabled
+  if [ "$DISABLE_NODERED_AUTH" = true ]; then
+    log_message "Node-RED authentication will be disabled as requested"
+    NODERED_USERNAME=""
+    NODERED_PASSWORD=""
+    NODERED_PASSWORD_HASH=""
+  else
+    # Generate random credentials for Node-RED admin authentication
+    NODERED_USERNAME="admin"
+    NODERED_PASSWORD=$(< /dev/urandom tr -dc 'A-Za-z0-9' | head -c12)
+    
+    # Hash the password for Node-RED's settings.js
+    NODERED_PASSWORD_HASH=$(echo -n "$NODERED_PASSWORD" | node -e "const crypto = require('crypto'); process.stdin.on('data', (data) => { const hash = crypto.createHash('bcrypt').update(data.toString().trim(), 'utf8').digest('base64'); console.log(hash); });" || echo "FAILED TO HASH PASSWORD")
+    
+    if [[ "$NODERED_PASSWORD_HASH" == "FAILED TO HASH PASSWORD" ]]; then
+      log_message "Warning: Failed to hash Node-RED password. Using bcrypt directly."
+      # Alternative method
+      NODERED_PASSWORD_HASH=$(echo -n "$NODERED_PASSWORD" | node -e "const bcrypt = require('bcryptjs'); process.stdin.on('data', (data) => { const hash = bcrypt.hashSync(data.toString().trim(), 8); console.log(hash); });")
+    fi
+  fi
+  
+  # Install Node.js and npm if not already installed
   if ! command -v node-red &> /dev/null; then
     log_message "Installing Node-RED as global package"
     runuser -l "$SYSTEM_USER" -c 'npm install -g --unsafe-perm node-red' || {
@@ -835,181 +860,99 @@ setup_nodered() {
     }
   done
   
-  # Create Node-RED settings file
-  log_message "Creating Node-RED settings file"
-  cat > "/home/$SYSTEM_USER/.node-red/settings.js" << EOF
-module.exports = {
-    httpAdminRoot: '/admin',
-    httpNodeRoot: '/',
-    uiPort: $NODERED_PORT,
-    userDir: '/home/$SYSTEM_USER/.node-red',
-    adminAuth: {
-        type: "credentials",
-        users: [{
-            username: "$NODERED_USERNAME",
-            password: "$NODERED_PASSWORD_HASH",
-            permissions: "*"
-        }]
-    },
-    functionGlobalContext: {
-        // Make project configuration available to functions
-        config: {
-            projectName: "$PROJECT_NAME",
-            mqtt: {
-                host: "localhost",
-                port: $MQTT_PORT,
-                username: "$MQTT_USERNAME",
-                password: "$MQTT_PASSWORD"
-            },
-            vm: {
-                host: "localhost",
-                port: $VM_PORT
-            }
-        }
-    },
-    httpNodeCors: {
-        origin: "*",
-        methods: "GET,PUT,POST,DELETE"
-    },
-    editorTheme: { 
-        projects: { enabled: false }
-    }
-};
-EOF
-
-  # Fix permissions on settings file
-  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/settings.js"
-
-  # Create systemd service for Node-RED
-  log_message "Creating Node-RED systemd service"
-  cat > /etc/systemd/system/nodered.service << EOF
+  # Setup Node-RED files
+  log_message "Setting up Node-RED configuration files"
+  
+  # Create node-red-files directory if it doesn't exist
+  mkdir -p "$BASE_DIR/node-red-files"
+  
+  # Copy settings.js from repo to Node-RED directory
+  if [ -f "$BASE_DIR/node-red-files/settings.js" ]; then
+    log_message "Copying settings.js to Node-RED directory"
+    cp "$BASE_DIR/node-red-files/settings.js" "/home/$SYSTEM_USER/.node-red/settings.js"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/settings.js"
+  else
+    log_message "Warning: settings.js not found in node-red-files directory"
+  fi
+  
+  # Copy flows.json from repo to Node-RED directory
+  if [ -f "$BASE_DIR/node-red-files/flows.json" ]; then
+    log_message "Copying flows.json to Node-RED directory"
+    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/flows.json"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
+    
+    # Create backup files needed by Node-RED
+    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
+    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
+    
+    # Set permissions
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
+  else
+    log_message "Warning: flows.json not found in node-red-files directory"
+  fi
+  
+  # Set permissions for the Node-RED directory
+  chown -R "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red"
+  
+  # Create Node-RED service
+  log_message "Creating Node-RED service"
+  cat > "/etc/systemd/system/nodered.service" << EOF
 [Unit]
 Description=Node-RED
 After=network.target
 
 [Service]
+Type=simple
 User=$SYSTEM_USER
-Group=$SYSTEM_USER
 WorkingDirectory=/home/$SYSTEM_USER
-Environment="NODE_OPTIONS=--max_old_space_size=$NODERED_MEMORY"
-ExecStart=/home/$SYSTEM_USER/.npm-global/bin/node-red --max-old-space-size=$NODERED_MEMORY
+Environment="NODE_OPTIONS=--max_old_space_size=256"
+ExecStart=/usr/local/bin/node-red-pi --max-old-space-size=256 -v
 Restart=on-failure
-RestartSec=5
+KillSignal=SIGINT
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  # Reload and enable service
-  log_message "Enabling Node-RED service"
+  # Add recovery script for Node-RED authentication
+  if [ -f "/home/$SYSTEM_USER/.node-red/settings.js" ]; then
+    log_message "Creating auth recovery script"
+    cat > "/home/$SYSTEM_USER/nodered-auth-recovery.sh" << EOF
+#!/bin/bash
+echo "Node-RED Authentication Recovery"
+if [ "\$(id -u)" != "0" ]; then
+   echo "This script must be run as root" 
+   exit 1
+fi
+
+ACTION="\$1"
+if [ "\$ACTION" == "disable" ]; then
+  echo "Disabling authentication in Node-RED settings..."
+  sed -i 's/adminAuth:/\/\/ adminAuth:/' /home/$SYSTEM_USER/.node-red/settings.js
+  systemctl restart nodered
+  echo "Authentication disabled. Node-RED restarted."
+elif [ "\$ACTION" == "enable" ]; then
+  echo "Enabling authentication in Node-RED settings..."
+  sed -i 's/\/\/ adminAuth:/adminAuth:/' /home/$SYSTEM_USER/.node-red/settings.js
+  systemctl restart nodered
+  echo "Authentication enabled. Node-RED restarted."
+else
+  echo "Usage: \$0 <disable|enable>"
+  exit 1
+fi
+EOF
+
+    chmod +x "/home/$SYSTEM_USER/nodered-auth-recovery.sh"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/nodered-auth-recovery.sh"
+  fi
+
+  # Enable and start the Node-RED service
   systemctl daemon-reload
-  systemctl enable nodered
+  systemctl enable nodered.service
+  systemctl start nodered.service
   
-  log_message "Node-RED installation completed"
-}
-
-# Create a new function for updating Node-RED flows only
-update_nodered_flows() {
-  log_message "Updating Node-RED flows"
-  
-  # Get flow status
-  if systemctl is-active --quiet nodered; then
-    NODE_RED_WAS_RUNNING=true
-    log_message "Stopping Node-RED service to update flows"
-    systemctl stop nodered || true
-    sleep 2
-  else
-    NODE_RED_WAS_RUNNING=false
-  fi
-  
-  # Setup flows from node-red-flows directory
-  setup_nodered_flows
-  
-  # Start Node-RED and wait for it to initialize
-  log_message "Starting Node-RED service to apply flows..."
-  systemctl start nodered
-  log_message "Waiting for Node-RED to start and apply flows (this may take a moment)..."
-  sleep 10
-  
-  # Check if Node-RED started successfully
-  if systemctl is-active --quiet nodered; then
-    log_message "✓ Node-RED started successfully with flows applied"
-    
-    # Perform additional verification
-    if [ -f "/home/$SYSTEM_USER/.node-red/.flows.json.backup" ] && [ -f "/home/$SYSTEM_USER/.node-red/flows.json" ]; then
-      log_message "✓ Flow files verified - flows are ready to use"
-    else
-      log_message "Warning: Flow backup files not found, flows may not be properly applied"
-    fi
-  else
-    log_message "Warning: Node-RED service didn't start properly. Checking status..."
-    systemctl status nodered
-    log_message "You can check logs with: journalctl -xeu nodered.service"
-    
-    # Ask if we should continue despite the error
-    if [ "$INTERACTIVE" = true ]; then
-      read -p "Node-RED failed to start. Continue with setup anyway? [y/N]: " choice
-      case "$choice" in
-        y|Y) log_message "Continuing setup despite Node-RED failure" ;;
-        *) 
-          log_message "Aborting setup due to Node-RED failure"
-          exit 1
-          ;;
-      esac
-    else
-      log_message "WARNING: Node-RED flow update failed but continuing with installation"
-    fi
-  fi
-  
-  log_message "Node-RED flows updated"
-}
-
-# Setup Node-RED flows
-setup_nodered_flows() {
-  log_message "Setting up Node-RED flows"
-  
-  # Create Node-RED user directory
-  mkdir -p "/home/$SYSTEM_USER/.node-red"
-  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red"
-  
-  # Create node-red-flows directory if it doesn't exist
-  mkdir -p "$BASE_DIR/node-red-flows"
-  chown "$SYSTEM_USER:$SYSTEM_USER" "$BASE_DIR/node-red-flows"
-  
-  # Remove any flows.json from the root directory (we only use node-red-flows)
-  if [ -f "$BASE_DIR/flows.json" ]; then
-    log_message "Found flows.json in project root, moving to node-red-flows"
-    # If no flows exist in node-red-flows, move the root one there
-    if [ ! -f "$BASE_DIR/node-red-flows/flows.json" ]; then
-      mv "$BASE_DIR/flows.json" "$BASE_DIR/node-red-flows/flows.json"
-    else
-      # If flows exist in both places, backup the root one and remove it
-      mv "$BASE_DIR/flows.json" "$BASE_DIR/flows.json.bak"
-    fi
-    log_message "Removed flows.json from project root for cleaner structure"
-  fi
-  
-  # If no flows.json in node-red-flows, create a minimal empty one
-  if [ ! -f "$BASE_DIR/node-red-flows/flows.json" ]; then
-    log_message "No flows.json found in node-red-flows, creating minimal empty flow"
-    echo "[]" > "$BASE_DIR/node-red-flows/flows.json"
-    chown "$SYSTEM_USER:$SYSTEM_USER" "$BASE_DIR/node-red-flows/flows.json"
-  fi
-  
-  # Copy flows from node-red-flows to Node-RED directory
-  log_message "Installing flows from node-red-flows to Node-RED"
-  cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/flows.json"
-  
-  # Create backup files needed by Node-RED
-  cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
-  cp "$BASE_DIR/node-red-flows/flows.json" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
-  
-  # Set permissions
-  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
-  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
-  chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
-  
-  log_message "Node-RED flows successfully installed"
+  log_message "Node-RED setup completed"
 }
 
 # Setup Flask Dashboard
@@ -1610,7 +1553,7 @@ main() {
   
   # Setup WiFi
   if should_process_component "wifi" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
-    if [ "$CONFIGURE_NETWORK" = "true" ]; then
+    if [ "$CONFIGURE_NETWORK" = true ]; then
       if confirm_install "WiFi in AP+STA mode" "N"; then
         setup_wifi
       else
@@ -1672,6 +1615,11 @@ main() {
   sudo systemctl restart mosquitto.service
   sudo systemctl restart dashboard
   log_message "Services restarted successfully."
+  
+  # Display and save system information
+  log_message "Installation completed successfully! ✓"
+  display_system_info
+  save_system_info
 }
 
 # Backup function (adapted from older script)
@@ -1684,7 +1632,7 @@ backup() {
   
   # Create backup with timestamp
   BACKUP_FILE="$BASE_DIR/$BACKUP_DIR/backup-$(date +%F).tar.gz"
-  tar -czf "$BACKUP_FILE" "$BASE_DIR/config" "$BASE_DIR/dashboard" "$BASE_DIR/node-red-flows" > /dev/null 2>&1 || { 
+  tar -czf "$BACKUP_FILE" "$BASE_DIR/config" "$BASE_DIR/dashboard" "$BASE_DIR/node-red-files" > /dev/null 2>&1 || { 
     log_message "Error creating backup"
     return 1
   }
@@ -1724,6 +1672,93 @@ show_info() {
   echo "Credentials:"
   echo "  MQTT Username: $MQTT_USERNAME"
   echo "  Node-RED Username: $NODERED_USERNAME"
+}
+
+# Function to display system information
+display_system_info() {
+  log_message "System Information" 
+  echo "-------------------------"
+  echo "Project Name: $PROJECT_NAME"
+  echo "Installation Directory: $BASE_DIR"
+  echo ""
+  
+  # MQTT Status
+  if [ "$SKIP_MQTT" = false ]; then
+    MQTT_STATUS=$(systemctl is-active mosquitto || echo "not running")
+    echo "MQTT Broker: $MQTT_STATUS"
+    echo "MQTT Port: $MQTT_PORT"
+    if [ -n "$MQTT_USERNAME" ]; then
+      echo "MQTT Username: $MQTT_USERNAME"
+      echo "MQTT Password: $MQTT_PASSWORD"
+    fi
+    echo "MQTT Web Access: http://$(hostname -I | awk '{print $1}'):9001"
+  else
+    echo "MQTT Broker: Not installed"
+  fi
+  echo ""
+  
+  # Node-RED Status
+  if [ "$SKIP_NODERED" = false ]; then
+    NODERED_STATUS=$(systemctl is-active nodered || echo "not running")
+    echo "Node-RED: $NODERED_STATUS"
+    echo "Node-RED Port: $NODERED_PORT"
+    echo "Node-RED Web Access: http://$(hostname -I | awk '{print $1}'):$NODERED_PORT/admin"
+    if [ "$DISABLE_NODERED_AUTH" = false ]; then
+      echo "Node-RED Username: $NODERED_USERNAME"
+      echo "Node-RED Password: $NODERED_PASSWORD"
+      echo "Authentication Recovery Script: $BASE_DIR/scripts/nodered_auth.sh"
+      echo "To temporarily disable authentication if you get locked out:"
+      echo "  sudo $BASE_DIR/scripts/nodered_auth.sh disable"
+    else
+      echo "Node-RED Authentication: Disabled"
+    fi
+  else
+    echo "Node-RED: Not installed"
+  fi
+  echo ""
+  
+  # VM Status
+  if [ "$SKIP_VM" = false ]; then
+    VM_STATUS=$(systemctl is-active victoriametrics || echo "not running")
+    echo "VictoriaMetrics: $VM_STATUS"
+    echo "VM Port: $VM_PORT"
+    echo "VM Web Access: http://$(hostname -I | awk '{print $1}'):$VM_PORT"
+  else
+    echo "VictoriaMetrics: Not installed"
+  fi
+  echo ""
+  
+  # Dashboard Status
+  if [ "$SKIP_DASHBOARD" = false ]; then
+    DASHBOARD_STATUS=$(systemctl is-active dashboard || echo "not running")
+    echo "Dashboard: $DASHBOARD_STATUS"
+    echo "Dashboard Port: $DASHBOARD_PORT"
+    echo "Dashboard Web Access: http://$(hostname -I | awk '{print $1}'):$DASHBOARD_PORT"
+  else
+    echo "Dashboard: Not installed"
+  fi
+  echo ""
+  
+  echo "To manage Node-RED flows:"
+  echo "sudo $BASE_DIR/scripts/manage_flows.sh export|import"
+  echo ""
+  
+  if [ "$DISABLE_NODERED_AUTH" = false ]; then
+    echo "If you forget Node-RED credentials:"
+    echo "sudo $BASE_DIR/scripts/nodered_auth.sh disable"
+    echo ""
+  fi
+  
+  echo "All information has been saved to $BASE_DIR/system_info.txt"
+}
+
+# Save system information to a file
+save_system_info() {
+  # Capture the output to a file
+  mkdir -p "$BASE_DIR/logs"
+  display_system_info > "$BASE_DIR/system_info.txt" 2>/dev/null || true
+  chown "$SYSTEM_USER:$SYSTEM_USER" "$BASE_DIR/system_info.txt" 2>/dev/null || true
+  log_message "System information saved to $BASE_DIR/system_info.txt"
 }
 
 # Handle command

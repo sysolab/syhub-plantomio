@@ -2,7 +2,7 @@
 
 # Node-RED Flows Management Script
 # This script helps manage flows.json files between the Node-RED installation
-# and your project's node-red-flows directory
+# and your project's node-red-files directory
 
 set -e  # Exit on any error
 
@@ -17,7 +17,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR=$(dirname "$SCRIPT_DIR")
 NODE_RED_DIR="/home/$SYSTEM_USER/.node-red"
-PROJECT_FLOWS_DIR="$BASE_DIR/node-red-flows"
+PROJECT_FLOWS_DIR="$BASE_DIR/node-red-files"
 PROJECT_FLOW="$PROJECT_FLOWS_DIR/flows.json"
 
 # Ensure we're running as sudo/root
@@ -36,8 +36,8 @@ show_help() {
   echo "Usage: sudo $0 [COMMAND]"
   echo ""
   echo "Commands:"
-  echo "  export    Export flows from Node-RED to node-red-flows directory"
-  echo "  import    Import flows from node-red-flows directory to Node-RED"
+  echo "  export    Export flows from Node-RED to node-red-files directory"
+  echo "  import    Import flows from node-red-files directory to Node-RED"
   echo "  backup    Create a timestamped backup of current Node-RED flows"
   echo "  help      Show this help message"
   echo ""
@@ -48,9 +48,9 @@ show_help() {
   exit 0
 }
 
-# Export flows from Node-RED to node-red-flows directory
+# Export flows from Node-RED to node-red-files directory
 export_flows() {
-  echo "Exporting flows from Node-RED to node-red-flows directory..."
+  echo "Exporting flows from Node-RED to node-red-files directory..."
   
   if [ ! -f "$NODE_RED_DIR/flows.json" ]; then
     echo "Error: Node-RED flows.json not found at $NODE_RED_DIR/flows.json"
@@ -58,11 +58,11 @@ export_flows() {
     exit 1
   fi
   
-  # Create node-red-flows directory if it doesn't exist
+  # Create node-red-files directory if it doesn't exist
   if [ ! -d "$PROJECT_FLOWS_DIR" ]; then
     mkdir -p "$PROJECT_FLOWS_DIR"
     chown "$SYSTEM_USER:$SYSTEM_USER" "$PROJECT_FLOWS_DIR"
-    echo "Created node-red-flows directory"
+    echo "Created node-red-files directory"
   fi
   
   # Create a backup of the project flows if it exists
@@ -78,16 +78,16 @@ export_flows() {
   # Fix ownership
   chown "$SYSTEM_USER:$SYSTEM_USER" "$PROJECT_FLOW"
   
-  echo "Done! Your updated flows.json is now in the node-red-flows directory."
+  echo "Done! Your updated flows.json is now in the node-red-files directory."
 }
 
-# Import flows from node-red-flows directory to Node-RED
+# Import flows from node-red-files directory to Node-RED
 import_flows() {
-  echo "Importing flows from node-red-flows directory to Node-RED..."
+  echo "Importing flows from node-red-files directory to Node-RED..."
   
   if [ ! -f "$PROJECT_FLOW" ]; then
     echo "Error: Project flows.json not found at $PROJECT_FLOW"
-    echo "Make sure you have a flows.json file in your node-red-flows directory"
+    echo "Make sure you have a flows.json file in your node-red-files directory"
     exit 1
   fi
   

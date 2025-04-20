@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/utils.sh"
 
 # Get directory paths
 BASE_DIR=$(get_base_dir)
-FLOWS_FILE="$BASE_DIR/node-red-flows/flows.json"
+FLOWS_FILE="$BASE_DIR/node-red-files/flows.json"
 CONFIG_FILE="$BASE_DIR/config/config.yml"
 BACKUP_DIR="$BASE_DIR/backups"
 

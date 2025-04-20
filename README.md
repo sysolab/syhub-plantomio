@@ -231,7 +231,7 @@ Node-RED configuration is stored in `/home/youruser/.node-red/settings.js`. This
    sudo ./scripts/manage_flows.sh export
    ```
 
-2. Edit the `node-red-flows/flows.json` file or create new flows in the Node-RED editor
+2. Edit the `node-red-files/flows.json` file or create new flows in the Node-RED editor
 
 3. Import your modified flows:
    ```bash
