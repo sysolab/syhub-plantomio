@@ -899,19 +899,33 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-  # Setup flows from node-red-flows directory
-  setup_nodered_flows
-  
-  # Reload, enable and start service
-  log_message "Starting Node-RED service to apply flows..."
+  # Reload and enable service
+  log_message "Enabling Node-RED service"
   systemctl daemon-reload
   systemctl enable nodered
   
-  # Completely stop Node-RED first to ensure a clean start
-  systemctl stop nodered 2>/dev/null || true
-  sleep 2
+  log_message "Node-RED installation completed"
+}
+
+# Create a new function for updating Node-RED flows only
+update_nodered_flows() {
+  log_message "Updating Node-RED flows"
+  
+  # Get flow status
+  if systemctl is-active --quiet nodered; then
+    NODE_RED_WAS_RUNNING=true
+    log_message "Stopping Node-RED service to update flows"
+    systemctl stop nodered || true
+    sleep 2
+  else
+    NODE_RED_WAS_RUNNING=false
+  fi
+  
+  # Setup flows from node-red-flows directory
+  setup_nodered_flows
   
   # Start Node-RED and wait for it to initialize
+  log_message "Starting Node-RED service to apply flows..."
   systemctl start nodered
   log_message "Waiting for Node-RED to start and apply flows (this may take a moment)..."
   sleep 10
@@ -942,11 +956,11 @@ EOF
           ;;
       esac
     else
-      log_message "WARNING: Node-RED setup failed but continuing with installation"
+      log_message "WARNING: Node-RED flow update failed but continuing with installation"
     fi
   fi
   
-  log_message "Node-RED setup completed with flows from node-red-flows"
+  log_message "Node-RED flows updated"
 }
 
 # Setup Node-RED flows
@@ -1559,12 +1573,19 @@ main() {
     fi
   fi
   
-  # Setup Node-RED
+  # Setup Node-RED (modified section in main())
   if should_process_component "nodered" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
     if confirm_install "Node-RED flow editor"; then
-  setup_nodered
+      setup_nodered
     else
       log_message "Skipping Node-RED installation"
+    fi
+    
+    # Now separately ask about updating flows
+    if confirm_install "Node-RED flows update"; then
+      update_nodered_flows
+    else
+      log_message "Skipping Node-RED flows update"
     fi
   fi
   

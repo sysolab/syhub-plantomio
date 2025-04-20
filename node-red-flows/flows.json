@@ -340,7 +340,7 @@
         "type": "function",
         "z": "mqtt-flow",
         "name": "Process Sensor Data",
-        "func": "// Add timestamp if not present\nif (!msg.payload.timestamp) {\n    msg.payload.timestamp = new Date().toISOString();\n}\n\n// Add topic information\nmsg.payload.topic = msg.topic;\n\n// Forward to debug and potentially to database\nreturn msg;",
+        "func": "// Add timestamp if not present\nif (!msg.payload.timestamp) {\n    msg.payload.timestamp = new Date().toISOString();\n}\n\n// Add topic information\nmsg.payload.topic = msg.topic;\n\n// Store the latest data in global context\nconst latestData = global.get('latestSensorData') || {};\nObject.assign(latestData, msg.payload);\nlatestData.lastUpdate = new Date().toISOString();\nglobal.set('latestSensorData', latestData);\n\n// Forward to debug and potentially to database\nreturn msg;",
         "outputs": 1,
         "x": 420,
         "y": 120,
@@ -447,6 +447,167 @@
         "x": 1170,
         "y": 120,
         "wires": []
+    },
+    {
+        "id": "api-flow",
+        "type": "tab",
+        "label": "Dashboard API",
+        "disabled": false,
+        "info": "This flow provides API endpoints for the dashboard",
+        "env": []
+    },
+    {
+        "id": "api-latest-endpoint",
+        "type": "http in",
+        "z": "api-flow",
+        "name": "GET /api/latest",
+        "url": "/api/latest",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 120,
+        "y": 60,
+        "wires": [
+            [
+                "get-latest-data"
+            ]
+        ]
+    },
+    {
+        "id": "get-latest-data",
+        "type": "function",
+        "z": "api-flow",
+        "name": "Get Latest Data",
+        "func": "// Get data from global context\nlet data = global.get('latestSensorData') || {};\n\n// If no data exists yet, provide demo data\nif (Object.keys(data).length === 0) {\n    data = {\n        temperature: 25.5,\n        pH: 6.8,\n        EC: 1.2,\n        TDS: 600,\n        waterLevel: 75,\n        distance: 12.3,\n        deviceID: 'plt-404cca470da0',\n        lastUpdate: new Date().toISOString()\n    };\n}\n\nreturn { payload: data };",
+        "outputs": 1,
+        "x": 320,
+        "y": 60,
+        "wires": [
+            [
+                "api-latest-response"
+            ]
+        ]
+    },
+    {
+        "id": "api-latest-response",
+        "type": "http response",
+        "z": "api-flow",
+        "name": "HTTP Response",
+        "statusCode": "",
+        "headers": {
+            "content-type": "application/json"
+        },
+        "x": 520,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "api-events-endpoint",
+        "type": "http in",
+        "z": "api-flow",
+        "name": "GET /api/events",
+        "url": "/api/events",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 120,
+        "y": 120,
+        "wires": [
+            [
+                "setup-sse"
+            ]
+        ]
+    },
+    {
+        "id": "setup-sse",
+        "type": "function",
+        "z": "api-flow",
+        "name": "Setup SSE",
+        "func": "// Initialize SSE headers in context\nnode.sse = {};\nnode.sse.id = 1; // Event ID counter\n\n// Setup SSE response headers\nmsg.headers = {\n    'Content-Type': 'text/event-stream',\n    'Cache-Control': 'no-cache',\n    'Connection': 'keep-alive',\n    'X-Accel-Buffering': 'no' // For Nginx proxy\n};\n\n// Send a connection established event\nmsg.payload = {\n    id: node.sse.id++,\n    event: 'connected',\n    data: JSON.stringify({ status: 'connected', timestamp: new Date().toISOString() })\n};\n\n// Format the SSE message\nmsg.sse = true; // Flag this as an SSE message\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 290,
+        "y": 120,
+        "wires": [
+            [
+                "store-sse-client"
+            ]
+        ]
+    },
+    {
+        "id": "store-sse-client",
+        "type": "function",
+        "z": "api-flow",
+        "name": "Store SSE Client",
+        "func": "// Get existing clients array\nlet clients = global.get('sse_clients') || [];\n\n// Add this node if not already present\nif (!clients.includes(node)) {\n    clients.push(node);\n    global.set('sse_clients', clients);\n}\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "// Remove this client when connection closes\nlet clients = global.get('sse_clients') || [];\nconst index = clients.indexOf(node);\nif (index > -1) {\n    clients.splice(index, 1);\n    global.set('sse_clients', clients);\n}\n",
+        "libs": [],
+        "x": 490,
+        "y": 180,
+        "wires": [
+            ["api-events-response"]
+        ]
+    },
+    {
+        "id": "api-events-response",
+        "type": "http response",
+        "z": "api-flow",
+        "name": "SSE Response",
+        "statusCode": "",
+        "headers": {},
+        "x": 490,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "send-data-updates",
+        "type": "inject",
+        "z": "api-flow",
+        "name": "Send Updates Every 5s",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "5",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 140,
+        "y": 180,
+        "wires": [
+            [
+                "generate-test-data"
+            ]
+        ]
+    },
+    {
+        "id": "generate-test-data",
+        "type": "function",
+        "z": "api-flow",
+        "name": "Generate Test Data",
+        "func": "// Get existing data or create new\nlet data = global.get('latestSensorData') || {\n    temperature: 25.0,\n    pH: 6.5,\n    EC: 1.0,\n    TDS: 500,\n    waterLevel: 70,\n    distance: 15.0,\n    deviceID: 'plt-404cca470da0'\n};\n\n// Add small random variations to simulate changes\ndata.temperature = Math.max(15, Math.min(35, data.temperature + (Math.random() - 0.5)));\ndata.pH = Math.max(5, Math.min(8, data.pH + (Math.random() - 0.5) * 0.2));\ndata.EC = Math.max(0.5, Math.min(2.0, data.EC + (Math.random() - 0.5) * 0.1));\ndata.TDS = Math.round(Math.max(300, Math.min(800, data.TDS + (Math.random() - 0.5) * 20)));\ndata.waterLevel = Math.round(Math.max(10, Math.min(95, data.waterLevel + (Math.random() - 0.5) * 5)));\ndata.distance = Math.max(5, Math.min(30, data.distance + (Math.random() - 0.5)));\ndata.lastUpdate = new Date().toISOString();\n\n// Store updated data in global context\nglobal.set('latestSensorData', data);\n\n// Create a simple event message for SSE\nmsg.payload = {\n    data: JSON.stringify(data)\n};\n\n// Format the SSE message\nmsg.headers = {\n    'Content-Type': 'text/event-stream',\n    'Cache-Control': 'no-cache',\n    'Connection': 'keep-alive'\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "// Initialize global latestSensorData if not exists\nif (!global.get('latestSensorData')) {\n    global.set('latestSensorData', {\n        temperature: 25.0,\n        pH: 6.5,\n        EC: 1.0,\n        TDS: 500,\n        waterLevel: 70,\n        distance: 15.0,\n        deviceID: 'plt-404cca470da0',\n        lastUpdate: new Date().toISOString()\n    });\n}\n",
+        "finalize": "",
+        "libs": [],
+        "x": 340,
+        "y": 180,
+        "wires": [
+            [
+                "api-events-response"
+            ]
+        ]
     },
     {
         "id": "mqtt-broker",
