@@ -860,41 +860,6 @@ setup_nodered() {
     }
   done
   
-  # Setup Node-RED files
-  log_message "Setting up Node-RED configuration files"
-  
-  # Create node-red-files directory if it doesn't exist
-  mkdir -p "$BASE_DIR/node-red-files"
-  
-  # Copy settings.js from repo to Node-RED directory
-  if [ -f "$BASE_DIR/node-red-files/settings.js" ]; then
-    log_message "Copying settings.js to Node-RED directory"
-    cp "$BASE_DIR/node-red-files/settings.js" "/home/$SYSTEM_USER/.node-red/settings.js"
-    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/settings.js"
-  else
-    log_message "Warning: settings.js not found in node-red-files directory"
-  fi
-  
-  # Copy flows.json from repo to Node-RED directory
-  if [ -f "$BASE_DIR/node-red-files/flows.json" ]; then
-    log_message "Copying flows.json to Node-RED directory"
-    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/flows.json"
-    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
-    
-    # Create backup files needed by Node-RED
-    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
-    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
-    
-    # Set permissions
-    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
-    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
-  else
-    log_message "Warning: flows.json not found in node-red-files directory"
-  fi
-  
-  # Set permissions for the Node-RED directory
-  chown -R "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red"
-  
   # Create Node-RED service
   log_message "Creating Node-RED service"
   cat > "/etc/systemd/system/nodered.service" << EOF
@@ -1495,7 +1460,41 @@ main() {
     
     # Now separately ask about updating flows
     if confirm_install "Node-RED flows update"; then
-      update_nodered_flows
+      # Setup Node-RED files
+  log_message "Setting up Node-RED configuration files"
+  
+  # Create node-red-files directory if it doesn't exist
+  mkdir -p "$BASE_DIR/node-red-files"
+  
+  # Copy settings.js from repo to Node-RED directory
+  if [ -f "$BASE_DIR/node-red-files/settings.js" ]; then
+    log_message "Copying settings.js to Node-RED directory"
+    cp "$BASE_DIR/node-red-files/settings.js" "/home/$SYSTEM_USER/.node-red/settings.js"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/settings.js"
+  else
+    log_message "Warning: settings.js not found in node-red-files directory"
+  fi
+  
+  # Copy flows.json from repo to Node-RED directory
+  if [ -f "$BASE_DIR/node-red-files/flows.json" ]; then
+    log_message "Copying flows.json to Node-RED directory"
+    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/flows.json"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows.json"
+    
+    # Create backup files needed by Node-RED
+    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
+    cp "$BASE_DIR/node-red-files/flows.json" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
+    
+    # Set permissions
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/flows_backup.json"
+    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red/.flows.json.backup"
+  else
+    log_message "Warning: flows.json not found in node-red-files directory"
+  fi
+  
+  # Set permissions for the Node-RED directory
+  chown -R "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/.node-red"
+  
     else
       log_message "Skipping Node-RED flows update"
     fi
