@@ -915,38 +915,6 @@ KillSignal=SIGINT
 WantedBy=multi-user.target
 EOF
 
-  # Add recovery script for Node-RED authentication
-  if [ -f "/home/$SYSTEM_USER/.node-red/settings.js" ]; then
-    log_message "Creating auth recovery script"
-    cat > "/home/$SYSTEM_USER/nodered-auth-recovery.sh" << EOF
-#!/bin/bash
-echo "Node-RED Authentication Recovery"
-if [ "\$(id -u)" != "0" ]; then
-   echo "This script must be run as root" 
-   exit 1
-fi
-
-ACTION="\$1"
-if [ "\$ACTION" == "disable" ]; then
-  echo "Disabling authentication in Node-RED settings..."
-  sed -i 's/adminAuth:/\/\/ adminAuth:/' /home/$SYSTEM_USER/.node-red/settings.js
-  systemctl restart nodered
-  echo "Authentication disabled. Node-RED restarted."
-elif [ "\$ACTION" == "enable" ]; then
-  echo "Enabling authentication in Node-RED settings..."
-  sed -i 's/\/\/ adminAuth:/adminAuth:/' /home/$SYSTEM_USER/.node-red/settings.js
-  systemctl restart nodered
-  echo "Authentication enabled. Node-RED restarted."
-else
-  echo "Usage: \$0 <disable|enable>"
-  exit 1
-fi
-EOF
-
-    chmod +x "/home/$SYSTEM_USER/nodered-auth-recovery.sh"
-    chown "$SYSTEM_USER:$SYSTEM_USER" "/home/$SYSTEM_USER/nodered-auth-recovery.sh"
-  fi
-
   # Enable and start the Node-RED service
   systemctl daemon-reload
   systemctl enable nodered.service
