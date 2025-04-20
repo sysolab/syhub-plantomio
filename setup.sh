@@ -872,7 +872,7 @@ Type=simple
 User=$SYSTEM_USER
 WorkingDirectory=/home/$SYSTEM_USER
 Environment="NODE_OPTIONS=--max_old_space_size=256"
-ExecStart=/usr/local/bin/node-red-pi --max-old-space-size=256 -v
+ExecStart=/home/$SYSTEM_USER/.npm-global/bin/node-red --max-old-space-size=256 -v
 Restart=on-failure
 KillSignal=SIGINT
 
