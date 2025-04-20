@@ -37,178 +37,277 @@
         <!-- Main Content -->
         <div class="main-content">
             <header class="main-header">
-                <h2>Dashboard Overview</h2>
-                <div id="last-updated">Last updated: <span id="last-update">--</span></div>
+                <div class="header-content">
+                    <h1>Plantomio Dashboard</h1>
+                    <p class="subtitle">Plant monitoring system</p>
+                </div>
+                <div class="header-status">
+                    <span class="status-indicator live">Live Data</span>
+                    <span class="device-id">Device: <span id="device-id">pit-404cca470da0</span></span>
+                    <span class="last-update">Last update: <span id="last-update">08:19:57</span></span>
+                </div>
             </header>
 
             <div class="page-content">
-                <!-- Top row stats cards -->
-                <div class="dashboard-grid">
-                    <!-- Water Level Card -->
-                    <div class="card card-sm stat-card">
-                        <div class="card-header">
-                            <h3 class="card-title">Water Level</h3>
-                            <i class="fas fa-tint text-primary"></i>
-                        </div>
-                        <div class="card-body">
-                            <div class="card-value"><span id="water-level-value">--</span>%</div>
-                            <div class="card-trend">
-                                <i class="fas fa-arrow-up"></i> Optimal
-                            </div>
+                <!-- Plant Health Assessment -->
+                <div class="panel health-panel">
+                    <div class="panel-header">
+                        <h2>Plant Health Assessment</h2>
+                        <div class="panel-actions">
+                            <button class="btn btn-refresh">Refresh Data</button>
+                            <button class="btn btn-actions">Actions</button>
                         </div>
                     </div>
-
-                    <!-- Temperature Card -->
-                    <div class="card card-sm stat-card">
-                        <div class="card-header">
-                            <h3 class="card-title">Temperature</h3>
-                            <i class="fas fa-temperature-high text-warning"></i>
-                        </div>
-                        <div class="card-body">
-                            <div class="card-value"><span id="temperature-value">--</span>°C</div>
-                            <div class="card-trend">
-                                <i class="fas fa-check-circle"></i> Normal
+                    <div class="health-content">
+                        <div class="health-status">
+                            <div class="status-icon good">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div class="status-details">
+                                <h3>Good Condition</h3>
+                                <p>Based on sensor readings</p>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- pH Card -->
-                    <div class="card card-sm stat-card">
-                        <div class="card-header">
-                            <h3 class="card-title">pH Level</h3>
-                            <i class="fas fa-flask text-info"></i>
-                        </div>
-                        <div class="card-body">
-                            <div class="card-value"><span id="ph-value">--</span></div>
-                            <div class="card-trend">
-                                <i class="fas fa-check-circle"></i> Balanced
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- EC Card -->
-                    <div class="card card-sm stat-card">
-                        <div class="card-header">
-                            <h3 class="card-title">EC</h3>
-                            <i class="fas fa-bolt text-success"></i>
-                        </div>
-                        <div class="card-body">
-                            <div class="card-value"><span id="ec-value">--</span> mS/cm</div>
-                            <div class="card-trend">
-                                <i class="fas fa-check-circle"></i> Normal
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tank Level Visualization -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">Tank Visualization</h3>
-                            <div>
-                                <button class="btn btn-sm" id="refresh-tank">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="tank-container">
-                            <div class="tank-visualization">
-                                <div class="tank-level" id="tank-level"></div>
-                            </div>
-                            <div class="tank-info">
-                                <p><span id="water-level-value-alt">--</span>% filled</p>
-                                <p>Distance: <span id="distance-value">--</span> cm</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- TDS & EC Card -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">Water Quality</h3>
-                            <div class="time-range-selector">
-                                <button class="btn btn-sm active" data-range="now">Current</button>
-                                <button class="btn btn-sm" data-range="day">24h</button>
-                            </div>
-                        </div>
-                        <div class="metrics-container">
-                            <div class="stat-row">
-                                <span class="stat-label">TDS</span>
-                                <div class="stat-value-container">
-                                    <span id="tds-value">--</span> ppm
+                        
+                        <div class="health-metrics">
+                            <div class="health-metric">
+                                <label>Overall Health</label>
+                                <div class="progress-container">
+                                    <div class="progress-bar" style="width: 86%"></div>
                                 </div>
-                            </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar" id="tds-progress" style="width: 65%"></div>
+                                <span class="progress-value">86%</span>
                             </div>
                             
-                            <div class="stat-row">
-                                <span class="stat-label">EC</span>
-                                <div class="stat-value-container">
-                                    <span id="ec-value-alt">--</span> mS/cm
+                            <div class="health-metric">
+                                <label>Water Quality</label>
+                                <div class="progress-container">
+                                    <div class="progress-bar water-quality" style="width: 62%"></div>
+                                </div>
+                                <span class="progress-value">62%</span>
+                            </div>
+                            
+                            <div class="health-metric">
+                                <label>Growth Rate</label>
+                                <div class="progress-container">
+                                    <div class="progress-bar growth-rate" style="width: 78%"></div>
+                                </div>
+                                <span class="progress-value">78%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="recommendation-box">
+                            <h4>Recommendation</h4>
+                            <p>Consider reducing nutrient solution concentration. TDS levels are above optimal range for this plant type.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Critical Metrics -->
+                <div class="metrics-grid">
+                    <div class="metric-card temperature">
+                        <div class="metric-label">Temperature</div>
+                        <div class="metric-status">Ok</div>
+                        <div class="metric-value" id="temperature-value">20.9°C</div>
+                    </div>
+                    
+                    <div class="metric-card tds">
+                        <div class="metric-label">TDS</div>
+                        <div class="metric-status high">High</div>
+                        <div class="metric-value" id="tds-value">52595 ppm</div>
+                    </div>
+                    
+                    <div class="metric-card ph">
+                        <div class="metric-label">pH</div>
+                        <div class="metric-status high">High</div>
+                        <div class="metric-value" id="ph-value">42.06</div>
+                    </div>
+                </div>
+                
+                <!-- System Status -->
+                <div class="panel status-panel">
+                    <div class="panel-header">
+                        <h2>System Status</h2>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-label">CPU Load</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill" style="width: 32%"></div>
+                            </div>
+                            <div class="status-value">32%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-label">Memory</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill" style="width: 45%"></div>
+                            </div>
+                            <div class="status-value">45%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-label">Storage</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill" style="width: 18%"></div>
+                            </div>
+                            <div class="status-value">18%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-label">Water Level</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill water" style="width: 75%"></div>
+                            </div>
+                            <div class="status-value">2.7cm</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Detailed Metrics -->
+                <div class="panel detailed-metrics-panel">
+                    <div class="panel-header">
+                        <h2>Detailed Metrics</h2>
+                    </div>
+                    <div class="detailed-metrics-grid">
+                        <div class="detailed-metric">
+                            <div class="metric-header">
+                                <div class="metric-name">Temperature</div>
+                                <div class="metric-tag normal">Normal</div>
+                            </div>
+                            <div class="metric-reading">20.9 °C</div>
+                            <div class="metric-scale">
+                                <div class="scale-markers">
+                                    <span>15°C</span>
+                                    <span>21°C</span>
+                                    <span>30°C</span>
+                                </div>
+                                <div class="scale-bar">
+                                    <div class="scale-indicator" style="left: 42%"></div>
                                 </div>
                             </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar secondary" id="ec-progress" style="width: 45%"></div>
+                        </div>
+                        
+                        <div class="detailed-metric">
+                            <div class="metric-header">
+                                <div class="metric-name">pH Level</div>
+                                <div class="metric-tag too-high">Too High</div>
+                            </div>
+                            <div class="metric-reading">42.06 pH</div>
+                            <div class="metric-scale">
+                                <div class="scale-markers">
+                                    <span>5.5</span>
+                                    <span>7.0</span>
+                                    <span>8.5</span>
+                                </div>
+                                <div class="scale-bar">
+                                    <div class="scale-indicator" style="left: 100%"></div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Chart Card -->
-                    <div class="card card-lg">
-                        <div class="card-header">
-                            <h3 class="card-title">Sensor Readings</h3>
-                            <div class="time-range-selector">
-                                <button class="btn btn-sm active" data-range="1h">1h</button>
-                                <button class="btn btn-sm" data-range="6h">6h</button>
-                                <button class="btn btn-sm" data-range="24h">24h</button>
+                        
+                        <div class="detailed-metric">
+                            <div class="metric-header">
+                                <div class="metric-name">ORP</div>
+                                <div class="metric-tag suboptimal">Suboptimal</div>
+                            </div>
+                            <div class="metric-reading">214 mV</div>
+                            <div class="metric-scale">
+                                <div class="scale-markers">
+                                    <span>150mV</span>
+                                    <span>350mV</span>
+                                    <span>600mV</span>
+                                </div>
+                                <div class="scale-bar">
+                                    <div class="scale-indicator" style="left: 15%"></div>
+                                </div>
                             </div>
                         </div>
-                        <div class="chart-container">
-                            <canvas id="main-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- System Status Card -->
-                    <div class="card card-lg">
-                        <div class="card-header">
-                            <h3 class="card-title">System Status</h3>
-                            <div>
-                                <button class="btn btn-sm" id="refresh-status">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
+                        
+                        <div class="detailed-metric">
+                            <div class="metric-header">
+                                <div class="metric-name">TDS</div>
+                                <div class="metric-tag too-high">Too High</div>
+                            </div>
+                            <div class="metric-reading">52595 ppm</div>
+                            <div class="metric-scale">
+                                <div class="scale-markers">
+                                    <span>50</span>
+                                    <span>250</span>
+                                    <span>500</span>
+                                </div>
+                                <div class="scale-bar">
+                                    <div class="scale-indicator" style="left: 100%"></div>
+                                </div>
                             </div>
                         </div>
-                        <div class="status-grid">
-                            <div class="status-item">
-                                <span class="status-label">Dashboard:</span>
-                                <span class="status-value" id="dashboard-status">
-                                    <span class="status-dot online"></span> Online
-                                </span>
+                        
+                        <div class="detailed-metric">
+                            <div class="metric-header">
+                                <div class="metric-name">Conductivity</div>
+                                <div class="metric-tag suboptimal">Suboptimal</div>
                             </div>
-                            <div class="status-item">
-                                <span class="status-label">Node-RED:</span>
-                                <span class="status-value" id="nodered-status">
-                                    <span class="status-dot"></span> --
-                                </span>
+                            <div class="metric-reading">33.66 μS/cm</div>
+                            <div class="metric-scale">
+                                <div class="scale-markers">
+                                    <span>5</span>
+                                    <span>20</span>
+                                    <span>40</span>
+                                </div>
+                                <div class="scale-bar">
+                                    <div class="scale-indicator" style="left: 90%"></div>
+                                </div>
                             </div>
-                            <div class="status-item">
-                                <span class="status-label">VictoriaMetrics:</span>
-                                <span class="status-value" id="vm-status">
-                                    <span class="status-dot"></span> --
-                                </span>
+                        </div>
+                        
+                        <div class="detailed-metric">
+                            <div class="metric-header">
+                                <div class="metric-name">Water Level</div>
+                                <div class="metric-tag suboptimal">Suboptimal</div>
                             </div>
-                            <div class="status-item">
-                                <span class="status-label">System Load:</span>
-                                <span class="status-value" id="system-load">--</span>
+                            <div class="metric-reading">2.7 cm</div>
+                            <div class="metric-scale">
+                                <div class="scale-markers">
+                                    <span>1cm</span>
+                                    <span>5cm</span>
+                                    <span>10cm</span>
+                                </div>
+                                <div class="scale-bar">
+                                    <div class="scale-indicator" style="left: 19%"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Quick Actions -->
+                <div class="panel quick-actions-panel">
+                    <div class="panel-header">
+                        <h2>Quick Actions</h2>
+                    </div>
+                    <div class="actions-grid">
+                        <button class="action-btn start-pump">Start Pump</button>
+                        <button class="action-btn toggle-light">Toggle Light</button>
+                        <button class="action-btn reset-sensors">Reset Sensors</button>
+                        <button class="action-btn settings">Settings</button>
+                    </div>
+                </div>
+                
+                <!-- Sensor Trends -->
+                <div class="panel sensor-trends-panel">
+                    <div class="panel-header">
+                        <h2>Sensor Trends</h2>
+                        <div class="time-controls">
+                            <button class="time-btn active">24 Hours</button>
+                            <button class="time-btn">Week</button>
+                            <button class="time-btn">Month</button>
+                        </div>
+                    </div>
+                    <div class="trends-container">
+                        <!-- Chart will be inserted here by JavaScript -->
+                        <div id="trends-chart" class="trends-chart"></div>
+                    </div>
+                </div>
             </div>
-
-            <footer>
-                <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
-            </footer>
         </div>
     </div>
 
@@ -223,35 +322,6 @@
 
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
-        
-        // Sync water level values
-        const syncWaterLevelValues = () => {
-            const primaryValue = document.getElementById('water-level-value').textContent;
-            if (primaryValue && primaryValue !== '--') {
-                document.getElementById('water-level-value-alt').textContent = primaryValue;
-            }
-        };
-        
-        // Sync EC values
-        const syncECValues = () => {
-            const primaryValue = document.getElementById('ec-value').textContent;
-            if (primaryValue && primaryValue !== '--') {
-                document.getElementById('ec-value-alt').textContent = primaryValue;
-            }
-        };
-        
-        // Add event listeners for refresh buttons
-        document.getElementById('refresh-tank').addEventListener('click', function() {
-            fetchLatestData();
-        });
-        
-        document.getElementById('refresh-status').addEventListener('click', function() {
-            checkSystemStatus();
-        });
-        
-        // Call sync functions periodically
-        setInterval(syncWaterLevelValues, 1000);
-        setInterval(syncECValues, 1000);
     </script>
 </body>
 </html> 
