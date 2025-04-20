@@ -61,7 +61,7 @@ async function saveTankSettings(data) {
         
         const result = await response.json();
         
-        if (result.success) {
+        if (result.status === 'success') {
             showMessage('Settings saved successfully!', 'success');
             state.settings = data;
             updatePreview();
