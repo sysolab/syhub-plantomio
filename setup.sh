@@ -1663,7 +1663,7 @@ main() {
       echo "  sudo systemctl status victoriametrics"
       echo "  sudo journalctl -xeu victoriametrics.service"
     fi
-  }
+  fi
   
   # Restart services to apply changes
   log_message "Restarting services to apply changes..."
