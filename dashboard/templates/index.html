@@ -25,9 +25,7 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                        <path d="M2 17l10 5 10-5"></path>
-                        <path d="M2 12l10 5 10-5"></path>
+                        <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
                     </svg>
                 </div>
             </div>
@@ -49,7 +47,7 @@
                 </div>
                 <div class="header-status">
                     <span class="status-indicator live">Live Data</span>
-                    <span class="device-id">Device: <span id="device-id">pit-404cca470da0</span></span>
+                    <span class="device-id">Device: <span id="device-id">plt-404cca470da0</span></span>
                     <span class="last-update">Last update: <span id="last-update">08:19:57</span></span>
                 </div>
             </header>
@@ -92,14 +90,6 @@
                                 </div>
                                 <span class="progress-value">62%</span>
                             </div>
-                            
-                            <div class="health-metric">
-                                <label>Growth Rate</label>
-                                <div class="progress-container">
-                                    <div class="progress-bar growth-rate" style="width: 78%"></div>
-                                </div>
-                                <span class="progress-value">78%</span>
-                            </div>
                         </div>
                         
                         <div class="recommendation-box">
@@ -117,163 +107,86 @@
                             </div>
                         </div>
                         <div class="tank-info">
-                            <p>Water Level: 2.7cm</p>
-                            <p>75% Capacity</p>
+                            <p>Water Level: <span id="water-level-value">2.7</span>cm</p>
+                            <p><span id="water-level-percent">75</span>% Capacity</p>
+                            <button class="btn btn-settings" id="tank-settings-btn">
+                                <i class="fas fa-sliders-h"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Tank Settings Panel (Hidden by default) -->
+                        <div class="tank-settings-panel" id="tank-settings-panel">
+                            <div class="settings-header">
+                                <h4>Tank Calibration</h4>
+                                <button class="btn-close" id="tank-settings-close">×</button>
+                            </div>
+                            <div class="settings-form">
+                                <div class="form-group">
+                                    <label for="min-level">Min Level (cm)</label>
+                                    <input type="number" id="min-level" class="form-control" value="0" step="0.1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="max-level">Max Level (cm)</label>
+                                    <input type="number" id="max-level" class="form-control" value="10" step="0.1">
+                                </div>
+                                <div class="settings-actions">
+                                    <button class="btn btn-save" id="save-tank-settings">Save</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Critical Metrics -->
+                <!-- Sensor Parameters Grid -->
                 <div class="metrics-grid">
                     <div class="metric-card temperature">
                         <div class="metric-label">Temperature</div>
                         <div class="metric-status">Ok</div>
-                        <div class="metric-value" id="temperature-value">20.9°C</div>
+                        <div class="metric-value" id="temperature-value">25°C</div>
                     </div>
                     
                     <div class="metric-card tds">
                         <div class="metric-label">TDS</div>
                         <div class="metric-status high">High</div>
-                        <div class="metric-value" id="tds-value">52595 ppm</div>
+                        <div class="metric-value" id="tds-value">59923.9 ppm</div>
                     </div>
                     
                     <div class="metric-card ph">
                         <div class="metric-label">pH</div>
+                        <div class="metric-status">Ok</div>
+                        <div class="metric-value" id="ph-value">6.98</div>
+                    </div>
+                    
+                    <div class="metric-card orp">
+                        <div class="metric-label">ORP</div>
+                        <div class="metric-status">Ok</div>
+                        <div class="metric-value" id="orp-value">296.3 mV</div>
+                    </div>
+                    
+                    <div class="metric-card ec">
+                        <div class="metric-label">EC</div>
                         <div class="metric-status high">High</div>
-                        <div class="metric-value" id="ph-value">42.06</div>
+                        <div class="metric-value" id="ec-value">38.35 μS/cm</div>
                     </div>
                 </div>
                 
-                <!-- Detailed Metrics -->
-                <div class="detailed-metrics-panel">
+                <!-- Sensor Trends -->
+                <div class="sensor-trends-panel">
                     <div class="panel-header">
-                        <h2>Detailed Metrics</h2>
+                        <h2>Sensor Trends</h2>
+                        <div class="time-controls">
+                            <button class="time-btn active">24 Hours</button>
+                            <button class="time-btn">Week</button>
+                            <button class="time-btn">Month</button>
+                        </div>
                     </div>
-                    <div class="detailed-metrics-grid">
-                        <div class="detailed-metric">
-                            <div class="metric-header">
-                                <div class="metric-name">Temperature</div>
-                                <div class="metric-tag normal">Normal</div>
-                            </div>
-                            <div class="metric-reading">20.9 °C</div>
-                            <div class="metric-scale">
-                                <div class="scale-markers">
-                                    <span>15°C</span>
-                                    <span>21°C</span>
-                                    <span>30°C</span>
-                                </div>
-                                <div class="scale-bar">
-                                    <div class="scale-indicator" style="left: 42%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="detailed-metric">
-                            <div class="metric-header">
-                                <div class="metric-name">pH Level</div>
-                                <div class="metric-tag too-high">Too High</div>
-                            </div>
-                            <div class="metric-reading">42.06 pH</div>
-                            <div class="metric-scale">
-                                <div class="scale-markers">
-                                    <span>5.5</span>
-                                    <span>7.0</span>
-                                    <span>8.5</span>
-                                </div>
-                                <div class="scale-bar">
-                                    <div class="scale-indicator" style="left: 100%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="detailed-metric">
-                            <div class="metric-header">
-                                <div class="metric-name">ORP</div>
-                                <div class="metric-tag suboptimal">Suboptimal</div>
-                            </div>
-                            <div class="metric-reading">214 mV</div>
-                            <div class="metric-scale">
-                                <div class="scale-markers">
-                                    <span>150mV</span>
-                                    <span>350mV</span>
-                                    <span>600mV</span>
-                                </div>
-                                <div class="scale-bar">
-                                    <div class="scale-indicator" style="left: 15%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="detailed-metric">
-                            <div class="metric-header">
-                                <div class="metric-name">TDS</div>
-                                <div class="metric-tag too-high">Too High</div>
-                            </div>
-                            <div class="metric-reading">52595 ppm</div>
-                            <div class="metric-scale">
-                                <div class="scale-markers">
-                                    <span>50</span>
-                                    <span>250</span>
-                                    <span>500</span>
-                                </div>
-                                <div class="scale-bar">
-                                    <div class="scale-indicator" style="left: 100%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="detailed-metric">
-                            <div class="metric-header">
-                                <div class="metric-name">Conductivity</div>
-                                <div class="metric-tag suboptimal">Suboptimal</div>
-                            </div>
-                            <div class="metric-reading">33.66 μS/cm</div>
-                            <div class="metric-scale">
-                                <div class="scale-markers">
-                                    <span>5</span>
-                                    <span>20</span>
-                                    <span>40</span>
-                                </div>
-                                <div class="scale-bar">
-                                    <div class="scale-indicator" style="left: 90%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="detailed-metric">
-                            <div class="metric-header">
-                                <div class="metric-name">Water Level</div>
-                                <div class="metric-tag suboptimal">Suboptimal</div>
-                            </div>
-                            <div class="metric-reading">2.7 cm</div>
-                            <div class="metric-scale">
-                                <div class="scale-markers">
-                                    <span>1cm</span>
-                                    <span>5cm</span>
-                                    <span>10cm</span>
-                                </div>
-                                <div class="scale-bar">
-                                    <div class="scale-indicator" style="left: 19%"></div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="trends-container">
+                        <!-- Chart will be inserted here by JavaScript -->
+                        <div id="trends-chart" class="trends-chart"></div>
                     </div>
                 </div>
                 
-                <!-- Quick Actions -->
-                <div class="quick-actions-panel">
-                    <div class="panel-header">
-                        <h2>Quick Actions</h2>
-                    </div>
-                    <div class="actions-grid">
-                        <button class="action-btn start-pump">Start Pump</button>
-                        <button class="action-btn toggle-light">Toggle Light</button>
-                        <button class="action-btn reset-sensors">Reset Sensors</button>
-                        <button class="action-btn settings">Settings</button>
-                    </div>
-                </div>
-                
-                <!-- System Status -->
+                <!-- System Status (moved to bottom) -->
                 <div class="status-panel">
                     <div class="panel-header">
                         <h2>System Status</h2>
@@ -313,19 +226,24 @@
                     </div>
                 </div>
                 
-                <!-- Sensor Trends -->
-                <div class="sensor-trends-panel">
+                <!-- Quick Actions (moved to the very bottom) -->
+                <div class="quick-actions-panel">
                     <div class="panel-header">
-                        <h2>Sensor Trends</h2>
-                        <div class="time-controls">
-                            <button class="time-btn active">24 Hours</button>
-                            <button class="time-btn">Week</button>
-                            <button class="time-btn">Month</button>
-                        </div>
+                        <h2>Quick Actions</h2>
                     </div>
-                    <div class="trends-container">
-                        <!-- Chart will be inserted here by JavaScript -->
-                        <div id="trends-chart" class="trends-chart"></div>
+                    <div class="actions-grid">
+                        <button class="action-btn start-pump">
+                            <i class="fas fa-tint"></i> Start Pump
+                        </button>
+                        <button class="action-btn toggle-light">
+                            <i class="fas fa-lightbulb"></i> Toggle Light
+                        </button>
+                        <button class="action-btn reset-sensors">
+                            <i class="fas fa-redo-alt"></i> Reset Sensors
+                        </button>
+                        <button class="action-btn settings">
+                            <i class="fas fa-cog"></i> Settings
+                        </button>
                     </div>
                 </div>
             </div>
@@ -341,14 +259,55 @@
             document.querySelector('.sidebar').classList.toggle('active');
         });
 
-        // Simulate sensor data for chart (in real application this would be from API)
+        // Tank settings panel toggle
+        document.getElementById('tank-settings-btn').addEventListener('click', function() {
+            document.getElementById('tank-settings-panel').classList.toggle('active');
+        });
+        
+        document.getElementById('tank-settings-close').addEventListener('click', function() {
+            document.getElementById('tank-settings-panel').classList.remove('active');
+        });
+        
+        // Save tank settings
+        document.getElementById('save-tank-settings').addEventListener('click', function() {
+            const minLevel = parseFloat(document.getElementById('min-level').value) || 0;
+            const maxLevel = parseFloat(document.getElementById('max-level').value) || 10;
+            const currentLevel = parseFloat(document.getElementById('water-level-value').innerText);
+            
+            // Calculate percentage
+            const percentage = Math.round(((currentLevel - minLevel) / (maxLevel - minLevel)) * 100);
+            const clampedPercentage = Math.min(Math.max(percentage, 0), 100);
+            
+            // Update display
+            document.getElementById('water-level-percent').innerText = clampedPercentage;
+            document.querySelector('.tank-level').style.height = clampedPercentage + '%';
+            
+            // Save to localStorage
+            localStorage.setItem('tankSettings', JSON.stringify({
+                min: minLevel,
+                max: maxLevel
+            }));
+            
+            // Close panel
+            document.getElementById('tank-settings-panel').classList.remove('active');
+        });
+        
+        // Load saved tank settings
         document.addEventListener('DOMContentLoaded', function() {
+            // Load tank settings
+            const savedSettings = localStorage.getItem('tankSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                document.getElementById('min-level').value = settings.min;
+                document.getElementById('max-level').value = settings.max;
+            }
+            
             // Initialize chart if the element exists
             if (document.getElementById('trends-chart')) {
                 // Sample data setup for pH, EC and Temperature
                 const ctx = document.getElementById('trends-chart').getContext('2d');
                 
-                // Mock data
+                // Mock data (24 hours of data points)
                 const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
                 const temperatureData = Array.from({length: 24}, () => Math.random() * 5 + 18);
                 const phData = Array.from({length: 24}, () => Math.random() * 2 + 6);
