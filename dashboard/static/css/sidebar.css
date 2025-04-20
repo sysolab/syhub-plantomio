@@ -15,7 +15,7 @@
     --border-radius: 0.35rem;
     --sidebar-width: 250px;
     --header-height: 60px;
-    --sidebar-bg: #262a33;
+    --sidebar-bg: #0a1929; /* Deep space blue color */
     --sidebar-text: #fff;
     --sidebar-icon: #b0b5c3;
 }
@@ -33,11 +33,13 @@ body {
 .app-wrapper {
     display: flex;
     min-height: 100vh;
+    flex-direction: row; /* Ensure sidebar is always vertical */
 }
 
 /* Sidebar styles */
 .sidebar {
     width: var(--sidebar-width);
+    min-width: var(--sidebar-width); /* Prevent sidebar from shrinking */
     background-color: var(--sidebar-bg);
     position: fixed;
     height: 100vh;
@@ -68,10 +70,13 @@ body {
     list-style-type: none;
     padding: 0;
     margin: 0;
+    display: flex;
+    flex-direction: column; /* Ensure navigation is always vertical */
 }
 
 .sidebar-nav li {
     margin-bottom: 0.25rem;
+    width: 100%; /* Full width for list items */
 }
 
 .sidebar-nav a {
@@ -82,6 +87,7 @@ body {
     text-decoration: none;
     transition: all 0.2s ease;
     opacity: 0.7;
+    width: 100%; /* Full width for anchor tags */
 }
 
 .sidebar-nav a:hover {
@@ -373,4 +379,144 @@ footer {
 
 .status-dot.error {
     background-color: var(--danger-color);
+}
+
+/* Tank visualization */
+.tank-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    height: calc(100% - 3rem);
+    margin-top: 1rem;
+}
+
+.tank-visualization {
+    position: relative;
+    width: 120px;
+    height: 200px;
+    border: 3px solid var(--dark-color);
+    border-top: none;
+    border-radius: 0 0 15px 15px;
+    margin-bottom: 1rem;
+    background-color: rgba(255, 255, 255, 0.8);
+    overflow: hidden;
+}
+
+.tank-level {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: linear-gradient(to bottom, var(--info-color), var(--primary-color));
+    height: 0%; /* Will be set by JS */
+    transition: height 0.5s ease-out;
+}
+
+.tank-info {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.tank-info p {
+    margin: 0.5rem 0;
+}
+
+/* Alert level indicator */
+.alert-level-indicator {
+    position: relative;
+    margin-top: 1rem;
+}
+
+.alert-level-label {
+    font-size: 0.85rem;
+    color: var(--danger-color);
+}
+
+.alert-level-line {
+    position: absolute;
+    width: 100%;
+    height: 2px;
+    background-color: var(--danger-color);
+    left: 0;
+    bottom: 20%; /* Default position */
+    display: none;
+}
+
+/* Tank preview container */
+.tank-preview-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+}
+
+.tank-preview-info {
+    margin-left: 1rem;
+}
+
+/* Config items */
+.config-table {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.config-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.config-label {
+    font-weight: 500;
+}
+
+.config-value {
+    max-width: 200px;
+}
+
+.config-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Export section */
+.export-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.form-group {
+    flex: 1;
+    min-width: 200px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+/* Time range selector */
+.time-range-selector .btn {
+    margin-right: 0.5rem;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.time-range-selector .btn.active {
+    background-color: var(--primary-color);
+    color: white;
 } 

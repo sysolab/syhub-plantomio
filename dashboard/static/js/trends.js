@@ -1,143 +1,97 @@
-// Trends.js - JavaScript for the trends page
-// Optimized for low resource systems like Raspberry Pi 3B
-
-// Cache DOM elements
-const timeButtons = document.querySelectorAll('.time-btn');
-const currentYear = document.getElementById('current-year');
-
-// Set current year in footer
-currentYear.textContent = new Date().getFullYear();
+// trends.js - JavaScript for the trends page
+// Handles chart rendering and data loading
 
 // State management
 const state = {
-    timeRange: '1h',
+    timeRange: '1h', // Default time range
     charts: {},
-    metrics: [
-        { id: 'temperature', name: 'plantomio_temperature', label: 'Temperature', unit: '°C', color: '#2c7be5' },
-        { id: 'ph', name: 'plantomio_pH', label: 'pH', unit: '', color: '#e63757' },
-        { id: 'ec', name: 'plantomio_EC', label: 'EC', unit: 'mS/cm', color: '#00b074' },
-        { id: 'orp', name: 'plantomio_ORP', label: 'ORP', unit: 'mV', color: '#f6c343' },
-        { id: 'tds', name: 'plantomio_TDS', label: 'TDS', unit: 'ppm', color: '#39afd1' },
-        { id: 'water-level', name: 'plantomio_waterLevel', label: 'Water Level', unit: '%', color: '#12263f' }
-    ]
+    chartOptions: {
+        temperature: {
+            label: 'Temperature (°C)',
+            color: '#F6C343',
+            min: 15,
+            max: 35,
+            decimals: 1
+        },
+        pH: {
+            label: 'pH',
+            color: '#4e73df',
+            min: 0,
+            max: 14,
+            decimals: 1
+        },
+        EC: {
+            label: 'EC (mS/cm)',
+            color: '#1cc88a',
+            min: 0,
+            max: 3,
+            decimals: 2
+        },
+        TDS: {
+            label: 'TDS (ppm)',
+            color: '#36b9cc',
+            min: 0,
+            max: 1000,
+            decimals: 0
+        },
+        waterLevel: {
+            label: 'Water Level (%)',
+            color: '#4e73df',
+            min: 0,
+            max: 100,
+            decimals: 1
+        }
+    }
 };
 
-// Calculate time range values based on selected range
-function getTimeRange(range) {
-    const end = Math.floor(Date.now() / 1000); // Current time in seconds
-    let start, step;
-    
-    switch (range) {
-        case '1h':
-            start = end - 3600; // 1 hour
-            step = '10s';
-            break;
-        case '6h':
-            start = end - 21600; // 6 hours
-            step = '1m';
-            break;
-        case '24h':
-            start = end - 86400; // 24 hours
-            step = '5m';
-            break;
-        case '7d':
-            start = end - 604800; // 7 days
-            step = '1h';
-            break;
-        default:
-            start = end - 3600; // Default to 1 hour
-            step = '10s';
-    }
-    
-    return { start, end, step };
+// Converts timestamp to formatted date/time string
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp * 1000); // Convert to milliseconds
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Format timestamp for display
-function formatTimestamp(timestamp, timeRange) {
-    const date = new Date(timestamp * 1000);
+// Initialize all charts on the page
+function initializeCharts() {
+    // Find chart canvases
+    const chartElements = {
+        temperature: document.getElementById('temperature-chart'),
+        pH: document.getElementById('ph-chart'),
+        EC: document.getElementById('ec-chart'),
+        TDS: document.getElementById('tds-chart'),
+        waterLevel: document.getElementById('water-level-chart')
+    };
     
-    if (timeRange === '7d') {
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + 
-               ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (timeRange === '24h') {
-        return date.toLocaleDateString([], { weekday: 'short' }) + 
-               ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-}
-
-// Fetch historical data for a metric
-async function fetchHistoricalData(metric, timeRange) {
-    const { start, end, step } = getTimeRange(timeRange);
-    const url = `/api/query?metric=${metric}&start=${start}&end=${end}&step=${step}`;
-    
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data && data.data && data.data.result && data.data.result.length > 0) {
-            const series = data.data.result[0];
-            const values = series.values || [];
-            
-            // Extract timestamps and values
-            const timestamps = values.map(v => formatTimestamp(v[0], timeRange));
-            const dataPoints = values.map(v => parseFloat(v[1]));
-            
-            return { timestamps, dataPoints };
+    // Initialize each chart
+    for (const [metric, element] of Object.entries(chartElements)) {
+        if (element && state.chartOptions[metric]) {
+            const options = state.chartOptions[metric];
+            initChart(metric, element, options);
         }
-        
-        return { timestamps: [], dataPoints: [] };
-    } catch (error) {
-        console.error(`Error fetching data for ${metric}:`, error);
-        return { timestamps: [], dataPoints: [] };
-    }
-}
-
-// Initialize all charts
-async function initializeCharts() {
-    // Load all metrics in parallel
-    const promises = state.metrics.map(metric => fetchHistoricalData(metric.name, state.timeRange));
-    const results = await Promise.all(promises);
-    
-    // Create a chart for each metric
-    state.metrics.forEach((metric, index) => {
-        const { timestamps, dataPoints } = results[index];
-        createOrUpdateChart(metric, timestamps, dataPoints);
-    });
-}
-
-// Create or update a chart
-function createOrUpdateChart(metric, labels, data) {
-    const chartId = `${metric.id}-chart`;
-    const canvas = document.getElementById(chartId);
-    
-    if (!canvas) return;
-    
-    // If chart already exists, update it
-    if (state.charts[chartId]) {
-        const chart = state.charts[chartId];
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = data;
-        chart.update();
-        return;
     }
     
-    // Create new chart
-    const ctx = canvas.getContext('2d');
-    state.charts[chartId] = new Chart(ctx, {
+    // Load initial data
+    loadTrendsData(state.timeRange);
+}
+
+// Initialize a single chart
+function initChart(metric, element, options) {
+    if (!element) return;
+    
+    const ctx = element.getContext('2d');
+    state.charts[metric] = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
+            labels: [],
             datasets: [{
-                label: `${metric.label} ${metric.unit ? `(${metric.unit})` : ''}`,
-                data: data,
-                borderColor: metric.color,
-                backgroundColor: hexToRgba(metric.color, 0.1),
-                tension: 0.4,
+                label: options.label,
+                data: [],
+                borderColor: options.color,
+                backgroundColor: `${options.color}20`, // 20 is hex for 12% opacity
                 borderWidth: 2,
-                pointRadius: 0, // Hide points for performance
-                pointHoverRadius: 4
+                tension: 0.4,
+                pointRadius: 2,
+                pointBackgroundColor: options.color,
+                fill: true
             }]
         },
         options: {
@@ -147,77 +101,235 @@ function createOrUpdateChart(metric, labels, data) {
                 mode: 'index',
                 intersect: false
             },
-            scales: {
-                y: {
-                    beginAtZero: metric.id !== 'ph',
-                    title: {
-                        display: true,
-                        text: metric.unit ? metric.unit : undefined
-                    }
-                },
-                x: {
-                    title: {
-                        display: false
-                    }
-                }
-            },
             plugins: {
                 legend: {
-                    display: false
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        font: {
+                            size: 12
+                        }
+                    }
                 },
                 tooltip: {
-                    enabled: true
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    titleColor: '#333',
+                    bodyColor: '#666',
+                    borderColor: '#e3e6f0',
+                    borderWidth: 1,
+                    cornerRadius: 6,
+                    padding: 8,
+                    boxPadding: 4
                 }
             },
-            animation: false // Disable animations to save resources
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 6
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: options.label,
+                        color: options.color
+                    },
+                    min: options.min,
+                    max: options.max,
+                    ticks: {
+                        color: options.color
+                    }
+                }
+            },
+            animation: {
+                duration: 300
+            }
         }
     });
 }
 
-// Convert hex color to rgba for transparency
-function hexToRgba(hex, alpha) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+// Load data from API based on selected time range
+function loadTrendsData(timeRange) {
+    // Convert time range to minutes
+    let minutes = 10; // Default 10 minutes
+    switch (timeRange) {
+        case '1h': minutes = 60; break;
+        case '6h': minutes = 360; break;
+        case '24h': minutes = 1440; break;
+        case '7d': minutes = 10080; break;
+        default: minutes = 60;
+    }
+    
+    // Show loading indicators
+    document.querySelectorAll('.chart-container').forEach(container => {
+        container.classList.add('loading');
+    });
+    
+    // Fetch data from API
+    fetch(`/api/trends?minutes=${minutes}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.status === 'success' && data.data) {
+                updateCharts(data.data);
+            } else {
+                console.error('Invalid data format received from API');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching trends data:', error);
+        })
+        .finally(() => {
+            // Hide loading indicators
+            document.querySelectorAll('.chart-container').forEach(container => {
+                container.classList.remove('loading');
+            });
+        });
 }
 
-// Update all charts when time range changes
-async function updateAllCharts() {
-    // Load all metrics in parallel
-    const promises = state.metrics.map(metric => fetchHistoricalData(metric.name, state.timeRange));
-    const results = await Promise.all(promises);
+// Update all charts with new data
+function updateCharts(data) {
+    // Process each metric
+    for (const [metric, values] of Object.entries(data)) {
+        if (state.charts[metric] && values && values.length > 0) {
+            // Format timestamps and prepare data points
+            const labels = [];
+            const dataPoints = [];
+            
+            // Get chart options for formatting
+            const options = state.chartOptions[metric] || { decimals: 1 };
+            
+            // Sort values by timestamp (ascending)
+            values.sort((a, b) => a[0] - b[0]);
+            
+            // Extract data points
+            values.forEach(point => {
+                const [timestamp, value] = point;
+                labels.push(formatTimestamp(timestamp));
+                dataPoints.push(parseFloat(value).toFixed(options.decimals));
+            });
+            
+            // Update chart data
+            state.charts[metric].data.labels = labels;
+            state.charts[metric].data.datasets[0].data = dataPoints;
+            
+            // Update y-axis scale if needed
+            updateChartScale(state.charts[metric], dataPoints, options);
+            
+            // Refresh chart
+            state.charts[metric].update();
+        }
+    }
+}
+
+// Update chart scale based on data range
+function updateChartScale(chart, dataPoints, options) {
+    if (!dataPoints || dataPoints.length === 0) return;
     
-    // Update each chart
-    state.metrics.forEach((metric, index) => {
-        const { timestamps, dataPoints } = results[index];
-        createOrUpdateChart(metric, timestamps, dataPoints);
+    // Convert string values to numbers
+    const numericData = dataPoints.map(p => parseFloat(p)).filter(p => !isNaN(p));
+    
+    if (numericData.length === 0) return;
+    
+    // Calculate min and max with padding
+    const minValue = Math.min(...numericData);
+    const maxValue = Math.max(...numericData);
+    
+    // Only adjust if data is outside current range
+    const yScale = chart.options.scales.y;
+    const padding = (maxValue - minValue) * 0.1; // 10% padding
+    
+    if (minValue < yScale.min) {
+        yScale.min = Math.max(options.min, Math.floor(minValue - padding));
+    }
+    
+    if (maxValue > yScale.max) {
+        yScale.max = Math.min(options.max, Math.ceil(maxValue + padding));
+    }
+}
+
+// Event listener for time range buttons
+function setupTimeRangeButtons() {
+    const buttons = document.querySelectorAll('.time-range-selector .btn');
+    buttons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Update active button
+            buttons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Get time range and update charts
+            const range = this.getAttribute('data-range');
+            if (range && range !== state.timeRange) {
+                state.timeRange = range;
+                loadTrendsData(range);
+            }
+        });
     });
 }
 
-// Event listeners for time range buttons
-timeButtons.forEach(button => {
-    button.addEventListener('click', async function() {
-        // Update active button
-        timeButtons.forEach(btn => btn.classList.remove('active'));
-        this.classList.add('active');
-        
-        // Update time range
-        state.timeRange = this.getAttribute('data-range');
-        
-        // Update charts
-        await updateAllCharts();
-    });
-});
-
-// Initialize the trends page
-async function initTrends() {
-    // Initialize charts
-    await initializeCharts();
+// Export functionality
+function setupExportButtons() {
+    const exportDataBtn = document.getElementById('export-data');
+    const exportGraphBtn = document.getElementById('export-graph');
     
-    // Update year in footer
-    currentYear.textContent = new Date().getFullYear();
+    if (exportDataBtn) {
+        exportDataBtn.addEventListener('click', function() {
+            const sensor = document.getElementById('export-sensor').value;
+            const range = document.getElementById('export-range').value;
+            
+            // Create CSV from chart data
+            if (state.charts[sensor] && state.charts[sensor].data.labels.length > 0) {
+                const labels = state.charts[sensor].data.labels;
+                const data = state.charts[sensor].data.datasets[0].data;
+                
+                let csv = 'Time,' + state.chartOptions[sensor].label + '\n';
+                for (let i = 0; i < labels.length; i++) {
+                    csv += labels[i] + ',' + data[i] + '\n';
+                }
+                
+                // Create download
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.setAttribute('href', url);
+                a.setAttribute('download', `${sensor}_data_${range}.csv`);
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                alert('No data available for this sensor');
+            }
+        });
+    }
+    
+    if (exportGraphBtn) {
+        exportGraphBtn.addEventListener('click', function() {
+            const sensor = document.getElementById('export-sensor').value;
+            const range = document.getElementById('export-range').value;
+            
+            // Export chart as image
+            if (state.charts[sensor]) {
+                const url = state.charts[sensor].toBase64Image();
+                const a = document.createElement('a');
+                a.setAttribute('href', url);
+                a.setAttribute('download', `${sensor}_chart_${range}.png`);
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                alert('Chart not available');
+            }
+        });
+    }
 }
 
-// Start the trends page when DOM is loaded
-document.addEventListener('DOMContentLoaded', initTrends); 
+// Initialize everything when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    setupTimeRangeButtons();
+    setupExportButtons();
+    initializeCharts();
+}); 
