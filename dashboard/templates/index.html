@@ -6,6 +6,7 @@
     <title>{{ project_name }} Dashboard</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="/static/css/sidebar.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="/static/images/favicon.ico">
 </head>
 <body>
@@ -26,9 +27,9 @@
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    <li><a href="/" class="active">Dashboard</a></li>
-                    <li><a href="/trends">Trends</a></li>
-                    <li><a href="/settings">Settings</a></li>
+                    <li><a href="/" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                    <li><a href="/trends"><i class="fas fa-chart-line"></i> Trends</a></li>
+                    <li><a href="/settings"><i class="fas fa-cog"></i> Settings</a></li>
                 </ul>
             </nav>
         </aside>
@@ -36,72 +37,169 @@
         <!-- Main Content -->
         <div class="main-content">
             <header class="main-header">
-                <h2>Dashboard</h2>
+                <h2>Dashboard Overview</h2>
                 <div id="last-updated">Last updated: <span id="last-update">--</span></div>
             </header>
 
             <div class="page-content">
+                <!-- Top row stats cards -->
                 <div class="dashboard-grid">
+                    <!-- Water Level Card -->
+                    <div class="card card-sm stat-card">
+                        <div class="card-header">
+                            <h3 class="card-title">Water Level</h3>
+                            <i class="fas fa-tint text-primary"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="card-value"><span id="water-level-value">--</span>%</div>
+                            <div class="card-trend">
+                                <i class="fas fa-arrow-up"></i> Optimal
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Temperature Card -->
+                    <div class="card card-sm stat-card">
+                        <div class="card-header">
+                            <h3 class="card-title">Temperature</h3>
+                            <i class="fas fa-temperature-high text-warning"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="card-value"><span id="temperature-value">--</span>°C</div>
+                            <div class="card-trend">
+                                <i class="fas fa-check-circle"></i> Normal
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- pH Card -->
+                    <div class="card card-sm stat-card">
+                        <div class="card-header">
+                            <h3 class="card-title">pH Level</h3>
+                            <i class="fas fa-flask text-info"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="card-value"><span id="ph-value">--</span></div>
+                            <div class="card-trend">
+                                <i class="fas fa-check-circle"></i> Balanced
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- EC Card -->
+                    <div class="card card-sm stat-card">
+                        <div class="card-header">
+                            <h3 class="card-title">EC</h3>
+                            <i class="fas fa-bolt text-success"></i>
+                        </div>
+                        <div class="card-body">
+                            <div class="card-value"><span id="ec-value">--</span> mS/cm</div>
+                            <div class="card-trend">
+                                <i class="fas fa-check-circle"></i> Normal
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Tank Level Visualization -->
-                    <div class="card tank-card">
-                        <h3>Water Level</h3>
+                    <div class="card card-md">
+                        <div class="card-header">
+                            <h3 class="card-title">Tank Visualization</h3>
+                            <div>
+                                <button class="btn btn-sm" id="refresh-tank">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </div>
                         <div class="tank-container">
                             <div class="tank-visualization">
                                 <div class="tank-level" id="tank-level"></div>
                             </div>
                             <div class="tank-info">
-                                <p><span id="water-level-value">--</span>%</p>
+                                <p><span id="water-level-value-alt">--</span>% filled</p>
                                 <p>Distance: <span id="distance-value">--</span> cm</p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Key Metrics -->
-                    <div class="card metrics-card">
-                        <h3>Key Metrics</h3>
-                        <div class="metrics-grid">
-                            <div class="metric">
-                                <div class="metric-value" id="temperature-value">--</div>
-                                <div class="metric-label">Temperature (°C)</div>
+                    <!-- TDS & EC Card -->
+                    <div class="card card-md">
+                        <div class="card-header">
+                            <h3 class="card-title">Water Quality</h3>
+                            <div class="time-range-selector">
+                                <button class="btn btn-sm active" data-range="now">Current</button>
+                                <button class="btn btn-sm" data-range="day">24h</button>
                             </div>
-                            <div class="metric">
-                                <div class="metric-value" id="ph-value">--</div>
-                                <div class="metric-label">pH</div>
+                        </div>
+                        <div class="metrics-container">
+                            <div class="stat-row">
+                                <span class="stat-label">TDS</span>
+                                <div class="stat-value-container">
+                                    <span id="tds-value">--</span> ppm
+                                </div>
                             </div>
-                            <div class="metric">
-                                <div class="metric-value" id="ec-value">--</div>
-                                <div class="metric-label">EC (mS/cm)</div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="tds-progress" style="width: 65%"></div>
                             </div>
-                            <div class="metric">
-                                <div class="metric-value" id="tds-value">--</div>
-                                <div class="metric-label">TDS (ppm)</div>
+                            
+                            <div class="stat-row">
+                                <span class="stat-label">EC</span>
+                                <div class="stat-value-container">
+                                    <span id="ec-value-alt">--</span> mS/cm
+                                </div>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar secondary" id="ec-progress" style="width: 45%"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- pH & EC Chart -->
-                    <div class="card chart-card">
-                        <h3>pH & EC Trends</h3>
+                    <!-- Chart Card -->
+                    <div class="card card-lg">
+                        <div class="card-header">
+                            <h3 class="card-title">Sensor Readings</h3>
+                            <div class="time-range-selector">
+                                <button class="btn btn-sm active" data-range="1h">1h</button>
+                                <button class="btn btn-sm" data-range="6h">6h</button>
+                                <button class="btn btn-sm" data-range="24h">24h</button>
+                            </div>
+                        </div>
                         <div class="chart-container">
-                            <canvas id="ph-ec-chart"></canvas>
+                            <canvas id="main-chart"></canvas>
                         </div>
                     </div>
 
-                    <!-- System Status -->
-                    <div class="card status-card">
-                        <h3>System Status</h3>
+                    <!-- System Status Card -->
+                    <div class="card card-lg">
+                        <div class="card-header">
+                            <h3 class="card-title">System Status</h3>
+                            <div>
+                                <button class="btn btn-sm" id="refresh-status">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </div>
                         <div class="status-grid">
                             <div class="status-item">
                                 <span class="status-label">Dashboard:</span>
-                                <span class="status-value" id="dashboard-status"><span class="status-dot online"></span> Online</span>
+                                <span class="status-value" id="dashboard-status">
+                                    <span class="status-dot online"></span> Online
+                                </span>
                             </div>
                             <div class="status-item">
                                 <span class="status-label">Node-RED:</span>
-                                <span class="status-value" id="nodered-status"><span class="status-dot"></span> --</span>
+                                <span class="status-value" id="nodered-status">
+                                    <span class="status-dot"></span> --
+                                </span>
                             </div>
                             <div class="status-item">
                                 <span class="status-label">VictoriaMetrics:</span>
-                                <span class="status-value" id="vm-status"><span class="status-dot"></span> --</span>
+                                <span class="status-value" id="vm-status">
+                                    <span class="status-dot"></span> --
+                                </span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">System Load:</span>
+                                <span class="status-value" id="system-load">--</span>
                             </div>
                         </div>
                     </div>
@@ -125,6 +223,35 @@
 
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+        // Sync water level values
+        const syncWaterLevelValues = () => {
+            const primaryValue = document.getElementById('water-level-value').textContent;
+            if (primaryValue && primaryValue !== '--') {
+                document.getElementById('water-level-value-alt').textContent = primaryValue;
+            }
+        };
+        
+        // Sync EC values
+        const syncECValues = () => {
+            const primaryValue = document.getElementById('ec-value').textContent;
+            if (primaryValue && primaryValue !== '--') {
+                document.getElementById('ec-value-alt').textContent = primaryValue;
+            }
+        };
+        
+        // Add event listeners for refresh buttons
+        document.getElementById('refresh-tank').addEventListener('click', function() {
+            fetchLatestData();
+        });
+        
+        document.getElementById('refresh-status').addEventListener('click', function() {
+            checkSystemStatus();
+        });
+        
+        // Call sync functions periodically
+        setInterval(syncWaterLevelValues, 1000);
+        setInterval(syncECValues, 1000);
     </script>
 </body>
 </html> 

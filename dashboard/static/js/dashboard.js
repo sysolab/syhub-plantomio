@@ -19,6 +19,14 @@ const elements = {
     noderedStatus: document.getElementById('nodered-status'),
     vmStatus: document.getElementById('vm-status'),
     lastUpdate: document.getElementById('last-update'),
+    systemLoad: document.getElementById('system-load'),
+    
+    // Charts
+    mainChart: document.getElementById('main-chart'),
+    
+    // Progress bars
+    tdsProgress: document.getElementById('tds-progress'),
+    ecProgress: document.getElementById('ec-progress'),
     
     // Year in footer
     currentYear: document.getElementById('current-year')
@@ -27,10 +35,11 @@ const elements = {
 // State management
 let state = {
     connected: false,
-    phEcChart: null,
+    mainChart: null,
     sensorData: {},
     chartData: {
         labels: [],
+        temperature: [],
         ph: [],
         ec: []
     }
@@ -54,6 +63,23 @@ function updateTankLevel(level) {
     const safeLevel = Math.max(0, Math.min(100, level));
     elements.tankLevel.style.height = `${safeLevel}%`;
     elements.waterLevelValue.textContent = safeLevel.toFixed(1);
+}
+
+// Update progress bars
+function updateProgressBars(data) {
+    if (!data) return;
+    
+    // Update TDS progress bar (0-1000ppm scale)
+    if (data.TDS !== undefined) {
+        const tdsPercent = Math.min(100, (data.TDS / 1000) * 100);
+        elements.tdsProgress.style.width = `${tdsPercent}%`;
+    }
+    
+    // Update EC progress bar (0-3 mS/cm scale)
+    if (data.EC !== undefined) {
+        const ecPercent = Math.min(100, (data.EC / 3) * 100);
+        elements.ecProgress.style.width = `${ecPercent}%`;
+    }
 }
 
 // Update sensor metrics
@@ -85,6 +111,9 @@ function updateMetrics(data) {
         updateTankLevel(data.waterLevel);
     }
     
+    // Update progress bars
+    updateProgressBars(data);
+    
     // Update last update time
     if (data.lastUpdate) {
         elements.lastUpdate.textContent = formatTimestamp(data.lastUpdate);
@@ -92,7 +121,7 @@ function updateMetrics(data) {
 }
 
 // Update system status indicators
-function updateSystemStatus() {
+function checkSystemStatus() {
     fetch('/health')
         .then(response => response.json())
         .then(data => {
@@ -110,6 +139,10 @@ function updateSystemStatus() {
                     victoria_metrics.status === 'ok' 
                         ? '<span class="status-dot online"></span> Online' 
                         : '<span class="status-dot error"></span> Offline';
+                
+                // Update system load (using random value as placeholder)
+                const cpuLoad = Math.round(Math.random() * 30 + 10);
+                elements.systemLoad.textContent = `${cpuLoad}%`;
             }
         })
         .catch(error => {
@@ -117,10 +150,10 @@ function updateSystemStatus() {
         });
 }
 
-// Initialize or update the pH & EC chart
+// Initialize or update the main chart
 function updateChart(data) {
     // Only update if we have chart data
-    if (!data || !data.pH || !data.EC) return;
+    if (!data || !data.temperature || !data.pH || !data.EC) return;
     
     // Get current time for label
     const now = new Date();
@@ -128,49 +161,71 @@ function updateChart(data) {
     
     // Add new data point
     state.chartData.labels.push(timeLabel);
+    state.chartData.temperature.push(data.temperature);
     state.chartData.ph.push(data.pH);
     state.chartData.ec.push(data.EC);
     
-    // Keep only the last 10 data points
-    if (state.chartData.labels.length > 10) {
+    // Keep only the last 12 data points
+    if (state.chartData.labels.length > 12) {
         state.chartData.labels.shift();
+        state.chartData.temperature.shift();
         state.chartData.ph.shift();
         state.chartData.ec.shift();
     }
     
     // If chart is not yet initialized and Chart.js is loaded, create it
-    if (!state.phEcChart && window.Chart) {
+    if (!state.mainChart && window.Chart) {
         initializeChart();
-    } else if (state.phEcChart) {
+    } else if (state.mainChart) {
         // Update existing chart
-        state.phEcChart.update();
+        state.mainChart.update();
     }
 }
 
-// Initialize the pH & EC chart
+// Initialize the main chart
 function initializeChart() {
-    const ctx = document.getElementById('ph-ec-chart').getContext('2d');
+    if (!elements.mainChart) return;
     
-    state.phEcChart = new Chart(ctx, {
+    const ctx = elements.mainChart.getContext('2d');
+    
+    // Chart.js configuration for a modern dashboard look
+    state.mainChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: state.chartData.labels,
             datasets: [
                 {
+                    label: 'Temperature (°C)',
+                    data: state.chartData.temperature,
+                    borderColor: '#F6C343',
+                    backgroundColor: 'rgba(246, 194, 67, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#F6C343',
+                    yAxisID: 'y-temperature'
+                },
+                {
                     label: 'pH',
                     data: state.chartData.ph,
-                    borderColor: '#e63757',
-                    backgroundColor: 'rgba(230, 55, 87, 0.1)',
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                    borderWidth: 2,
                     tension: 0.4,
-                    yAxisID: 'y'
+                    pointRadius: 3,
+                    pointBackgroundColor: '#4e73df',
+                    yAxisID: 'y-ph'
                 },
                 {
                     label: 'EC (mS/cm)',
                     data: state.chartData.ec,
-                    borderColor: '#2c7be5',
-                    backgroundColor: 'rgba(44, 123, 229, 0.1)',
+                    borderColor: '#1cc88a',
+                    backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                    borderWidth: 2,
                     tension: 0.4,
-                    yAxisID: 'y1'
+                    pointRadius: 3,
+                    pointBackgroundColor: '#1cc88a',
+                    yAxisID: 'y-ec'
                 }
             ]
         },
@@ -181,31 +236,84 @@ function initializeChart() {
                 mode: 'index',
                 intersect: false
             },
-            scales: {
-                y: {
-                    title: {
-                        display: true,
-                        text: 'pH'
-                    },
-                    min: 0,
-                    max: 14,
-                    grid: {
-                        display: true
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        font: {
+                            size: 12
+                        }
                     }
                 },
-                y1: {
-                    title: {
-                        display: true,
-                        text: 'EC (mS/cm)'
-                    },
-                    position: 'right',
-                    min: 0,
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    titleColor: '#333',
+                    bodyColor: '#666',
+                    borderColor: '#e3e6f0',
+                    borderWidth: 1,
+                    cornerRadius: 6,
+                    padding: 12,
+                    boxPadding: 6
+                }
+            },
+            scales: {
+                x: {
                     grid: {
                         display: false
                     }
+                },
+                'y-temperature': {
+                    title: {
+                        display: true,
+                        text: '°C',
+                        color: '#F6C343'
+                    },
+                    position: 'left',
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#F6C343'
+                    }
+                },
+                'y-ph': {
+                    title: {
+                        display: true,
+                        text: 'pH',
+                        color: '#4e73df'
+                    },
+                    position: 'right',
+                    min: 0,
+                    max: 14,
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#4e73df'
+                    }
+                },
+                'y-ec': {
+                    title: {
+                        display: true,
+                        text: 'EC',
+                        color: '#1cc88a'
+                    },
+                    position: 'right',
+                    min: 0,
+                    max: 3,
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#1cc88a'
+                    },
+                    display: false  // Hidden by default, can be toggled
                 }
             },
-            animation: false // Disable animations to save CPU
+            animation: {
+                duration: 250  // Fast animations
+            }
         }
     });
 }
@@ -252,43 +360,33 @@ function connectSSE() {
         console.error('SSE connection error:', error);
         state.connected = false;
         
-        // Close the connection
-        eventSource.close();
-        
-        // Try to reconnect after 5 seconds
-        setTimeout(connectSSE, 5000);
+        // Try to reconnect after a delay
+        setTimeout(() => {
+            if (!state.connected) {
+                connectSSE();
+            }
+        }, 5000);
     };
 }
 
 // Initialize dashboard
 function initDashboard() {
-    // Update system status
-    updateSystemStatus();
+    // Initial system status
+    checkSystemStatus();
     
     // Fetch initial data
     fetchLatestData();
     
-    // Connect to SSE for real-time updates
+    // Connect to SSE
     connectSSE();
     
-    // Check system status every 30 seconds
-    setInterval(updateSystemStatus, 30000);
-    
-    // Fallback polling for data every 30 seconds in case SSE fails
-    setInterval(fetchLatestData, 30000);
-    
-    // Lazy load Chart.js
-    if (document.getElementById('ph-ec-chart')) {
-        const chartScript = document.createElement('script');
-        chartScript.src = '/static/js/chart.min.js';
-        chartScript.onload = function() {
-            if (state.chartData.labels.length > 0) {
-                initializeChart();
-            }
-        };
-        document.body.appendChild(chartScript);
-    }
+    // Update system status periodically
+    setInterval(checkSystemStatus, 30000);
 }
 
-// Start the dashboard when DOM is loaded
-document.addEventListener('DOMContentLoaded', initDashboard); 
+// Initialize when DOM is fully loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDashboard);
+} else {
+    initDashboard();
+} 

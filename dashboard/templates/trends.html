@@ -6,6 +6,7 @@
     <title>{{ project_name }} - Trends</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="/static/css/sidebar.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="/static/images/favicon.ico">
 </head>
 <body>
@@ -26,9 +27,9 @@
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    <li><a href="/">Dashboard</a></li>
-                    <li><a href="/trends" class="active">Trends</a></li>
-                    <li><a href="/settings">Settings</a></li>
+                    <li><a href="/"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                    <li><a href="/trends" class="active"><i class="fas fa-chart-line"></i> Trends</a></li>
+                    <li><a href="/settings"><i class="fas fa-cog"></i> Settings</a></li>
                 </ul>
             </nav>
         </aside>
@@ -36,62 +37,107 @@
         <!-- Main Content -->
         <div class="main-content">
             <header class="main-header">
-                <h2>Trends</h2>
+                <h2>Historical Data</h2>
                 <div class="time-range-selector">
-                    <button class="time-btn active" data-range="1h">1h</button>
-                    <button class="time-btn" data-range="6h">6h</button>
-                    <button class="time-btn" data-range="24h">24h</button>
-                    <button class="time-btn" data-range="7d">7d</button>
+                    <button class="btn btn-sm active" data-range="1h">1h</button>
+                    <button class="btn btn-sm" data-range="6h">6h</button>
+                    <button class="btn btn-sm" data-range="24h">24h</button>
+                    <button class="btn btn-sm" data-range="7d">7d</button>
                 </div>
             </header>
 
             <div class="page-content">
-                <div class="charts-grid">
+                <div class="dashboard-grid">
                     <!-- Temperature Chart -->
-                    <div class="card chart-full">
-                        <h3>Temperature (°C)</h3>
+                    <div class="card card-md">
+                        <div class="card-header">
+                            <h3 class="card-title">Temperature (°C)</h3>
+                            <i class="fas fa-temperature-high text-warning"></i>
+                        </div>
                         <div class="chart-container">
                             <canvas id="temperature-chart"></canvas>
                         </div>
                     </div>
 
                     <!-- pH Chart -->
-                    <div class="card chart-full">
-                        <h3>pH</h3>
+                    <div class="card card-md">
+                        <div class="card-header">
+                            <h3 class="card-title">pH</h3>
+                            <i class="fas fa-flask text-info"></i>
+                        </div>
                         <div class="chart-container">
                             <canvas id="ph-chart"></canvas>
                         </div>
                     </div>
 
                     <!-- EC Chart -->
-                    <div class="card chart-full">
-                        <h3>EC (mS/cm)</h3>
+                    <div class="card card-md">
+                        <div class="card-header">
+                            <h3 class="card-title">EC (mS/cm)</h3>
+                            <i class="fas fa-bolt text-success"></i>
+                        </div>
                         <div class="chart-container">
                             <canvas id="ec-chart"></canvas>
                         </div>
                     </div>
 
-                    <!-- ORP Chart -->
-                    <div class="card chart-full">
-                        <h3>ORP (mV)</h3>
-                        <div class="chart-container">
-                            <canvas id="orp-chart"></canvas>
-                        </div>
-                    </div>
-
                     <!-- TDS Chart -->
-                    <div class="card chart-full">
-                        <h3>TDS (ppm)</h3>
+                    <div class="card card-md">
+                        <div class="card-header">
+                            <h3 class="card-title">TDS (ppm)</h3>
+                            <i class="fas fa-vial text-primary"></i>
+                        </div>
                         <div class="chart-container">
                             <canvas id="tds-chart"></canvas>
                         </div>
                     </div>
 
                     <!-- Water Level Chart -->
-                    <div class="card chart-full">
-                        <h3>Water Level (%)</h3>
+                    <div class="card card-lg">
+                        <div class="card-header">
+                            <h3 class="card-title">Water Level (%)</h3>
+                            <i class="fas fa-tint text-primary"></i>
+                        </div>
                         <div class="chart-container">
                             <canvas id="water-level-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Data Export Card -->
+                    <div class="card card-lg">
+                        <div class="card-header">
+                            <h3 class="card-title">Data Export</h3>
+                            <i class="fas fa-download"></i>
+                        </div>
+                        <div class="card-body export-section">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Sensor</label>
+                                    <select id="export-sensor" class="form-control">
+                                        <option value="temperature">Temperature</option>
+                                        <option value="pH">pH</option>
+                                        <option value="EC">EC</option>
+                                        <option value="TDS">TDS</option>
+                                        <option value="waterLevel">Water Level</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Time Range</label>
+                                    <select id="export-range" class="form-control">
+                                        <option value="1d">Last 24 Hours</option>
+                                        <option value="7d">Last 7 Days</option>
+                                        <option value="30d">Last 30 Days</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <button id="export-data" class="btn">
+                                    <i class="fas fa-file-csv"></i> Export CSV
+                                </button>
+                                <button id="export-graph" class="btn btn-secondary">
+                                    <i class="fas fa-file-image"></i> Export Graph
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -114,6 +160,29 @@
 
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+        // Time range buttons
+        document.querySelectorAll('.time-range-selector .btn').forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active class from all buttons
+                document.querySelectorAll('.time-range-selector .btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // Update charts with new time range
+                const range = this.getAttribute('data-range');
+                updateChartsTimeRange(range);
+            });
+        });
+        
+        // Placeholder function for updating charts
+        function updateChartsTimeRange(range) {
+            console.log(`Updating charts with time range: ${range}`);
+            // This would be implemented in trends.js
+        }
     </script>
 </body>
 </html> 

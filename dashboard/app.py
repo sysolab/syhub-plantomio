@@ -17,6 +17,7 @@ app = Flask(__name__)
 NODERED_URL = f"http://localhost:{config['node_red']['port']}"
 VICTORIA_URL = f"http://localhost:{config['victoria_metrics']['port']}"
 PROJECT_NAME = config['project']['name']
+UPDATE_INTERVAL = 1  # Faster update interval in seconds (was 5)
 
 # Available metrics and their last known values
 metrics = {
@@ -48,7 +49,7 @@ def get_current_values():
                 'time': now
             }
             
-            response = requests.get(query_url, params=params, timeout=2)
+            response = requests.get(query_url, params=params, timeout=1)  # Reduced timeout from 2s to 1s
             
             if response.status_code == 200:
                 data = response.json()
@@ -111,12 +112,12 @@ def events():
             # Send initial connection message
             yield f"data: {json.dumps({'status': 'connected', 'timestamp': datetime.now().isoformat()})}\n\n"
             
-            # Send data updates every few seconds
+            # Send data updates every second
             while True:
                 # Get the latest data
                 current_data = get_current_values()
                 yield f"data: {json.dumps(current_data)}\n\n"
-                time.sleep(5)  # Send updates every 5 seconds
+                time.sleep(UPDATE_INTERVAL)  # Fast updates every second
         except Exception as e:
             app.logger.error(f"Error in SSE stream: {str(e)}")
             yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"
@@ -209,14 +210,14 @@ def health_check():
     
     # Check Node-RED
     try:
-        resp = requests.get(f"{NODERED_URL}/", timeout=2)
+        resp = requests.get(f"{NODERED_URL}/", timeout=1)  # Reduced timeout from 2s to 1s
         services["node_red"]["status"] = "ok" if resp.status_code == 200 else "error"
     except:
         services["node_red"]["status"] = "error"
     
     # Check VictoriaMetrics
     try:
-        resp = requests.get(f"{VICTORIA_URL}/health", timeout=2)
+        resp = requests.get(f"{VICTORIA_URL}/health", timeout=1)  # Reduced timeout from 2s to 1s
         services["victoria_metrics"]["status"] = "ok" if resp.status_code == 200 else "error"
     except:
         services["victoria_metrics"]["status"] = "error"
