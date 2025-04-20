@@ -2,10 +2,8 @@ import os
 import json
 import time
 import yaml
-import random
-import threading
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, Response, jsonify, stream_with_context
 
 # Load config
@@ -20,38 +18,75 @@ NODERED_URL = f"http://localhost:{config['node_red']['port']}"
 VICTORIA_URL = f"http://localhost:{config['victoria_metrics']['port']}"
 PROJECT_NAME = config['project']['name']
 
-# Store last sensor data
-last_sensor_data = {
-    "temperature": 25.5,
-    "pH": 6.8,
-    "EC": 1.2,
-    "TDS": 600,
-    "waterLevel": 75,
-    "distance": 12.3,
-    "deviceID": 'plt-404cca470da0',
-    "lastUpdate": datetime.now().isoformat()
+# Available metrics and their last known values
+metrics = {
+    "temperature": {"value": 0, "last_updated": None},
+    "pH": {"value": 0, "last_updated": None},
+    "EC": {"value": 0, "last_updated": None},
+    "TDS": {"value": 0, "last_updated": None},
+    "waterLevel": {"value": 0, "last_updated": None},
+    "distance": {"value": 0, "last_updated": None}
 }
 
-# Update mock data periodically
-def update_mock_data():
-    global last_sensor_data
-    while True:
+def get_current_values():
+    """Query VictoriaMetrics for the latest data points for each metric"""
+    result = {
+        "deviceID": "plt-404cca470da0",
+        "lastUpdate": datetime.now().isoformat()
+    }
+    
+    # Current timestamp for instant queries
+    now = int(time.time())
+    
+    # Query each metric individually
+    for metric_name in metrics.keys():
         try:
-            # Add small random variations to simulate changes
-            last_sensor_data["temperature"] = max(15, min(35, last_sensor_data["temperature"] + (random.random() - 0.5)))
-            last_sensor_data["pH"] = max(5, min(8, last_sensor_data["pH"] + (random.random() - 0.5) * 0.2))
-            last_sensor_data["EC"] = max(0.5, min(2.0, last_sensor_data["EC"] + (random.random() - 0.5) * 0.1))
-            last_sensor_data["TDS"] = round(max(300, min(800, last_sensor_data["TDS"] + (random.random() - 0.5) * 20)))
-            last_sensor_data["waterLevel"] = round(max(10, min(95, last_sensor_data["waterLevel"] + (random.random() - 0.5) * 5)))
-            last_sensor_data["distance"] = max(5, min(30, last_sensor_data["distance"] + (random.random() - 0.5)))
-            last_sensor_data["lastUpdate"] = datetime.now().isoformat()
+            # Use instant query for current value
+            query_url = f"{VICTORIA_URL}/api/v1/query"
+            params = {
+                'query': f'{metric_name}{{}}',  # Query all devices
+                'time': now
+            }
+            
+            response = requests.get(query_url, params=params, timeout=2)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
+                    # Get the first result and extract value and timestamp
+                    first_result = data['data']['result'][0]
+                    if 'value' in first_result:
+                        value = float(first_result['value'][1])
+                        timestamp = first_result['value'][0]
+                        
+                        # Store in metrics cache
+                        metrics[metric_name]['value'] = value
+                        metrics[metric_name]['last_updated'] = timestamp
+                        
+                        # Add to result
+                        result[metric_name] = value
         except Exception as e:
-            print(f"Error updating mock data: {e}")
-        time.sleep(5)  # Update every 5 seconds
-
-# Start the background thread for mock data updates
-update_thread = threading.Thread(target=update_mock_data, daemon=True)
-update_thread.start()
+            app.logger.error(f"Error querying {metric_name}: {str(e)}")
+            
+            # Use cached value if available, otherwise default value
+            if metrics[metric_name]['last_updated']:
+                result[metric_name] = metrics[metric_name]['value']
+    
+    # Add default values for missing metrics
+    default_values = {
+        "temperature": 25.0,
+        "pH": 7.0,
+        "EC": 1.0,
+        "TDS": 500,
+        "waterLevel": 50,
+        "distance": 10.0
+    }
+    
+    for metric_name, default in default_values.items():
+        if metric_name not in result:
+            result[metric_name] = default
+    
+    return result
 
 @app.route('/')
 def index():
@@ -70,7 +105,7 @@ def trends():
 
 @app.route('/api/events')
 def events():
-    """SSE endpoint - generate events directly"""
+    """SSE endpoint with real data from VictoriaMetrics"""
     def generate():
         try:
             # Send initial connection message
@@ -78,12 +113,12 @@ def events():
             
             # Send data updates every few seconds
             while True:
-                # Copy current data to avoid race conditions
-                current_data = last_sensor_data.copy()
+                # Get the latest data
+                current_data = get_current_values()
                 yield f"data: {json.dumps(current_data)}\n\n"
-                time.sleep(3)  # Send updates every 3 seconds
+                time.sleep(5)  # Send updates every 5 seconds
         except Exception as e:
-            print(f"Error in SSE stream: {e}")
+            app.logger.error(f"Error in SSE stream: {str(e)}")
             yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"
 
     return Response(stream_with_context(generate()), 
@@ -107,48 +142,60 @@ def tank_settings():
 
 @app.route('/api/latest')
 def latest_data():
-    """Get latest sensor data directly from our mock data"""
-    return jsonify(last_sensor_data)
+    """Get latest sensor data from VictoriaMetrics"""
+    try:
+        # Get current values from VictoriaMetrics
+        current_data = get_current_values()
+        return jsonify(current_data)
+    except Exception as e:
+        app.logger.error(f"Error fetching latest data: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/query')
 def query_data():
-    """Query historical data from VictoriaMetrics directly"""
+    """Query historical data from VictoriaMetrics"""
     try:
         # Get parameters
         metric = request.args.get('metric', 'temperature')
-        device_id = request.args.get('device', 'plt-404cca470da0')
+        device_id = request.args.get('device', '')
+        
+        # Parse time range parameters or use defaults
+        hours = int(request.args.get('hours', 1))
         
         # Calculate time range
         now = int(time.time())
-        start = now - 3600  # 1 hour ago
+        start = now - (hours * 3600)  # Convert hours to seconds
         
-        # Query VictoriaMetrics directly
+        # Construct device filter if provided
+        device_filter = f',device="{device_id}"' if device_id else ''
+        
+        # Query VictoriaMetrics for range data
         query_url = f"{VICTORIA_URL}/api/v1/query_range"
         params = {
-            'query': f'{metric}{{device="{device_id}"}}',
+            'query': f'{metric}{{{device_filter}}}',
             'start': start,
             'end': now,
-            'step': '60s'
+            'step': '60s'  # 1-minute intervals
         }
         
-        response = requests.get(query_url, params=params)
+        response = requests.get(query_url, params=params, timeout=5)
+        
         if response.status_code == 200:
-            return jsonify(response.json())
-        else:
-            # If real query fails, generate fake historical data
-            fake_data = {
-                "status": "success",
-                "data": {
-                    "resultType": "matrix",
-                    "result": [{
-                        "metric": {"__name__": metric, "device": device_id},
-                        "values": [[now - 3600, random.uniform(20, 30)]]
-                    }]
-                }
+            data = response.json()
+            # Check if we have actual data
+            if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
+                return jsonify(data)
+        
+        # If no data or query failed, return empty result structure
+        return jsonify({
+            "status": "success",
+            "data": {
+                "resultType": "matrix",
+                "result": []
             }
-            return jsonify(fake_data)
+        })
     except Exception as e:
-        print(f"Error querying data: {e}")
+        app.logger.error(f"Error querying data: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health')
