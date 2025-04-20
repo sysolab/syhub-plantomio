@@ -1,735 +1,153 @@
 [
     {
-        "id": "query-flow",
+        "id": "217e15ddb3f3fb95",
         "type": "tab",
-        "label": "VictoriaMetrics Query",
+        "label": "Plantomio Telemetry Flow",
         "disabled": false,
-        "info": "This flow demonstrates querying VictoriaMetrics for temperature data",
+        "info": "Flow to receive MQTT telemetry data and send to VictoriaMetrics using OpenMetrics format",
         "env": []
     },
     {
-        "id": "query-inject",
-        "type": "inject",
-        "z": "query-flow",
-        "name": "Query Data",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "60",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "3",
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 130,
-        "y": 120,
-        "wires": [
-            [
-                "query-function"
-            ]
-        ]
-    },
-    {
-        "id": "query-function",
-        "type": "function",
-        "z": "query-flow",
-        "name": "Prepare Query",
-        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Get VictoriaMetrics configuration from global context\nconst config = global.get('config') || {};\nconst vmHost = config.vm?.host || 'plantomio.local';\nconst vmPort = config.vm?.port || 8428;\n\n// Device ID for query\nconst deviceId = 'plt-404cca470da0';\n\n// Create query parameters - NO PREFIX\nmsg.url = `http://${vmHost}:${vmPort}/api/v1/query_range?query=temperature{device=\"${deviceId}\"}&start=${oneHourAgo}&end=${now}&step=60`;\n\n// For debugging\nmsg.query_info = {\n    metricName: 'temperature',\n    deviceId: deviceId,\n    timeRange: `${new Date(oneHourAgo*1000).toISOString()} to ${new Date(now*1000).toISOString()}`\n};\n\nreturn msg;",
-        "outputs": 1,
-        "x": 300,
-        "y": 120,
-        "wires": [
-            [
-                "query-request"
-            ]
-        ]
-    },
-    {
-        "id": "query-request",
-        "type": "http request",
-        "z": "query-flow",
-        "name": "Query VictoriaMetrics",
-        "method": "GET",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 510,
-        "y": 120,
-        "wires": [
-            [
-                "query-debug",
-                "format-for-chart"
-            ]
-        ]
-    },
-    {
-        "id": "query-debug",
-        "type": "debug",
-        "z": "query-flow",
-        "name": "Display Results",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 710,
-        "y": 60,
-        "wires": []
-    },
-    {
-        "id": "format-for-chart",
-        "type": "function",
-        "z": "query-flow",
-        "name": "Format for Chart",
-        "func": "// Format data for chart display\nlet chartData = { labels: [], datasets: [{ data: [], label: 'Temperature' }] };\n\n// Handle various response formats\nif (msg.payload && msg.payload.data && msg.payload.data.result && msg.payload.data.result.length > 0) {\n    const result = msg.payload.data.result[0];  // Take first result series\n    \n    if (result.values) {\n        // Handle query_range format\n        result.values.forEach(point => {\n            let timestamp = new Date(point[0] * 1000).toLocaleTimeString();\n            let value = parseFloat(point[1]);\n            chartData.labels.push(timestamp);\n            chartData.datasets[0].data.push(value);\n        });\n    } else if (result.value) {\n        // Handle instant query format\n        let timestamp = new Date(result.value[0] * 1000).toLocaleTimeString();\n        let value = parseFloat(result.value[1]);\n        chartData.labels.push(timestamp);\n        chartData.datasets[0].data.push(value);\n    }\n}\n\n// If no data, show a message\nif (chartData.labels.length === 0) {\n    chartData = { noData: true };\n    node.status({fill:\"yellow\",shape:\"ring\",text:\"No data returned\"});\n} else {\n    node.status({fill:\"green\",shape:\"dot\",text:`${chartData.labels.length} points`});\n}\n\nreturn { payload: chartData };",
-        "outputs": 1,
-        "x": 710,
-        "y": 120,
-        "wires": [
-            [
-                "temperature-chart"
-            ]
-        ]
-    },
-    {
-        "id": "temperature-chart",
-        "type": "ui_chart",
-        "z": "query-flow",
-        "name": "Temperature Chart",
-        "group": "dashboard-main",
-        "order": 1,
-        "width": "12",
-        "height": "6",
-        "label": "Temperature",
-        "chartType": "line",
-        "legend": "false",
-        "xformat": "HH:mm:ss",
-        "interpolate": "linear",
-        "nodata": "No Data Available",
-        "dot": false,
-        "ymin": "",
-        "ymax": "",
-        "removeOlder": "12",
-        "removeOlderPoints": "",
-        "removeOlderUnit": "3600",
-        "cutout": 0,
-        "useOneColor": false,
-        "useUTC": false,
-        "colors": [
-            "#1f77b4",
-            "#aec7e8",
-            "#ff7f0e",
-            "#2ca02c",
-            "#98df8a",
-            "#d62728",
-            "#ff9896",
-            "#9467bd",
-            "#c5b0d5"
-        ],
-        "outputs": 1,
-        "useDifferentColor": false,
-        "x": 910,
-        "y": 120,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "pH-inject",
-        "type": "inject",
-        "z": "query-flow",
-        "name": "Query pH Data",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "60",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "5",
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 140,
-        "y": 180,
-        "wires": [
-            [
-                "pH-query-function"
-            ]
-        ]
-    },
-    {
-        "id": "pH-query-function",
-        "type": "function",
-        "z": "query-flow",
-        "name": "Prepare pH Query",
-        "func": "// Get current time and 1 hour ago in Unix timestamp\nconst now = Math.floor(Date.now() / 1000);\nconst oneHourAgo = now - 3600;\n\n// Get VictoriaMetrics configuration from global context\nconst config = global.get('config') || {};\nconst vmHost = config.vm?.host || 'plantomio.local';\nconst vmPort = config.vm?.port || 8428;\n\n// Device ID for query\nconst deviceId = 'plt-404cca470da0';\n\n// Create query parameters - NO PREFIX\nmsg.url = `http://${vmHost}:${vmPort}/api/v1/query_range?query=pH{device=\"${deviceId}\"}&start=${oneHourAgo}&end=${now}&step=60`;\n\n// For debugging\nmsg.query_info = {\n    metricName: 'pH',\n    deviceId: deviceId,\n    timeRange: `${new Date(oneHourAgo*1000).toISOString()} to ${new Date(now*1000).toISOString()}`\n};\n\nreturn msg;",
-        "outputs": 1,
-        "x": 300,
-        "y": 180,
-        "wires": [
-            [
-                "pH-query-request"
-            ]
-        ]
-    },
-    {
-        "id": "pH-query-request",
-        "type": "http request",
-        "z": "query-flow",
-        "name": "Query VictoriaMetrics",
-        "method": "GET",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 510,
-        "y": 180,
-        "wires": [
-            [
-                "pH-debug",
-                "pH-format-for-chart"
-            ]
-        ]
-    },
-    {
-        "id": "pH-debug",
-        "type": "debug",
-        "z": "query-flow",
-        "name": "Display pH Results",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 720,
-        "y": 240,
-        "wires": []
-    },
-    {
-        "id": "pH-format-for-chart",
-        "type": "function",
-        "z": "query-flow",
-        "name": "Format pH for Chart",
-        "func": "// Format data for chart display\nlet chartData = { labels: [], datasets: [{ data: [], label: 'pH' }] };\n\n// Handle various response formats\nif (msg.payload && msg.payload.data && msg.payload.data.result && msg.payload.data.result.length > 0) {\n    const result = msg.payload.data.result[0];  // Take first result series\n    \n    if (result.values) {\n        // Handle query_range format\n        result.values.forEach(point => {\n            let timestamp = new Date(point[0] * 1000).toLocaleTimeString();\n            let value = parseFloat(point[1]);\n            chartData.labels.push(timestamp);\n            chartData.datasets[0].data.push(value);\n        });\n    } else if (result.value) {\n        // Handle instant query format\n        let timestamp = new Date(result.value[0] * 1000).toLocaleTimeString();\n        let value = parseFloat(result.value[1]);\n        chartData.labels.push(timestamp);\n        chartData.datasets[0].data.push(value);\n    }\n}\n\n// If no data, show a message\nif (chartData.labels.length === 0) {\n    chartData = { noData: true };\n    node.status({fill:\"yellow\",shape:\"ring\",text:\"No data returned\"});\n} else {\n    node.status({fill:\"green\",shape:\"dot\",text:`${chartData.labels.length} points`});\n}\n\nreturn { payload: chartData };",
-        "outputs": 1,
-        "x": 710,
-        "y": 180,
-        "wires": [
-            [
-                "pH-chart"
-            ]
-        ]
-    },
-    {
-        "id": "pH-chart",
-        "type": "ui_chart",
-        "z": "query-flow",
-        "name": "pH Chart",
-        "group": "dashboard-main",
-        "order": 2,
-        "width": "12",
-        "height": "6",
-        "label": "pH",
-        "chartType": "line",
-        "legend": "false",
-        "xformat": "HH:mm:ss",
-        "interpolate": "linear",
-        "nodata": "No Data Available",
-        "dot": false,
-        "ymin": "",
-        "ymax": "",
-        "removeOlder": "12",
-        "removeOlderPoints": "",
-        "removeOlderUnit": "3600",
-        "cutout": 0,
-        "useOneColor": false,
-        "useUTC": false,
-        "colors": [
-            "#ff7f0e",
-            "#aec7e8",
-            "#1f77b4",
-            "#2ca02c",
-            "#98df8a",
-            "#d62728",
-            "#ff9896",
-            "#9467bd",
-            "#c5b0d5"
-        ],
-        "outputs": 1,
-        "useDifferentColor": false,
-        "x": 890,
-        "y": 180,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "dashboard-main",
-        "type": "ui_group",
-        "name": "Main Sensors",
-        "tab": "dashboard-tab",
-        "order": 1,
-        "disp": true,
-        "width": "12",
-        "collapse": false
-    },
-    {
-        "id": "dashboard-tab",
-        "type": "ui_tab",
-        "name": "Plantomio",
-        "icon": "dashboard",
-        "order": 1,
-        "disabled": false,
-        "hidden": false
-    },
-    {
-        "id": "mqtt-flow",
-        "type": "tab",
-        "label": "MQTT Sensor Flow",
-        "disabled": false,
-        "info": "This flow demonstrates subscribing to MQTT sensor data",
-        "env": []
-    },
-    {
-        "id": "mqtt-in",
+        "id": "15869f201368979c",
         "type": "mqtt in",
-        "z": "mqtt-flow",
-        "name": "Subscribe to Sensor Data",
+        "z": "217e15ddb3f3fb95",
+        "name": "MQTT Telemetry Input",
         "topic": "v1/devices/me/telemetry",
         "qos": "2",
         "datatype": "json",
-        "broker": "mqtt-broker",
+        "broker": "mqtt_broker",
         "nl": false,
-        "rap": true,
-        "rh": 0,
+        "rap": false,
         "inputs": 0,
-        "x": 180,
-        "y": 120,
+        "x": 120,
+        "y": 100,
         "wires": [
             [
-                "mqtt-process"
+                "1319742384cb9668",
+                "debug_mqtt"
             ]
         ]
     },
     {
-        "id": "mqtt-process",
+        "id": "1319742384cb9668",
         "type": "function",
-        "z": "mqtt-flow",
-        "name": "Process Sensor Data",
-        "func": "// Add timestamp if not present\nif (!msg.payload.timestamp) {\n    msg.payload.timestamp = new Date().toISOString();\n}\n\n// Add topic information\nmsg.payload.topic = msg.topic;\n\n// Store the latest data in global context\nconst latestData = global.get('latestSensorData') || {};\nObject.assign(latestData, msg.payload);\nlatestData.lastUpdate = new Date().toISOString();\nglobal.set('latestSensorData', latestData);\n\n// Forward to debug and potentially to database\nreturn msg;",
+        "z": "217e15ddb3f3fb95",
+        "name": "Format for OpenMetrics",
+        "func": "// Format in OpenMetrics format\nconst lines = [];\nconst deviceId = msg.payload.deviceID || 'unknown';\n\nfor (const key in msg.payload) {\n    if (key !== \"deviceID\" && key !== \"timestamp\") {\n        const value = parseFloat(msg.payload[key]);\n        if (!isNaN(value) && isFinite(value)) {\n            // Format as OpenMetrics line\n            lines.push(`${key}{device=\"${deviceId}\"} ${value}`);\n        }\n    }\n}\n\n// Add required EOF marker for OpenMetrics\nlines.push(\"# EOF\");\n\nmsg.payload = lines.join('\\n');\nreturn msg;",
         "outputs": 1,
-        "x": 420,
-        "y": 120,
+        "x": 450,
+        "y": 100,
         "wires": [
             [
-                "mqtt-debug",
-                "format-for-victoriametrics"
+                "22e5b1c2af90a8db",
+                "debug_format"
             ]
         ]
     },
     {
-        "id": "mqtt-debug",
-        "type": "debug",
-        "z": "mqtt-flow",
-        "name": "Display Sensor Data",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 650,
-        "y": 60,
-        "wires": []
-    },
-    {
-        "id": "format-for-victoriametrics",
-        "type": "function",
-        "z": "mqtt-flow",
-        "name": "Format for VictoriaMetrics",
-        "func": "// Format in OpenMetrics format - NO PREFIX\nconst lines = [];\nconst deviceId = msg.payload.deviceID || 'unknown';\n\nfor (const key in msg.payload) {\n    if (key !== \"deviceID\" && key !== \"timestamp\" && key !== \"topic\") {\n        const value = parseFloat(msg.payload[key]);\n        if (!isNaN(value) && isFinite(value)) {\n            // Format as OpenMetrics line WITHOUT prefix\n            lines.push(`${key}{device=\"${deviceId}\"} ${value}`);\n        }\n    }\n}\n\n// Add required EOF marker for OpenMetrics\nlines.push(\"# EOF\");\n\nmsg.payload = lines.join('\\n');\nreturn msg;",
-        "outputs": 1,
-        "x": 670,
-        "y": 120,
-        "wires": [
-            [
-                "victoriametrics-post",
-                "format-debug"
-            ]
-        ]
-    },
-    {
-        "id": "victoriametrics-post",
+        "id": "22e5b1c2af90a8db",
         "type": "http request",
-        "z": "mqtt-flow",
+        "z": "217e15ddb3f3fb95",
         "name": "Send to VictoriaMetrics",
         "method": "POST",
-        "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://localhost:8428/api/v1/import/prometheus",
+        "url": "http://plantomio.local:8428/api/v1/import/prometheus",
         "tls": "",
         "persist": false,
         "proxy": "",
+        "insecureHTTPParser": false,
         "authType": "",
         "senderr": false,
         "headers": [
             {
-                "keyType": "Content-Type",
-                "keyValue": "Content-Type",
-                "valueType": "text",
-                "valueValue": "application/openmetrics-text"
+                "key": "Content-Type",
+                "value": "application/openmetrics-text"
             }
         ],
-        "x": 940,
-        "y": 120,
+        "x": 850,
+        "y": 100,
         "wires": [
             [
-                "victoriametrics-debug"
+                "debug_victoria"
             ]
         ]
     },
     {
-        "id": "format-debug",
+        "id": "debug_mqtt",
         "type": "debug",
-        "z": "mqtt-flow",
-        "name": "OpenMetrics Format",
+        "z": "217e15ddb3f3fb95",
+        "name": "MQTT Input Debug",
         "active": true,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
+        "complete": "true",
+        "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 940,
-        "y": 60,
+        "x": 250,
+        "y": 180,
         "wires": []
     },
     {
-        "id": "victoriametrics-debug",
+        "id": "debug_format",
         "type": "debug",
-        "z": "mqtt-flow",
-        "name": "VM Response",
+        "z": "217e15ddb3f3fb95",
+        "name": "Formatted Data Debug",
         "active": true,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
+        "complete": "true",
+        "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1170,
-        "y": 120,
+        "x": 560,
+        "y": 180,
         "wires": []
     },
     {
-        "id": "api-flow",
-        "type": "tab",
-        "label": "Dashboard API",
-        "disabled": false,
-        "info": "This flow provides API endpoints for the dashboard",
-        "env": []
-    },
-    {
-        "id": "api-latest-endpoint",
-        "type": "http in",
-        "z": "api-flow",
-        "name": "GET /api/latest",
-        "url": "/api/latest",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 120,
-        "y": 60,
-        "wires": [
-            [
-                "get-latest-data"
-            ]
-        ]
-    },
-    {
-        "id": "get-latest-data",
-        "type": "function",
-        "z": "api-flow",
-        "name": "Get Latest Data",
-        "func": "// Get data from global context\nlet data = global.get('latestSensorData') || {};\n\n// If no data exists yet, provide demo data\nif (Object.keys(data).length === 0) {\n    data = {\n        temperature: 25.5,\n        pH: 6.8,\n        EC: 1.2,\n        TDS: 600,\n        waterLevel: 75,\n        distance: 12.3,\n        deviceID: 'plt-404cca470da0',\n        lastUpdate: new Date().toISOString()\n    };\n}\n\nreturn { payload: data };",
-        "outputs": 1,
-        "x": 320,
-        "y": 60,
-        "wires": [
-            [
-                "api-latest-response"
-            ]
-        ]
-    },
-    {
-        "id": "api-latest-response",
-        "type": "http response",
-        "z": "api-flow",
-        "name": "HTTP Response",
-        "statusCode": "",
-        "headers": {
-            "content-type": "application/json"
-        },
-        "x": 520,
-        "y": 60,
+        "id": "debug_victoria",
+        "type": "debug",
+        "z": "217e15ddb3f3fb95",
+        "name": "VictoriaMetrics Response Debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 900,
+        "y": 180,
         "wires": []
     },
     {
-        "id": "api-events-endpoint",
-        "type": "http in",
-        "z": "api-flow",
-        "name": "GET /api/events",
-        "url": "/api/events",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 120,
-        "y": 120,
-        "wires": [
-            [
-                "setup-sse"
-            ]
-        ]
-    },
-    {
-        "id": "setup-sse",
-        "type": "function",
-        "z": "api-flow",
-        "name": "Setup SSE",
-        "func": "// Initialize SSE headers in context\nnode.sse = {};\nnode.sse.id = 1; // Event ID counter\n\n// Setup SSE response headers\nmsg.headers = {\n    'Content-Type': 'text/event-stream',\n    'Cache-Control': 'no-cache',\n    'Connection': 'keep-alive',\n    'X-Accel-Buffering': 'no' // For Nginx proxy\n};\n\n// Send a connection established event\nmsg.payload = {\n    id: node.sse.id++,\n    event: 'connected',\n    data: JSON.stringify({ status: 'connected', timestamp: new Date().toISOString() })\n};\n\n// Format the SSE message\nmsg.sse = true; // Flag this as an SSE message\n\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 290,
-        "y": 120,
-        "wires": [
-            [
-                "store-sse-client"
-            ]
-        ]
-    },
-    {
-        "id": "store-sse-client",
-        "type": "function",
-        "z": "api-flow",
-        "name": "Store SSE Client",
-        "func": "// Get existing clients array\nlet clients = global.get('sse_clients') || [];\n\n// Add this node if not already present\nif (!clients.includes(node)) {\n    clients.push(node);\n    global.set('sse_clients', clients);\n}\n\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "// Remove this client when connection closes\nlet clients = global.get('sse_clients') || [];\nconst index = clients.indexOf(node);\nif (index > -1) {\n    clients.splice(index, 1);\n    global.set('sse_clients', clients);\n}\n",
-        "libs": [],
-        "x": 490,
-        "y": 180,
-        "wires": [
-            ["api-events-response"]
-        ]
-    },
-    {
-        "id": "api-events-response",
-        "type": "http response",
-        "z": "api-flow",
-        "name": "SSE Response",
-        "statusCode": "",
-        "headers": {},
-        "x": 490,
-        "y": 120,
-        "wires": []
-    },
-    {
-        "id": "send-data-updates",
-        "type": "inject",
-        "z": "api-flow",
-        "name": "Send Updates Every 5s",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "5",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "1",
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 140,
-        "y": 180,
-        "wires": [
-            [
-                "generate-test-data"
-            ]
-        ]
-    },
-    {
-        "id": "generate-test-data",
-        "type": "function",
-        "z": "api-flow",
-        "name": "Generate Test Data",
-        "func": "// Get existing data or create new\nlet data = global.get('latestSensorData') || {\n    temperature: 25.0,\n    pH: 6.5,\n    EC: 1.0,\n    TDS: 500,\n    waterLevel: 70,\n    distance: 15.0,\n    deviceID: 'plt-404cca470da0'\n};\n\n// Add small random variations to simulate changes\ndata.temperature = Math.max(15, Math.min(35, data.temperature + (Math.random() - 0.5)));\ndata.pH = Math.max(5, Math.min(8, data.pH + (Math.random() - 0.5) * 0.2));\ndata.EC = Math.max(0.5, Math.min(2.0, data.EC + (Math.random() - 0.5) * 0.1));\ndata.TDS = Math.round(Math.max(300, Math.min(800, data.TDS + (Math.random() - 0.5) * 20)));\ndata.waterLevel = Math.round(Math.max(10, Math.min(95, data.waterLevel + (Math.random() - 0.5) * 5)));\ndata.distance = Math.max(5, Math.min(30, data.distance + (Math.random() - 0.5)));\ndata.lastUpdate = new Date().toISOString();\n\n// Store updated data in global context\nglobal.set('latestSensorData', data);\n\n// Create a simple event message for SSE\nmsg.payload = {\n    data: JSON.stringify(data)\n};\n\n// Format the SSE message\nmsg.headers = {\n    'Content-Type': 'text/event-stream',\n    'Cache-Control': 'no-cache',\n    'Connection': 'keep-alive'\n};\n\nreturn msg;",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "// Initialize global latestSensorData if not exists\nif (!global.get('latestSensorData')) {\n    global.set('latestSensorData', {\n        temperature: 25.0,\n        pH: 6.5,\n        EC: 1.0,\n        TDS: 500,\n        waterLevel: 70,\n        distance: 15.0,\n        deviceID: 'plt-404cca470da0',\n        lastUpdate: new Date().toISOString()\n    });\n}\n",
-        "finalize": "",
-        "libs": [],
-        "x": 340,
-        "y": 180,
-        "wires": [
-            [
-                "api-events-response"
-            ]
-        ]
-    },
-    {
-        "id": "mqtt-broker",
+        "id": "mqtt_broker",
         "type": "mqtt-broker",
         "name": "Plantomio MQTT Broker",
         "broker": "localhost",
         "port": "1883",
-        "clientid": "plantomioX1",
+        "clientid": "nodered_plantomio",
         "autoConnect": true,
         "usetls": false,
         "protocolVersion": "4",
         "keepalive": "60",
-        "cleansession": true,
+        "cleansession": false,
+        "autoUnsubscribe": true,
         "birthTopic": "",
         "birthQos": "0",
         "birthPayload": "",
         "birthMsg": {},
         "closeTopic": "",
-        "closeQos": "0",
         "closePayload": "",
         "closeMsg": {},
         "willTopic": "",
         "willQos": "0",
         "willPayload": "",
         "willMsg": {},
+        "userProps": "",
         "sessionExpiry": ""
-    },
-    {
-        "id": "ui_base",
-        "type": "ui_base",
-        "theme": {
-            "name": "theme-light",
-            "lightTheme": {
-                "default": "#0094CE",
-                "baseColor": "#0094CE",
-                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
-                "edited": true,
-                "reset": false
-            },
-            "darkTheme": {
-                "default": "#097479",
-                "baseColor": "#097479",
-                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
-                "edited": false
-            },
-            "customTheme": {
-                "name": "Untitled Theme 1",
-                "default": "#4B7930",
-                "baseColor": "#4B7930",
-                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
-            },
-            "themeState": {
-                "base-color": {
-                    "default": "#0094CE",
-                    "value": "#0094CE",
-                    "edited": false
-                },
-                "page-titlebar-backgroundColor": {
-                    "value": "#0094CE",
-                    "edited": false
-                },
-                "page-backgroundColor": {
-                    "value": "#fafafa",
-                    "edited": false
-                },
-                "page-sidebar-backgroundColor": {
-                    "value": "#ffffff",
-                    "edited": false
-                },
-                "group-textColor": {
-                    "value": "#1bbfff",
-                    "edited": false
-                },
-                "group-borderColor": {
-                    "value": "#ffffff",
-                    "edited": false
-                },
-                "group-backgroundColor": {
-                    "value": "#ffffff",
-                    "edited": false
-                },
-                "widget-textColor": {
-                    "value": "#111111",
-                    "edited": false
-                },
-                "widget-backgroundColor": {
-                    "value": "#0094ce",
-                    "edited": false
-                },
-                "widget-borderColor": {
-                    "value": "#ffffff",
-                    "edited": false
-                },
-                "base-font": {
-                    "value": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
-                }
-            },
-            "angularTheme": {
-                "primary": "indigo",
-                "accents": "blue",
-                "warn": "red",
-                "background": "grey",
-                "palette": "light"
-            }
-        },
-        "site": {
-            "name": "Plantomio Dashboard",
-            "hideToolbar": "false",
-            "allowSwipe": "false",
-            "lockMenu": "false",
-            "allowTempTheme": "true",
-            "dateFormat": "DD/MM/YYYY",
-            "sizes": {
-                "sx": 48,
-                "sy": 48,
-                "gx": 6,
-                "gy": 6,
-                "cx": 6,
-                "cy": 6,
-                "px": 0,
-                "py": 0
-            }
-        }
     }
 ]
