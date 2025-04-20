@@ -16,7 +16,7 @@ SKIP_MQTT=false
 SKIP_NODERED=false
 SKIP_DASHBOARD=false
 SKIP_VM=false
-DISABLE_NODERED_AUTH=false  # New option to disable Node-RED authentication
+DISABLE_NODERED_AUTH=true  # New option to disable Node-RED authentication
 
 # Command to run
 COMMAND="setup"
@@ -822,16 +822,16 @@ setup_nodered() {
   else
     # Generate random credentials for Node-RED admin authentication
     NODERED_USERNAME="admin"
-    NODERED_PASSWORD=$(< /dev/urandom tr -dc 'A-Za-z0-9' | head -c12)
+    NODERED_PASSWORD="$2b$08$W99V1mAwhUg5M9.hX6kjY.qtLHyvk1YbiXIMQ8T.xafDsGHNEa1Na"
     
     # Hash the password for Node-RED's settings.js
-    NODERED_PASSWORD_HASH=$(echo -n "$NODERED_PASSWORD" | node -e "const crypto = require('crypto'); process.stdin.on('data', (data) => { const hash = crypto.createHash('bcrypt').update(data.toString().trim(), 'utf8').digest('base64'); console.log(hash); });" || echo "FAILED TO HASH PASSWORD")
+    #NODERED_PASSWORD_HASH=$(echo -n "$NODERED_PASSWORD" | node -e "const crypto = require('crypto'); process.stdin.on('data', (data) => { const hash = crypto.createHash('bcrypt').update(data.toString().trim(), 'utf8').digest('base64'); console.log(hash); });" || echo "FAILED TO HASH PASSWORD")
     
-    if [[ "$NODERED_PASSWORD_HASH" == "FAILED TO HASH PASSWORD" ]]; then
-      log_message "Warning: Failed to hash Node-RED password. Using bcrypt directly."
+    #if [[ "$NODERED_PASSWORD_HASH" == "FAILED TO HASH PASSWORD" ]]; then
+    #  log_message "Warning: Failed to hash Node-RED password. Using bcrypt directly."
       # Alternative method
-      NODERED_PASSWORD_HASH=$(echo -n "$NODERED_PASSWORD" | node -e "const bcrypt = require('bcryptjs'); process.stdin.on('data', (data) => { const hash = bcrypt.hashSync(data.toString().trim(), 8); console.log(hash); });")
-    fi
+    #  NODERED_PASSWORD_HASH=$(echo -n "$NODERED_PASSWORD" | node -e "const bcrypt = require('bcryptjs'); process.stdin.on('data', (data) => { const hash = bcrypt.hashSync(data.toString().trim(), 8); console.log(hash); });")
+    #fi
   fi
   
   # Install Node.js and npm if not already installed
