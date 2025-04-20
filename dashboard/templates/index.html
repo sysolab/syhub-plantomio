@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ project_name }} Dashboard</title>
+    <title>Plantomio Dashboard</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="/static/css/sidebar.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -23,13 +23,19 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h1>{{ project_name }}</h1>
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                        <path d="M2 17l10 5 10-5"></path>
+                        <path d="M2 12l10 5 10-5"></path>
+                    </svg>
+                </div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    <li><a href="/" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                    <li><a href="/trends"><i class="fas fa-chart-line"></i> Trends</a></li>
-                    <li><a href="/settings"><i class="fas fa-cog"></i> Settings</a></li>
+                    <li><a href="/" class="active" title="Dashboard"><i class="fas fa-tachometer-alt"></i></a></li>
+                    <li><a href="/trends" title="Trends"><i class="fas fa-chart-line"></i></a></li>
+                    <li><a href="/settings" title="Settings"><i class="fas fa-cog"></i></a></li>
                 </ul>
             </nav>
         </aside>
@@ -49,16 +55,17 @@
             </header>
 
             <div class="page-content">
-                <!-- Plant Health Assessment -->
-                <div class="panel health-panel">
-                    <div class="panel-header">
-                        <h2>Plant Health Assessment</h2>
-                        <div class="panel-actions">
-                            <button class="btn btn-refresh">Refresh Data</button>
-                            <button class="btn btn-actions">Actions</button>
-                        </div>
-                    </div>
+                <!-- Plant Health and Tank Level Row -->
+                <div class="health-tank-container">
+                    <!-- Plant Health Assessment -->
                     <div class="health-content">
+                        <div class="health-header">
+                            <h2>Plant Health Assessment</h2>
+                            <div class="health-actions">
+                                <button class="btn btn-refresh">Refresh</button>
+                                <button class="btn btn-actions">Actions</button>
+                            </div>
+                        </div>
                         <div class="health-status">
                             <div class="status-icon good">
                                 <i class="fas fa-check"></i>
@@ -100,6 +107,20 @@
                             <p>Consider reducing nutrient solution concentration. TDS levels are above optimal range for this plant type.</p>
                         </div>
                     </div>
+                    
+                    <!-- Tank Visualization -->
+                    <div class="tank-container">
+                        <div class="tank-visualization">
+                            <div class="tank-level" style="height: 75%"></div>
+                            <div class="alert-level-indicator">
+                                <div class="alert-level-line"></div>
+                            </div>
+                        </div>
+                        <div class="tank-info">
+                            <p>Water Level: 2.7cm</p>
+                            <p>75% Capacity</p>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Critical Metrics -->
@@ -123,48 +144,8 @@
                     </div>
                 </div>
                 
-                <!-- System Status -->
-                <div class="panel status-panel">
-                    <div class="panel-header">
-                        <h2>System Status</h2>
-                    </div>
-                    <div class="status-grid">
-                        <div class="status-item">
-                            <div class="status-label">CPU Load</div>
-                            <div class="status-gauge">
-                                <div class="gauge-fill" style="width: 32%"></div>
-                            </div>
-                            <div class="status-value">32%</div>
-                        </div>
-                        
-                        <div class="status-item">
-                            <div class="status-label">Memory</div>
-                            <div class="status-gauge">
-                                <div class="gauge-fill" style="width: 45%"></div>
-                            </div>
-                            <div class="status-value">45%</div>
-                        </div>
-                        
-                        <div class="status-item">
-                            <div class="status-label">Storage</div>
-                            <div class="status-gauge">
-                                <div class="gauge-fill" style="width: 18%"></div>
-                            </div>
-                            <div class="status-value">18%</div>
-                        </div>
-                        
-                        <div class="status-item">
-                            <div class="status-label">Water Level</div>
-                            <div class="status-gauge">
-                                <div class="gauge-fill water" style="width: 75%"></div>
-                            </div>
-                            <div class="status-value">2.7cm</div>
-                        </div>
-                    </div>
-                </div>
-                
                 <!-- Detailed Metrics -->
-                <div class="panel detailed-metrics-panel">
+                <div class="detailed-metrics-panel">
                     <div class="panel-header">
                         <h2>Detailed Metrics</h2>
                     </div>
@@ -280,7 +261,7 @@
                 </div>
                 
                 <!-- Quick Actions -->
-                <div class="panel quick-actions-panel">
+                <div class="quick-actions-panel">
                     <div class="panel-header">
                         <h2>Quick Actions</h2>
                     </div>
@@ -292,8 +273,48 @@
                     </div>
                 </div>
                 
+                <!-- System Status -->
+                <div class="status-panel">
+                    <div class="panel-header">
+                        <h2>System Status</h2>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-label">CPU Load</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill" style="width: 32%"></div>
+                            </div>
+                            <div class="status-value">32%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-label">Memory</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill" style="width: 45%"></div>
+                            </div>
+                            <div class="status-value">45%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-label">Storage</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill" style="width: 18%"></div>
+                            </div>
+                            <div class="status-value">18%</div>
+                        </div>
+                        
+                        <div class="status-item">
+                            <div class="status-label">Water Level</div>
+                            <div class="status-gauge">
+                                <div class="gauge-fill water" style="width: 75%"></div>
+                            </div>
+                            <div class="status-value">2.7cm</div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Sensor Trends -->
-                <div class="panel sensor-trends-panel">
+                <div class="sensor-trends-panel">
                     <div class="panel-header">
                         <h2>Sensor Trends</h2>
                         <div class="time-controls">
@@ -320,8 +341,79 @@
             document.querySelector('.sidebar').classList.toggle('active');
         });
 
-        // Set current year in footer
-        document.getElementById('current-year').textContent = new Date().getFullYear();
+        // Simulate sensor data for chart (in real application this would be from API)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize chart if the element exists
+            if (document.getElementById('trends-chart')) {
+                // Sample data setup for pH, EC and Temperature
+                const ctx = document.getElementById('trends-chart').getContext('2d');
+                
+                // Mock data
+                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+                const temperatureData = Array.from({length: 24}, () => Math.random() * 5 + 18);
+                const phData = Array.from({length: 24}, () => Math.random() * 2 + 6);
+                const ecData = Array.from({length: 24}, () => Math.random() * 20 + 20);
+                
+                // Chart configuration
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Temperature (°C)',
+                                data: temperatureData,
+                                borderColor: '#4e73df',
+                                backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false
+                            },
+                            {
+                                label: 'pH',
+                                data: phData,
+                                borderColor: '#e74a3b',
+                                backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false
+                            },
+                            {
+                                label: 'EC (μS/cm)',
+                                data: ecData,
+                                borderColor: '#36b9cc',
+                                backgroundColor: 'rgba(54, 185, 204, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
     </script>
 </body>
-</html> 
+</html>
