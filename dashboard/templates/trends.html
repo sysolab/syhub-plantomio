@@ -20,16 +20,16 @@
     </button>
 
     <div class="app-wrapper">
-        <!-- Sidebar -->
-        <aside class="sidebar">
+        <!-- Icon-only Sidebar -->
+        <aside class="sidebar sidebar-icon-only">
             <div class="sidebar-header">
-                <h1>{{ project_name }}</h1>
+                <div class="logo-icon">{{ project_name|truncate(1, True, '') }}</div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    <li><a href="/"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                    <li><a href="/trends" class="active"><i class="fas fa-chart-line"></i> Trends</a></li>
-                    <li><a href="/settings"><i class="fas fa-cog"></i> Settings</a></li>
+                    <li><a href="/" title="Dashboard"><i class="fas fa-tachometer-alt"></i></a></li>
+                    <li><a href="/trends" class="active" title="Trends"><i class="fas fa-chart-line"></i></a></li>
+                    <li><a href="/settings" title="Settings"><i class="fas fa-cog"></i></a></li>
                 </ul>
             </nav>
         </aside>
@@ -37,121 +37,144 @@
         <!-- Main Content -->
         <div class="main-content">
             <header class="main-header">
-                <h2>Historical Data</h2>
-                <div class="time-range-selector">
-                    <button class="btn btn-sm active" data-range="1h">1h</button>
-                    <button class="btn btn-sm" data-range="6h">6h</button>
-                    <button class="btn btn-sm" data-range="24h">24h</button>
-                    <button class="btn btn-sm" data-range="7d">7d</button>
+                <div class="header-content">
+                    <h1>Sensor Trends</h1>
+                </div>
+                <div class="time-controls">
+                    <button class="btn btn-sm time-btn active" data-range="24h">24 Hours</button>
+                    <button class="btn btn-sm time-btn" data-range="7d">7 Days</button>
+                    <button class="btn btn-sm time-btn" data-range="30d">30 Days</button>
+                    <button class="btn btn-sm time-btn" data-range="custom">Custom Range</button>
                 </div>
             </header>
 
             <div class="page-content">
-                <div class="dashboard-grid">
-                    <!-- Temperature Chart -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">Temperature (°C)</h3>
-                            <i class="fas fa-temperature-high text-warning"></i>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="temperature-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- pH Chart -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">pH</h3>
-                            <i class="fas fa-flask text-info"></i>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="ph-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- EC Chart -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">EC (mS/cm)</h3>
-                            <i class="fas fa-bolt text-success"></i>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="ec-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- TDS Chart -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">TDS (ppm)</h3>
-                            <i class="fas fa-vial text-primary"></i>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="tds-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Water Level Chart -->
-                    <div class="card card-lg">
-                        <div class="card-header">
-                            <h3 class="card-title">Water Level (%)</h3>
-                            <i class="fas fa-tint text-primary"></i>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="water-level-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Data Export Card -->
-                    <div class="card card-lg">
-                        <div class="card-header">
-                            <h3 class="card-title">Data Export</h3>
-                            <i class="fas fa-download"></i>
-                        </div>
-                        <div class="card-body export-section">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Sensor</label>
-                                    <select id="export-sensor" class="form-control">
-                                        <option value="temperature">Temperature</option>
-                                        <option value="pH">pH</option>
-                                        <option value="EC">EC</option>
-                                        <option value="TDS">TDS</option>
-                                        <option value="waterLevel">Water Level</option>
-                                    </select>
+                <div class="main-grid">
+                    <div class="main-column">
+                        <!-- Charts Grid -->
+                        <div class="charts-grid">
+                            <!-- Temperature Chart -->
+                            <div class="panel chart-panel">
+                                <div class="panel-header">
+                                    <h2>Temperature</h2>
+                                    <div class="chart-controls">
+                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
+                                            <i class="fas fa-arrows-up-down"></i>
+                                        </button>
+                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
+                                            <i class="fas fa-equals"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="form-group">
-                                    <label>Time Range</label>
-                                    <select id="export-range" class="form-control">
-                                        <option value="1d">Last 24 Hours</option>
-                                        <option value="7d">Last 7 Days</option>
-                                        <option value="30d">Last 30 Days</option>
-                                    </select>
+                                <div class="panel-content">
+                                    <div class="chart-container">
+                                        <canvas id="temperature-chart"></canvas>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="form-row">
-                                <button id="export-data" class="btn">
-                                    <i class="fas fa-file-csv"></i> Export CSV
-                                </button>
-                                <button id="export-graph" class="btn btn-secondary">
-                                    <i class="fas fa-file-image"></i> Export Graph
-                                </button>
+                            
+                            <!-- pH Chart -->
+                            <div class="panel chart-panel">
+                                <div class="panel-header">
+                                    <h2>pH Level</h2>
+                                    <div class="chart-controls">
+                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
+                                            <i class="fas fa-arrows-up-down"></i>
+                                        </button>
+                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
+                                            <i class="fas fa-equals"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="panel-content">
+                                    <div class="chart-container">
+                                        <canvas id="ph-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- TDS Chart -->
+                            <div class="panel chart-panel">
+                                <div class="panel-header">
+                                    <h2>TDS</h2>
+                                    <div class="chart-controls">
+                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
+                                            <i class="fas fa-arrows-up-down"></i>
+                                        </button>
+                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
+                                            <i class="fas fa-equals"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="panel-content">
+                                    <div class="chart-container">
+                                        <canvas id="tds-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Water Level Chart -->
+                            <div class="panel chart-panel">
+                                <div class="panel-header">
+                                    <h2>Water Level</h2>
+                                    <div class="chart-controls">
+                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
+                                            <i class="fas fa-arrows-up-down"></i>
+                                        </button>
+                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
+                                            <i class="fas fa-equals"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="panel-content">
+                                    <div class="chart-container">
+                                        <canvas id="water-level-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Export Panel -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h2>Export Data</h2>
+                            </div>
+                            <div class="panel-content">
+                                <div class="export-controls">
+                                    <div class="form-group">
+                                        <label for="export-format">Export Format</label>
+                                        <select id="export-format" class="form-control">
+                                            <option value="csv">CSV</option>
+                                            <option value="json">JSON</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="export-range">Date Range</label>
+                                        <select id="export-range" class="form-control">
+                                            <option value="24h">Last 24 Hours</option>
+                                            <option value="7d">Last 7 Days</option>
+                                            <option value="30d">Last 30 Days</option>
+                                            <option value="all">All Data</option>
+                                        </select>
+                                    </div>
+                                    <button id="export-btn" class="btn btn-primary">
+                                        <i class="fas fa-download"></i> Export Data
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
+            
             <footer>
-                <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
+                <p>{{ project_name }} | <span id="current-year"></span></p>
             </footer>
         </div>
     </div>
 
-    <!-- Load Chart.js -->
-    <script src="/static/js/chart.min.js"></script>
-    <script src="/static/js/trends.js"></script>
+    <script src="/static/js/chart.min.js" defer></script>
+    <script src="/static/js/trends.js" defer></script>
     <script>
         // Mobile sidebar toggle
         document.getElementById('mobile-toggle').addEventListener('click', function() {
@@ -160,29 +183,6 @@
 
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
-        
-        // Time range buttons
-        document.querySelectorAll('.time-range-selector .btn').forEach(button => {
-            button.addEventListener('click', function() {
-                // Remove active class from all buttons
-                document.querySelectorAll('.time-range-selector .btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                
-                // Add active class to clicked button
-                this.classList.add('active');
-                
-                // Update charts with new time range
-                const range = this.getAttribute('data-range');
-                updateChartsTimeRange(range);
-            });
-        });
-        
-        // Placeholder function for updating charts
-        function updateChartsTimeRange(range) {
-            console.log(`Updating charts with time range: ${range}`);
-            // This would be implemented in trends.js
-        }
     </script>
 </body>
 </html> 

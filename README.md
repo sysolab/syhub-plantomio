@@ -1,8 +1,8 @@
-# Plantomio IoT Monitoring System
+# SyHub - Plantomio IoT Monitoring System
 
 ![Plantomio](assets/logo.png)
 
-An integrated IoT monitoring system for sensor data collection, storage, visualization, and automation. Plantomio combines MQTT, VictoriaMetrics, and Node-RED to create a powerful platform for IoT projects.
+An integrated IoT monitoring system for sensor data collection, storage, visualization, and automation. SyHub combines MQTT, VictoriaMetrics, and Node-RED to create a powerful platform for IoT projects, with Plantomio as the project name.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ An integrated IoT monitoring system for sensor data collection, storage, visuali
 
 ## Overview
 
-Plantomio is a comprehensive IoT platform designed for monitoring sensor data. It provides a complete infrastructure for:
+SyHub is a comprehensive IoT platform designed for monitoring sensor data. It provides a complete infrastructure for:
 
 - Collecting sensor data via MQTT
 - Storing time series data in VictoriaMetrics
@@ -55,7 +55,7 @@ Perfect for home automation, environmental monitoring, agricultural projects, an
 
 ## Architecture
 
-Plantomio consists of several integrated components:
+SyHub consists of several integrated components:
 
 1. **Mosquitto MQTT Broker**: Handles device communication
 2. **VictoriaMetrics**: Time series database for storing sensor data
@@ -77,7 +77,7 @@ The typical data flow is:
 
 ### Setup Options
 
-Plantomio can be installed with different options depending on your needs:
+SyHub can be installed with different options depending on your needs:
 
 - **Full Installation**: All components (recommended)
 - **Component Selection**: Choose which components to install
@@ -88,8 +88,8 @@ Plantomio can be installed with different options depending on your needs:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/plantomio.git
-   cd plantomio
+   git clone https://github.com/yourusername/syhub.git
+   cd syhub
    ```
 
 2. Run the setup script:
@@ -111,9 +111,9 @@ Plantomio can be installed with different options depending on your needs:
 
 After installation, access your dashboards at:
 
-- **Main Dashboard**: http://plantomio.local:1880/ui
-- **Node-RED Editor**: http://plantomio.local:1880/admin
-- **VictoriaMetrics**: http://plantomio.local:8428
+- **Main Dashboard**: http://syhub.local:1880/ui
+- **Node-RED Editor**: http://syhub.local:1880/admin
+- **VictoriaMetrics**: http://syhub.local:8428
 
 Default login credentials:
 - **Node-RED**: Username: `admin`, Password: As configured during setup
@@ -123,7 +123,7 @@ Default login credentials:
 Send sensor data to the MQTT broker using the topic format specified in your config:
 
 ```bash
-mosquitto_pub -h plantomio.local -p 1883 -u plantomioX1 -P plantomioX1Pass -t v1/devices/me/telemetry -m '{"deviceID":"plt-404cca470da0","temperature":"21.813","distance":"2.762","pH":"42.091"}'
+mosquitto_pub -h syhub.local -p 1883 -u plantomioX1 -P plantomioX1Pass -t v1/devices/me/telemetry -m '{"deviceID":"plt-404cca470da0","temperature":"21.813","distance":"2.762","pH":"42.091"}'
 ```
 
 For Arduino/ESP32/ESP8266 code examples, see the `examples` directory.
@@ -133,7 +133,7 @@ For Arduino/ESP32/ESP8266 code examples, see the `examples` directory.
 Data can be queried directly from VictoriaMetrics:
 
 ```bash
-curl -G "http://plantomio.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature{device=\"plt-404cca470da0\"}"
+curl -G "http://syhub.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature{device=\"plt-404cca470da0\"}"
 ```
 
 Or use the Node-RED flows to create custom queries.
@@ -210,7 +210,7 @@ Node-RED configuration is stored in `/home/youruser/.node-red/settings.js`. This
 
 ### Customizing Dashboards
 
-1. Access the Node-RED editor at http://plantomio.local:1880/admin
+1. Access the Node-RED editor at http://syhub.local:1880/admin
 
 2. Navigate to the "Plantomio" flow tab
 
@@ -296,7 +296,7 @@ If your dashboard isn't showing data:
 
 2. Check VictoriaMetrics contains your data:
    ```bash
-   curl -G "http://plantomio.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature"
+   curl -G "http://syhub.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature"
    ```
 
 3. In Node-RED, enable debug nodes to view the data flow

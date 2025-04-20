@@ -31,6 +31,7 @@ show_help() {
   echo "  setup   : Install components (default)"
   echo "  backup  : Create a backup of configuration files"
   echo "  info    : Display system information"
+  echo "  update  : Restart specific services"
   echo ""
   echo "Examples:"
   echo "  $0 -i                        : Interactive installation"
@@ -76,7 +77,7 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       ;;
-    setup|backup|info)
+    setup|backup|info|update)
       COMMAND="$1"
       shift
       ;;
@@ -1620,42 +1621,6 @@ main() {
     fi
   fi
   
-  log_message "Setup completed successfully!"
-  
-  # Verify all services are running
-  log_message "Verifying services..."
-  services_status=""
-  
-  if systemctl is-active --quiet mosquitto; then
-    services_status="${services_status}✓ Mosquitto: RUNNING\n"
-  else
-    services_status="${services_status}× Mosquitto: NOT RUNNING\n"
-  fi
-  
-  if systemctl is-active --quiet victoriametrics; then
-    services_status="${services_status}✓ VictoriaMetrics: RUNNING\n"
-  else
-    services_status="${services_status}× VictoriaMetrics: NOT RUNNING\n"
-  fi
-  
-  if systemctl is-active --quiet nodered; then
-    services_status="${services_status}✓ Node-RED: RUNNING\n"
-  else
-    services_status="${services_status}× Node-RED: NOT RUNNING\n"
-  fi
-  
-  if systemctl is-active --quiet dashboard; then
-    services_status="${services_status}✓ Dashboard: RUNNING\n"
-  else
-    services_status="${services_status}× Dashboard: NOT RUNNING\n"
-  fi
-  
-  if systemctl is-active --quiet nginx; then
-    services_status="${services_status}✓ Nginx: RUNNING\n"
-  else
-    services_status="${services_status}× Nginx: NOT RUNNING\n"
-  fi
-  
   log_message "Services status:\n${services_status}"
   
   # Show access information
@@ -1698,9 +1663,15 @@ main() {
       echo "  sudo systemctl status victoriametrics"
       echo "  sudo journalctl -xeu victoriametrics.service"
     fi
-    
-    echo ""
-  fi
+  }
+  
+  # Restart services to apply changes
+  log_message "Restarting services to apply changes..."
+  sudo systemctl daemon-reload
+  sudo systemctl restart nodered.service 
+  sudo systemctl restart mosquitto.service
+  sudo systemctl restart dashboard
+  log_message "Services restarted successfully."
 }
 
 # Backup function (adapted from older script)
@@ -1769,6 +1740,14 @@ case "$COMMAND" in
       # Normal setup
       main
     fi
+    ;;
+  update)
+    # Check permissions
+    if [ "$EUID" -ne 0 ]; then
+      echo "Please run as root: sudo $0 update"
+      exit 1
+    fi
+    update
     ;;
   backup)
     load_config

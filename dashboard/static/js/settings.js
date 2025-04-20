@@ -51,6 +51,20 @@ async function fetchTankSettings() {
 // Save tank settings
 async function saveTankSettings(data) {
     try {
+        // Show a "saving" message to prevent multiple clicks
+        showMessage('Saving settings...', 'info');
+        
+        // Make sure the data is valid
+        if (isNaN(data.maxDistance) || isNaN(data.minDistance) || data.minDistance >= data.maxDistance) {
+            showMessage('Invalid settings. Min distance must be less than max distance.', 'error');
+            return;
+        }
+        
+        // Add alertLevel if it exists in the form
+        if (document.getElementById('alert-level')) {
+            data.alertLevel = parseFloat(document.getElementById('alert-level').value);
+        }
+        
         const response = await fetch('/api/tank-settings', {
             method: 'POST',
             headers: {
@@ -65,12 +79,25 @@ async function saveTankSettings(data) {
             showMessage('Settings saved successfully!', 'success');
             state.settings = data;
             updatePreview();
+            
+            // Force refresh of the dashboard data if we're viewing settings
+            fetch('/api/refresh-dashboard', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({force: true})
+            }).catch(err => console.log('Error refreshing dashboard:', err));
+            
+            return true;
         } else {
             showMessage(result.message || 'Error saving settings.', 'error');
+            return false;
         }
     } catch (error) {
         console.error('Error saving tank settings:', error);
         showMessage('Error saving settings. Please try again.', 'error');
+        return false;
     }
 }
 

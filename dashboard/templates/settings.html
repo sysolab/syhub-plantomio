@@ -20,16 +20,16 @@
     </button>
 
     <div class="app-wrapper">
-        <!-- Sidebar -->
-        <aside class="sidebar">
+        <!-- Icon-only Sidebar -->
+        <aside class="sidebar sidebar-icon-only">
             <div class="sidebar-header">
-                <h1>{{ project_name }}</h1>
+                <div class="logo-icon">{{ project_name|truncate(1, True, '') }}</div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    <li><a href="/"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                    <li><a href="/trends"><i class="fas fa-chart-line"></i> Trends</a></li>
-                    <li><a href="/settings" class="active"><i class="fas fa-cog"></i> Settings</a></li>
+                    <li><a href="/" title="Dashboard"><i class="fas fa-tachometer-alt"></i></a></li>
+                    <li><a href="/trends" title="Trends"><i class="fas fa-chart-line"></i></a></li>
+                    <li><a href="/settings" class="active" title="Settings"><i class="fas fa-cog"></i></a></li>
                 </ul>
             </nav>
         </aside>
@@ -37,140 +37,140 @@
         <!-- Main Content -->
         <div class="main-content">
             <header class="main-header">
-                <h2>System Settings</h2>
+                <div class="header-content">
+                    <h1>Settings</h1>
+                </div>
             </header>
 
             <div class="page-content">
-                <div class="dashboard-grid">
-                    <!-- Tank Configuration Card -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">Tank Configuration</h3>
-                            <i class="fas fa-water"></i>
-                        </div>
-                        <div class="card-body">
-                            <form id="tank-settings-form">
-                                <div class="form-group">
-                                    <label for="max-distance">Maximum Distance (Empty Tank) in cm:</label>
-                                    <input type="number" id="max-distance" name="maxDistance" min="0" step="0.1" required>
-                                    <p class="help-text">The distance reading when the tank is empty (0% water level)</p>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="min-distance">Minimum Distance (Full Tank) in cm:</label>
-                                    <input type="number" id="min-distance" name="minDistance" min="0" step="0.1" required>
-                                    <p class="help-text">The distance reading when the tank is full (100% water level)</p>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="alert-level">Alert Level (%):</label>
-                                    <input type="number" id="alert-level" name="alertLevel" min="0" max="100" step="1" required>
-                                    <p class="help-text">Send alert when water level falls below this percentage</p>
-                                </div>
-                                
-                                <div class="form-actions">
-                                    <button type="submit" class="btn">
-                                        <i class="fas fa-save"></i> Save Settings
-                                    </button>
-                                </div>
-                            </form>
-                            
-                            <div id="settings-message" class="settings-message"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Tank Preview Card -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">Tank Level Preview</h3>
-                            <i class="fas fa-tint"></i>
-                        </div>
-                        <div class="card-body tank-preview-container">
-                            <div class="tank-visualization preview">
-                                <div class="tank-level" id="tank-preview-level"></div>
+                <div class="main-grid">
+                    <div class="main-column">
+                        <!-- Tank Configuration Card -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h2>Tank Configuration</h2>
                             </div>
-                            <div class="tank-preview-info">
-                                <p>Current level: <span id="preview-level-value">--</span>%</p>
-                                <p>Current distance: <span id="preview-distance-value">--</span> cm</p>
-                                <div class="alert-level-indicator">
-                                    <span class="alert-level-label">Alert Level</span>
-                                    <div class="alert-level-line" id="alert-level-indicator"></div>
+                            <div class="panel-content">
+                                <div class="settings-flex">
+                                    <div class="settings-form">
+                                        <form id="tank-settings-form">
+                                            <div class="form-group">
+                                                <label for="max-distance">Maximum Distance (Empty Tank) in cm:</label>
+                                                <input type="number" id="max-distance" name="maxDistance" min="0" step="0.1" required>
+                                                <p class="help-text">The distance reading when the tank is empty (0% water level)</p>
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="min-distance">Minimum Distance (Full Tank) in cm:</label>
+                                                <input type="number" id="min-distance" name="minDistance" min="0" step="0.1" required>
+                                                <p class="help-text">The distance reading when the tank is full (100% water level)</p>
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="alert-level">Alert Level (%):</label>
+                                                <input type="number" id="alert-level" name="alertLevel" min="0" max="100" step="1" required>
+                                                <p class="help-text">Send alert when water level falls below this percentage</p>
+                                            </div>
+                                            
+                                            <div class="form-actions">
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="fas fa-save"></i> Save Settings
+                                                </button>
+                                            </div>
+                                            
+                                            <div id="settings-message" class="settings-message"></div>
+                                        </form>
+                                    </div>
+                                    
+                                    <!-- Tank Preview -->
+                                    <div class="tank-preview-container">
+                                        <h3>Tank Level Preview</h3>
+                                        <div class="tank-visualization preview">
+                                            <div class="tank-level" id="tank-preview-level"></div>
+                                        </div>
+                                        <div class="tank-preview-info">
+                                            <p>Current level: <span id="preview-level-value">--</span>%</p>
+                                            <p>Current distance: <span id="preview-distance-value">--</span> cm</p>
+                                            <div class="alert-level-indicator">
+                                                <span class="alert-level-label">Alert Level</span>
+                                                <div class="alert-level-line" id="alert-level-indicator"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- System Information Card -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">System Information</h3>
-                            <i class="fas fa-info-circle"></i>
-                        </div>
-                        <div class="card-body">
-                            <div class="info-grid">
-                                <div class="info-item">
-                                    <span class="info-label">Dashboard Version:</span>
-                                    <span class="info-value">1.0.0</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Node-RED:</span>
-                                    <span class="info-value">http://{{ request.host.split(':')[0] }}:{{ config['node_red']['port'] }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">VictoriaMetrics:</span>
-                                    <span class="info-value">http://{{ request.host.split(':')[0] }}:{{ config['victoria_metrics']['port'] }}</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">System Uptime:</span>
-                                    <span class="info-value" id="system-uptime">--</span>
+                        <!-- System Information Card -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h2>System Information</h2>
+                            </div>
+                            <div class="panel-content">
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <span class="info-label">Dashboard Version:</span>
+                                        <span class="info-value">1.0.0</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Node-RED:</span>
+                                        <span class="info-value">http://localhost:{{ config['node_red']['port'] }}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">VictoriaMetrics:</span>
+                                        <span class="info-value">http://localhost:{{ config['victoria_metrics']['port'] }}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">System Uptime:</span>
+                                        <span class="info-value" id="system-uptime">--</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Device Configuration Card -->
-                    <div class="card card-md">
-                        <div class="card-header">
-                            <h3 class="card-title">Device Configuration</h3>
-                            <i class="fas fa-microchip"></i>
-                        </div>
-                        <div class="card-body">
-                            <div class="config-table">
-                                <div class="config-item">
-                                    <span class="config-label">Device ID:</span>
-                                    <span class="config-value">plt-404cca470da0</span>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-label">Sensor Polling Rate:</span>
-                                    <select id="polling-rate" class="form-control config-value">
-                                        <option value="1">1 second</option>
-                                        <option value="5" selected>5 seconds</option>
-                                        <option value="10">10 seconds</option>
-                                        <option value="30">30 seconds</option>
-                                        <option value="60">1 minute</option>
-                                    </select>
-                                </div>
-                                <div class="config-item">
-                                    <span class="config-label">Data Storage:</span>
-                                    <select id="data-storage" class="form-control config-value">
-                                        <option value="7">7 days</option>
-                                        <option value="30" selected>30 days</option>
-                                        <option value="90">90 days</option>
-                                    </select>
-                                </div>
-                                <div class="config-actions">
-                                    <button id="save-device-config" class="btn">
-                                        <i class="fas fa-save"></i> Save Configuration
-                                    </button>
+                        
+                        <!-- Device Configuration Card -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h2>Device Configuration</h2>
+                            </div>
+                            <div class="panel-content">
+                                <div class="config-table">
+                                    <div class="config-item">
+                                        <span class="config-label">Device ID:</span>
+                                        <span class="config-value">plt-404cca470da0</span>
+                                    </div>
+                                    <div class="config-item">
+                                        <span class="config-label">Sensor Polling Rate:</span>
+                                        <select id="polling-rate" class="form-control config-value">
+                                            <option value="1">1 second</option>
+                                            <option value="5" selected>5 seconds</option>
+                                            <option value="10">10 seconds</option>
+                                            <option value="30">30 seconds</option>
+                                            <option value="60">1 minute</option>
+                                        </select>
+                                    </div>
+                                    <div class="config-item">
+                                        <span class="config-label">Data Storage:</span>
+                                        <select id="data-storage" class="form-control config-value">
+                                            <option value="7">7 days</option>
+                                            <option value="30" selected>30 days</option>
+                                            <option value="90">90 days</option>
+                                        </select>
+                                    </div>
+                                    <div class="config-actions">
+                                        <button id="save-device-config" class="btn btn-primary">
+                                            <i class="fas fa-save"></i> Save Configuration
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
+            
             <footer>
-                <p>{{ project_name }} Dashboard | <span id="current-year"></span></p>
+                <p>{{ project_name }} | <span id="current-year"></span></p>
             </footer>
         </div>
     </div>
@@ -184,37 +184,6 @@
 
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
-        
-        // Example function to update the tank preview
-        function updateTankPreview() {
-            const level = document.getElementById('alert-level').value;
-            const tankLevel = document.getElementById('tank-preview-level');
-            const alertIndicator = document.getElementById('alert-level-indicator');
-            
-            // Update the preview
-            if (level) {
-                alertIndicator.style.bottom = `${level}%`;
-                alertIndicator.style.display = 'block';
-            }
-        }
-        
-        // Add event listener to alert level input
-        document.getElementById('alert-level').addEventListener('input', updateTankPreview);
-        
-        // Save device configuration
-        document.getElementById('save-device-config').addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            // Get values
-            const pollingRate = document.getElementById('polling-rate').value;
-            const dataStorage = document.getElementById('data-storage').value;
-            
-            // Show success message
-            alert(`Configuration saved: Polling rate: ${pollingRate}s, Data storage: ${dataStorage} days`);
-        });
-        
-        // Set a random uptime
-        document.getElementById('system-uptime').textContent = `${Math.floor(Math.random() * 30) + 1} days`;
     </script>
 </body>
 </html> 
