@@ -85,7 +85,7 @@ Next, clone and install SyHub:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/syhub.git
+git clone https://github.com/sysolab/syhub-plantomio.git
 cd syhub
 
 # For full installation (interactive mode)
