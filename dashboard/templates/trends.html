@@ -134,6 +134,32 @@
                     </div>
                 </div>
                 
+                <!-- Distance Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h2>Distance</h2>
+                        <div class="chart-controls">
+                            <button class="btn btn-export">Export Data</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="distance-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- ORP Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h2>ORP</h2>
+                        <div class="chart-controls">
+                            <button class="btn btn-export">Export Data</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="orp-chart"></canvas>
+                    </div>
+                </div>
+                
                 <!-- Data Export -->
                 <div class="export-panel">
                     <div class="panel-header">
@@ -154,7 +180,9 @@
                                 <option value="all">All Sensors</option>
                                 <option value="temperature">Temperature</option>
                                 <option value="ph">pH</option>
-                                <option value="ec-tds">EC & TDS</option>
+                                <option value="ec">EC</option>
+                                <option value="tds">TDS</option>
+                                <option value="distance">Distance</option>
                                 <option value="orp">ORP</option>
                             </select>
                         </div>
@@ -202,6 +230,8 @@
                         loadChartData('pH', 'ph-chart', timeMinutes);
                         loadChartData('TDS', 'tds-chart', timeMinutes);
                         loadChartData('EC', 'ec-chart', timeMinutes);
+                        loadChartData('distance', 'distance-chart', timeMinutes);
+                        loadChartData('ORP', 'orp-chart', timeMinutes);
                     }
                 });
             });
@@ -216,22 +246,31 @@
                 // Get current device ID for filtering
                 const deviceId = document.getElementById('device-id').textContent || 'plt-404cca470da0';
                 
+                // Show loading indicator
+                canvas.style.opacity = '0.5';
+                
                 // Fetch data from API with device ID filter
                 fetch(`/api/query?metric=${metric}&minutes=${minutes}&device=${deviceId}`)
                     .then(response => response.json())
                     .then(data => {
+                        // Remove loading indicator
+                        canvas.style.opacity = '1';
+                        
                         // Process data
                         const timestamps = [];
                         const values = [];
                         
                         if (data.data && data.data.result && data.data.result.length > 0) {
                             // Get device ID from result - corrected to use deviceID instead of device
-                            const resultDeviceId = data.data.result[0].metric?.deviceID || deviceId;
+                            const resultDeviceId = data.data.result[0].metric?.device || deviceId;
                             
                             // Extract values and filter unique timestamps
                             const uniqueTimestamps = new Set();
                             data.data.result[0].values.forEach(point => {
                                 const [timestamp, value] = point;
+                                // Skip NaN values
+                                if (value === "NaN" || value === "nan") return;
+                                
                                 if (!uniqueTimestamps.has(timestamp)) {
                                     uniqueTimestamps.add(timestamp);
                                     const date = new Date(timestamp * 1000);
@@ -259,6 +298,14 @@
                                     borderColor = '#36b9cc';
                                     backgroundColor = 'rgba(54, 185, 204, 0.1)';
                                     break;
+                                case 'distance':
+                                    borderColor = '#f6c23e';
+                                    backgroundColor = 'rgba(246, 194, 62, 0.1)';
+                                    break;
+                                case 'ORP':
+                                    borderColor = '#6f42c1';
+                                    backgroundColor = 'rgba(111, 66, 193, 0.1)';
+                                    break;
                                 default:
                                     borderColor = '#858796';
                                     backgroundColor = 'rgba(133, 135, 150, 0.1)';
@@ -271,10 +318,18 @@
                                 case 'pH': unit = ''; break;
                                 case 'TDS': unit = 'ppm'; break;
                                 case 'EC': unit = 'μS/cm'; break;
+                                case 'distance': unit = 'm'; break;
+                                case 'ORP': unit = 'mV'; break;
+                            }
+                            
+                            // Destroy previous chart if it exists
+                            if (window.charts && window.charts[chartId]) {
+                                window.charts[chartId].destroy();
                             }
                             
                             // Create chart
-                            new Chart(ctx, {
+                            window.charts = window.charts || {};
+                            window.charts[chartId] = new Chart(ctx, {
                                 type: 'line',
                                 data: {
                                     labels: timestamps,
@@ -300,6 +355,20 @@
                                         title: {
                                             display: true,
                                             text: `Device: ${resultDeviceId}`
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(context) {
+                                                    let label = context.dataset.label || '';
+                                                    if (label) {
+                                                        label += ': ';
+                                                    }
+                                                    if (context.parsed.y !== null) {
+                                                        label += context.parsed.y.toFixed(2);
+                                                    }
+                                                    return label;
+                                                }
+                                            }
                                         }
                                     },
                                     scales: {
@@ -319,7 +388,13 @@
                             });
                         } else {
                             // No data
-                            new Chart(ctx, {
+                            // Destroy previous chart if it exists
+                            if (window.charts && window.charts[chartId]) {
+                                window.charts[chartId].destroy();
+                            }
+                            
+                            window.charts = window.charts || {};
+                            window.charts[chartId] = new Chart(ctx, {
                                 type: 'line',
                                 data: {
                                     labels: [],
@@ -344,9 +419,18 @@
                         }
                     })
                     .catch(error => {
+                        // Remove loading indicator
+                        canvas.style.opacity = '1';
+                        
                         console.error(`Error loading ${metric} chart:`, error);
                         // Display error chart
-                        new Chart(ctx, {
+                        // Destroy previous chart if it exists
+                        if (window.charts && window.charts[chartId]) {
+                            window.charts[chartId].destroy();
+                        }
+                        
+                        window.charts = window.charts || {};
+                        window.charts[chartId] = new Chart(ctx, {
                             type: 'line',
                             data: {
                                 labels: [],
@@ -371,6 +455,8 @@
             loadChartData('pH', 'ph-chart', timeMinutes);
             loadChartData('TDS', 'tds-chart', timeMinutes);
             loadChartData('EC', 'ec-chart', timeMinutes);
+            loadChartData('distance', 'distance-chart', timeMinutes);
+            loadChartData('ORP', 'orp-chart', timeMinutes);
         });
     </script>
 </body>

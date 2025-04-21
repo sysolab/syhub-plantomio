@@ -110,7 +110,7 @@
                             </div>
                         </div>
                         <div class="tank-info">
-                            <p>Water Level: <span id="water-level-value">2.7</span>cm</p>
+                            <p>Water Level: <span id="water-level-value">2.7</span>m</p>
                             <p><span id="water-level-percent">75</span>% Capacity</p>
                             <button class="btn btn-settings" id="tank-settings-btn">
                                 <i class="fas fa-sliders-h"></i>
@@ -232,11 +232,11 @@
         </div>
         <div class="settings-form">
             <div class="form-group">
-                <label for="min-level">Min Level (cm)</label>
+                <label for="min-level">Min Level (m)</label>
                 <input type="number" id="min-level" class="form-control" value="0" step="0.1">
             </div>
             <div class="form-group">
-                <label for="max-level">Max Level (cm)</label>
+                <label for="max-level">Max Level (m)</label>
                 <input type="number" id="max-level" class="form-control" value="10" step="0.1">
             </div>
             <div class="settings-actions">
@@ -387,10 +387,16 @@
                 // Get device ID for filtering
                 const deviceId = document.getElementById('device-id').textContent || 'plt-404cca470da0';
                 
+                // Add loading indicator
+                chartCanvas.style.opacity = '0.5';
+                
                 // We'll fetch data via API with device filter
                 fetch(`/api/trends?metrics=temperature,pH,EC&minutes=1440&device=${deviceId}`)
                     .then(response => response.json())
                     .then(data => {
+                        // Remove loading indicator
+                        chartCanvas.style.opacity = '1';
+                        
                         if (data.status === "success") {
                             const timestamps = [];
                             const temperatureData = [];
@@ -402,6 +408,9 @@
                                 const uniqueTimestamps = new Set();
                                 data.data.temperature.forEach(point => {
                                     const [timestamp, value] = point;
+                                    // Skip NaN values
+                                    if (value === "NaN" || value === "nan") return;
+                                    
                                     // Only add unique timestamps
                                     if (!uniqueTimestamps.has(timestamp)) {
                                         uniqueTimestamps.add(timestamp);
@@ -412,38 +421,44 @@
                                 });
                             }
                             
-                            // Process pH data with matching timestamps
+                            // Create maps for pH and EC data
+                            const phMap = new Map();
+                            const ecMap = new Map();
+                            
+                            // Process pH data
                             if (data.data.pH) {
-                                const phMap = new Map();
                                 data.data.pH.forEach(point => {
                                     const [timestamp, value] = point;
-                                    phMap.set(timestamp, parseFloat(value));
+                                    if (value !== "NaN" && value !== "nan") {
+                                        phMap.set(timestamp, parseFloat(value));
+                                    }
                                 });
-                                
-                                // Use the timestamps from temperature data as reference
-                                for (let i = 0; i < timestamps.length; i++) {
-                                    const timestamp = Array.from(new Set(data.data.temperature.map(p => p[0])))[i];
-                                    phData.push(phMap.get(timestamp) || null);
-                                }
                             }
                             
-                            // Process EC data with matching timestamps
+                            // Process EC data
                             if (data.data.EC) {
-                                const ecMap = new Map();
                                 data.data.EC.forEach(point => {
                                     const [timestamp, value] = point;
-                                    ecMap.set(timestamp, parseFloat(value));
+                                    if (value !== "NaN" && value !== "nan") {
+                                        ecMap.set(timestamp, parseFloat(value));
+                                    }
                                 });
-                                
-                                // Use the timestamps from temperature data as reference
-                                for (let i = 0; i < timestamps.length; i++) {
-                                    const timestamp = Array.from(new Set(data.data.temperature.map(p => p[0])))[i];
-                                    ecData.push(ecMap.get(timestamp) || null);
-                                }
+                            }
+                            
+                            // Fill pH and EC data arrays based on timestamps
+                            const uniqueTempTimestamps = Array.from(new Set(data.data.temperature.map(p => p[0])));
+                            for (const timestamp of uniqueTempTimestamps) {
+                                phData.push(phMap.get(timestamp) || null);
+                                ecData.push(ecMap.get(timestamp) || null);
+                            }
+                            
+                            // Destroy previous chart if it exists
+                            if (window.mainChart) {
+                                window.mainChart.destroy();
                             }
                             
                             // Chart configuration with three Y axes
-                            new Chart(ctx, {
+                            window.mainChart = new Chart(ctx, {
                                 type: 'line',
                                 data: {
                                     labels: timestamps,
@@ -490,6 +505,20 @@
                                         title: {
                                             display: true,
                                             text: `Device: ${deviceId}`
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(context) {
+                                                    let label = context.dataset.label || '';
+                                                    if (label) {
+                                                        label += ': ';
+                                                    }
+                                                    if (context.parsed.y !== null) {
+                                                        label += context.parsed.y.toFixed(2);
+                                                    }
+                                                    return label;
+                                                }
+                                            }
                                         }
                                     },
                                     scales: {
@@ -541,8 +570,15 @@
                     })
                     .catch(error => {
                         console.error('Error fetching chart data:', error);
+                        // Remove loading indicator
+                        chartCanvas.style.opacity = '1';
+                        
                         // Fallback to empty chart
-                        new Chart(ctx, {
+                        if (window.mainChart) {
+                            window.mainChart.destroy();
+                        }
+                        
+                        window.mainChart = new Chart(ctx, {
                             type: 'line',
                             data: {
                                 labels: [],
@@ -550,7 +586,13 @@
                             },
                             options: {
                                 responsive: true,
-                                maintainAspectRatio: false
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Error loading data'
+                                    }
+                                }
                             }
                         });
                     });

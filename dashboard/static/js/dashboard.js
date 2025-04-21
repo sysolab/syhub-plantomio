@@ -36,9 +36,9 @@ const elements = {
 
 // Tank configuration
 let tankConfig = {
-    maxDistance: 50.0,  // cm when tank is empty (0%)
-    minDistance: 5.0,   // cm when tank is full (100%)
-    alertLevel: 20      // % alert level
+    maxDistance: 3.0,  // m when tank is empty (0%)
+    minDistance: 0.3,   // m when tank is full (100%)
+    alertLevel: 10      // % alert level
 };
 
 // State management

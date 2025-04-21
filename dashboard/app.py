@@ -31,9 +31,9 @@ metrics = {
 
 # Tank configuration with default values
 tank_config = {
-    "maxDistance": 50.0,  # cm when tank is empty (0%)
-    "minDistance": 5.0,    # cm when tank is full (100%)
-    "alertLevel": 20       # % alert level
+    "maxDistance": 3.0,  # m when tank is empty (0%)
+    "minDistance": 0.3,    # m when tank is full (100%)
+    "alertLevel": 10       # % alert level
 }
 
 # Calculate water level percentage based on distance and tank configuration
@@ -237,16 +237,21 @@ def query_data():
         now = int(time.time())
         start = now - (minutes * 60)  # Convert minutes to seconds
         
-        # Construct device filter if provided - using deviceID as the field name
-        device_filter = f',deviceID="{device_id}"' if device_id else ''
+        # Construct device filter if provided - using device as the field name (from VM data)
+        device_filter = f',device="{device_id}"' if device_id else ''
         
         # Query VictoriaMetrics for range data
         query_url = f"{VICTORIA_URL}/api/v1/query_range"
+        
+        # Adjust step size based on time range to reduce data points
+        # For 24 hours, a 10-minute step is reasonable (~144 points)
+        step_size = '10m' if minutes >= 1440 else '5m' if minutes >= 720 else '1m'
+        
         params = {
             'query': f'{metric}{{{device_filter}}}',
             'start': start,
             'end': now,
-            'step': '10s'  # 10-second intervals for more detail
+            'step': step_size  # Adjust step size for data reduction
         }
         
         response = requests.get(query_url, params=params, timeout=5)
@@ -263,6 +268,10 @@ def query_data():
                 
                 if 'values' in result:
                     for timestamp, value in result['values']:
+                        # Skip NaN values
+                        if value == "NaN" or value == "nan":
+                            continue
+                            
                         if timestamp not in seen_timestamps:
                             seen_timestamps.add(timestamp)
                             unique_values.append([timestamp, value])
@@ -290,7 +299,7 @@ def trends_data():
     """Query multiple metrics over time for trends page"""
     try:
         # Get parameters
-        metrics_list = request.args.get('metrics', 'temperature,pH,EC,TDS,waterLevel').split(',')
+        metrics_list = request.args.get('metrics', 'temperature,pH,EC,TDS,distance,ORP').split(',')
         device_id = request.args.get('device', '')
         
         # Parse time range (default to last 10 minutes)
@@ -300,8 +309,11 @@ def trends_data():
         now = int(time.time())
         start = now - (minutes * 60)  # Convert minutes to seconds
         
-        # Construct device filter if provided - using deviceID as the field name
-        device_filter = f',deviceID="{device_id}"' if device_id else ''
+        # Construct device filter if provided - using device as the field name (from VM data)
+        device_filter = f',device="{device_id}"' if device_id else ''
+        
+        # Adjust step size based on time range to reduce data points
+        step_size = '10m' if minutes >= 1440 else '5m' if minutes >= 720 else '1m'
         
         results = {}
         
@@ -313,7 +325,7 @@ def trends_data():
                     'query': f'{metric}{{{device_filter}}}',
                     'start': start,
                     'end': now,
-                    'step': '10s'  # 10-second intervals
+                    'step': step_size  # Adjust step size to reduce data volume
                 }
                 
                 response = requests.get(query_url, params=params, timeout=3)
@@ -326,6 +338,10 @@ def trends_data():
                         
                         for point in data['data']['result'][0].get('values', []):
                             timestamp, value = point
+                            # Skip NaN values
+                            if value == "NaN" or value == "nan":
+                                continue
+                                
                             if timestamp not in seen_timestamps:
                                 seen_timestamps.add(timestamp)
                                 values.append([timestamp, value])
@@ -341,11 +357,13 @@ def trends_data():
 
 @app.route('/health')
 def health_check():
-    """Simple health check endpoint"""
+    """Enhanced health check endpoint that also checks MQTT"""
     services = {
         "dashboard": {"status": "ok"},
         "node_red": {"status": "unknown"},
-        "victoria_metrics": {"status": "unknown"}
+        "victoria_metrics": {"status": "unknown"},
+        "mqtt": {"status": "unknown"},
+        "ap_mode": {"status": "unknown"}
     }
     
     # Check Node-RED
@@ -361,6 +379,30 @@ def health_check():
         services["victoria_metrics"]["status"] = "ok" if resp.status_code == 200 else "error"
     except:
         services["victoria_metrics"]["status"] = "error"
+    
+    # Try to check Node-RED MQTT status via Node-RED API
+    try:
+        # This assumes Node-RED has an endpoint to check MQTT status
+        # If not available, you'll need to implement alternative checks
+        resp = requests.get(f"{NODERED_URL}/mqtt/status", timeout=1)
+        if resp.status_code == 200:
+            services["mqtt"]["status"] = "ok" if resp.json().get("connected", False) else "error"
+    except:
+        # If Node-RED doesn't expose MQTT status, leave as unknown
+        pass
+    
+    # Check AP mode status using system commands (requires sudo privileges)
+    try:
+        # This is a simplistic check and may need adjustment for your setup
+        import subprocess
+        result = subprocess.run(["iwconfig"], capture_output=True, text=True)
+        if "Mode:Master" in result.stdout:
+            services["ap_mode"]["status"] = "ok"
+        else:
+            services["ap_mode"]["status"] = "inactive"
+    except:
+        # If can't check AP mode, leave as unknown
+        pass
     
     return jsonify({"status": "ok", "services": services})
 
