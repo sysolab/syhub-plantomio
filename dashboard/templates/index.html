@@ -8,7 +8,25 @@
     <link rel="stylesheet" href="/static/css/sidebar.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="/static/images/favicon.ico">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- Chart.js with fallback -->
+    <script>
+        // Check if Chart.js loaded from CDN
+        window.chartLoaded = false;
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" 
+        onload="window.chartLoaded = true;" 
+        onerror="document.write('<script src=\"/static/js/chart.min.js\"><\/script>')"></script>
+    <!-- Fallback check -->
+    <script>
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (!window.chartLoaded && typeof Chart === 'undefined') {
+                    console.error('Chart.js failed to load from both CDN and local fallback');
+                    alert('Failed to load Chart.js library. Please check your internet connection or try refreshing the page.');
+                }
+            }, 2000);
+        });
+    </script>
 </head>
 <body>
     <!-- Mobile menu toggle button -->
