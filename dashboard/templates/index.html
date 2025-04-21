@@ -50,7 +50,10 @@
                 </div>
                 <div class="header-status">
                     <span class="status-indicator live">Live Data</span>
-                    <span class="device-id">Device: <span id="device-id">plt-404cca470da0</span></span>
+                    <div class="device-selector">
+                        <span class="device-id">Device: <span id="device-id">--</span></span>
+                        <select id="device-dropdown" style="display: none;"></select>
+                    </div>
                     <span class="last-update">Last update: <span id="last-update">08:19:57</span></span>
                 </div>
             </header>
@@ -169,6 +172,7 @@
                         <button class="metric-btn" data-metric="TDS">TDS</button>
                         <button class="metric-btn" data-metric="ORP">ORP</button>
                         <button class="metric-btn" data-metric="distance">Distance</button>
+                        <button class="metric-btn" data-metric="combined">Combined</button>
                     </div>
                     <div class="trends-container">
                         <canvas id="main-chart" class="trends-chart"></canvas>
@@ -255,8 +259,82 @@
 
     <script src="/static/js/dashboard.js"></script>
     <script>
-        // Device ID for data queries
-        const deviceId = 'plt-404cca470da0';
+        // Dynamic device selection
+        let currentDevice = null;
+        let availableDevices = [];
+        
+        // Fetch available devices on load
+        function fetchDevices() {
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === "success" && data.devices && data.devices.length > 0) {
+                        availableDevices = data.devices;
+                        
+                        // Set current device to first available device if not already set
+                        if (!currentDevice) {
+                            currentDevice = availableDevices[0];
+                        }
+                        
+                        // Update deviceID display
+                        const deviceElement = document.getElementById('device-id');
+                        if (deviceElement) {
+                            deviceElement.textContent = currentDevice;
+                        }
+                        
+                        // Get the device dropdown
+                        const deviceDropdown = document.getElementById('device-dropdown');
+                        
+                        // If we have multiple devices, populate and show the dropdown
+                        if (availableDevices.length > 1 && deviceDropdown) {
+                            // Clear existing options
+                            deviceDropdown.innerHTML = '';
+                            
+                            // Add options for each device
+                            availableDevices.forEach(device => {
+                                const option = document.createElement('option');
+                                option.value = device;
+                                option.text = device;
+                                
+                                // Set the current device as selected
+                                if (device === currentDevice) {
+                                    option.selected = true;
+                                }
+                                
+                                deviceDropdown.appendChild(option);
+                            });
+                            
+                            // Show the dropdown
+                            deviceDropdown.style.display = 'inline-block';
+                            
+                            // Add change event handler
+                            deviceDropdown.addEventListener('change', function() {
+                                // Set the new current device
+                                currentDevice = this.value;
+                                
+                                // Update deviceID display
+                                if (deviceElement) {
+                                    deviceElement.textContent = currentDevice;
+                                }
+                                
+                                // Reload charts with the new device
+                                updateMainChart();
+                            });
+                        }
+                        
+                        // Load initial data for the selected device
+                        updateMainChart();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching devices:', error);
+                });
+        }
+        
+        // Chart update tracking
+        window.lastChartUpdate = null;
+        window.lastChartRequestTime = Math.floor(Date.now() / 1000);
+        window.isChartInteractionActive = false;
         
         // Mobile sidebar toggle
         document.getElementById('mobile-toggle').addEventListener('click', function() {
@@ -271,9 +349,20 @@
             // Skip status messages
             if (data.status) return;
             
-            // Update device ID
+            // Update device ID if available
             if (data.deviceID) {
+                // Update the current device if needed
+                if (!currentDevice) {
+                    currentDevice = data.deviceID;
+                }
+                
+                // Always update device ID display
                 document.getElementById('device-id').textContent = data.deviceID;
+            }
+            
+            // Skip updates for devices that aren't the current focus
+            if (data.deviceID && currentDevice && data.deviceID !== currentDevice) {
+                return;
             }
             
             // Update last update timestamp
@@ -319,11 +408,20 @@
                 if (valueEl && data.distance) valueEl.textContent = Number(data.distance).toFixed(1);
             }
             
-            // Request chart update when new data arrives
-            // Only update if we have a new deviceID timestamp to prevent excessive updates
-            if (data.timestamp && window.lastChartUpdate !== data.timestamp) {
+            // Request chart update when new data arrives (only once per minute at most)
+            const currentTime = Math.floor(Date.now() / 1000);
+            if (data.timestamp && 
+                (!window.lastChartUpdate || 
+                 data.timestamp > window.lastChartUpdate || 
+                 currentTime - window.lastChartRequestTime > 60)) {
+                
                 window.lastChartUpdate = data.timestamp;
-                updateMainChart();
+                window.lastChartRequestTime = currentTime;
+                
+                // Throttle chart updates - only update if not actively using controls
+                if (!window.isChartInteractionActive) {
+                    updateMainChart();
+                }
             }
         };
         
@@ -337,8 +435,14 @@
             // Show loading indicator
             chartCanvas.style.opacity = '0.6';
             
-            // Use the simpler method from trends.html - load single metric
-            fetch(`/api/query?metric=${selectedMetric}&device=${deviceId}&minutes=${timeMinutes}`)
+            // Handle "combined" special case
+            if (selectedMetric === 'combined') {
+                loadCombinedChart(timeMinutes);
+                return;
+            }
+            
+            // Use the simpler method from trends.html - load single metric with full 24h history
+            fetch(`/api/query?metric=${selectedMetric}&device=${currentDevice}&minutes=${timeMinutes}`)
                 .then(response => response.json())
                 .then(data => {
                     // Remove loading indicator
@@ -434,7 +538,7 @@
                                 },
                                 title: {
                                     display: true,
-                                    text: `Device: ${deviceId}`
+                                    text: `Device: ${currentDevice}`
                                 },
                                 tooltip: {
                                     callbacks: {
@@ -470,6 +574,212 @@
                 .catch(error => {
                     console.error('Error fetching chart data:', error);
                     // Remove loading indicator
+                    chartCanvas.style.opacity = '1';
+                    
+                    // Fallback to empty chart
+                    if (window.mainChart) {
+                        window.mainChart.destroy();
+                    }
+                    
+                    window.mainChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: []
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Error loading data'
+                                }
+                            }
+                        }
+                    });
+                });
+        }
+        
+        // Function to load the combined chart (temp, pH, EC)
+        function loadCombinedChart(timeMinutes) {
+            const ctx = document.getElementById('main-chart').getContext('2d');
+            const chartCanvas = document.getElementById('main-chart');
+            
+            // Show loading indicator
+            chartCanvas.style.opacity = '0.6';
+            
+            // Fetch data for all three metrics at once
+            fetch(`/api/trends?metrics=temperature,pH,EC&device=${currentDevice}&minutes=${timeMinutes}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Remove loading indicator
+                    chartCanvas.style.opacity = '1';
+                    
+                    if (data.status === "success") {
+                        const timestamps = [];
+                        const temperatureData = [];
+                        const phData = [];
+                        const ecData = [];
+                        
+                        // Create map of timestamps to values for each metric
+                        const metricMaps = {
+                            temperature: new Map(),
+                            pH: new Map(),
+                            EC: new Map()
+                        };
+                        
+                        // Collect all timestamps from all metrics
+                        const allTimestamps = new Set();
+                        
+                        // Process all metrics and gather their timestamps
+                        Object.entries(data.data).forEach(([metric, values]) => {
+                            if (!values || !values.length) return;
+                            
+                            values.forEach(point => {
+                                const [timestamp, value] = point;
+                                allTimestamps.add(timestamp);
+                                
+                                if (value !== null && value !== "NaN" && value !== "nan") {
+                                    metricMaps[metric].set(timestamp, parseFloat(value));
+                                }
+                            });
+                        });
+                        
+                        // Sort timestamps chronologically
+                        const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+                        
+                        // Format timestamps for display
+                        sortedTimestamps.forEach(timestamp => {
+                            const date = new Date(timestamp * 1000);
+                            timestamps.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                        });
+                        
+                        // Extract values for each metric based on sorted timestamps
+                        sortedTimestamps.forEach(timestamp => {
+                            temperatureData.push(metricMaps.temperature.get(timestamp) || null);
+                            phData.push(metricMaps.pH.get(timestamp) || null);
+                            ecData.push(metricMaps.EC.get(timestamp) || null);
+                        });
+                        
+                        // Destroy previous chart if it exists
+                        if (window.mainChart) {
+                            window.mainChart.destroy();
+                        }
+                        
+                        // Chart configuration with three Y axes
+                        window.mainChart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: timestamps,
+                                datasets: [
+                                    {
+                                        label: 'Temperature (°C)',
+                                        data: temperatureData,
+                                        borderColor: '#4e73df',
+                                        backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                                        tension: 0.4,
+                                        borderWidth: 2,
+                                        fill: false,
+                                        yAxisID: 'y-temperature'
+                                    },
+                                    {
+                                        label: 'pH',
+                                        data: phData,
+                                        borderColor: '#e74a3b',
+                                        backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                                        tension: 0.4,
+                                        borderWidth: 2,
+                                        fill: false,
+                                        yAxisID: 'y-ph'
+                                    },
+                                    {
+                                        label: 'EC (μS/cm)',
+                                        data: ecData,
+                                        borderColor: '#36b9cc',
+                                        backgroundColor: 'rgba(54, 185, 204, 0.1)',
+                                        tension: 0.4,
+                                        borderWidth: 2,
+                                        fill: false,
+                                        yAxisID: 'y-ec'
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        position: 'top',
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: `Device: ${currentDevice}`
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) {
+                                                    label += ': ';
+                                                }
+                                                if (context.parsed.y !== null) {
+                                                    label += context.parsed.y.toFixed(2);
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    'y-temperature': {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
+                                        title: {
+                                            display: true,
+                                            text: 'Temperature (°C)'
+                                        },
+                                        grid: {
+                                            color: 'rgba(0, 0, 0, 0.05)'
+                                        }
+                                    },
+                                    'y-ph': {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        title: {
+                                            display: true,
+                                            text: 'pH'
+                                        },
+                                        grid: {
+                                            drawOnChartArea: false
+                                        }
+                                    },
+                                    'y-ec': {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        title: {
+                                            display: true,
+                                            text: 'EC (μS/cm)'
+                                        },
+                                        grid: {
+                                            drawOnChartArea: false
+                                        }
+                                    },
+                                    x: {
+                                        grid: {
+                                            display: false
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching combined chart data:', error);
                     chartCanvas.style.opacity = '1';
                     
                     // Fallback to empty chart
@@ -541,25 +851,12 @@
                 });
         }
         
-        // Time range buttons for chart
-        document.querySelectorAll('.time-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                // Remove active class from all buttons
-                document.querySelectorAll('.time-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                
-                // Add active class to clicked button
-                this.classList.add('active');
-                
-                // Update chart with new time range
-                updateMainChart();
-            });
-        });
-        
         // Metric selector buttons
         document.querySelectorAll('.metric-btn').forEach(button => {
             button.addEventListener('click', function() {
+                // Set interaction active
+                window.isChartInteractionActive = true;
+                
                 // Remove active class from all buttons
                 document.querySelectorAll('.metric-btn').forEach(btn => {
                     btn.classList.remove('active');
@@ -570,6 +867,35 @@
                 
                 // Update chart with new metric
                 updateMainChart();
+                
+                // Reset interaction after a short delay
+                setTimeout(() => {
+                    window.isChartInteractionActive = false;
+                }, 5000);
+            });
+        });
+        
+        // Time range buttons for chart
+        document.querySelectorAll('.time-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                // Set interaction active
+                window.isChartInteractionActive = true;
+                
+                // Remove active class from all buttons
+                document.querySelectorAll('.time-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // Update chart with new time range
+                updateMainChart();
+                
+                // Reset interaction after a short delay
+                setTimeout(() => {
+                    window.isChartInteractionActive = false;
+                }, 5000);
             });
         });
         
@@ -583,6 +909,9 @@
             
             // Check service status every 60 seconds
             setInterval(updateServiceStatus, 60000);
+            
+            // Fetch available devices
+            fetchDevices();
         });
     </script>
 </body>

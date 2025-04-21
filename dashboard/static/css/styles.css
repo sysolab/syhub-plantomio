@@ -961,3 +961,19 @@ body {
     padding: 0.2rem 0.5rem;
   }
 }
+
+/* Device selector styles */
+.device-selector {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+#device-dropdown {
+  margin-left: 0.5rem;
+  padding: 0.2rem;
+  font-size: 0.75rem;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 3px;
+  background-color: rgba(255,255,255,0.8);
+}

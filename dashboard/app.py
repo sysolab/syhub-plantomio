@@ -55,8 +55,23 @@ def calculate_water_level(distance):
 def get_current_values():
     """Query VictoriaMetrics for the latest data points for each metric"""
     now = int(time.time())
+    
+    # Get the device list from VM
+    devices = get_device_list()
+    
+    # Return early if no devices
+    if not devices:
+        return {
+            "deviceID": None,
+            "lastUpdate": datetime.now().isoformat(),
+            "timestamp": now
+        }
+    
+    # Use the first device or a provided default
+    device_id = devices[0]
+    
     result = {
-        "deviceID": "plt-404cca470da0",
+        "deviceID": device_id,
         "lastUpdate": datetime.now().isoformat(),
         "timestamp": now  # Default to current time, will be updated if we find an actual timestamp
     }
@@ -70,7 +85,7 @@ def get_current_values():
             # Use instant query for current value
             query_url = f"{VICTORIA_URL}/api/v1/query"
             params = {
-                'query': f'{metric_name}{{}}',  # Query all devices
+                'query': f'{metric_name}{{device="{device_id}"}}',  # Query specific device
                 'time': now
             }
             
@@ -138,6 +153,33 @@ def get_current_values():
         result["waterLevel"] = 50.0  # Default water level
     
     return result
+
+def get_device_list():
+    """Get list of available devices from VictoriaMetrics"""
+    try:
+        # Query for a common metric to get device list
+        query_url = f"{VICTORIA_URL}/api/v1/query"
+        params = {
+            'query': 'temperature',  # Use temperature as it's likely always present
+        }
+        
+        response = requests.get(query_url, params=params, timeout=2)
+        
+        if response.status_code == 200:
+            data = response.json()
+            devices = []
+            
+            if data.get('data', {}).get('result'):
+                for result in data['data']['result']:
+                    if 'metric' in result and 'device' in result['metric']:
+                        devices.append(result['metric']['device'])
+            
+            # Deduplicate the list
+            return list(set(devices))
+        return ['plt-404cca470da0']  # Fallback to default if query fails
+    except Exception as e:
+        app.logger.error(f"Error getting device list: {str(e)}")
+        return ['plt-404cca470da0']  # Fallback to default
 
 @app.route('/')
 def index():
@@ -411,9 +453,8 @@ def trends_data():
                         for point in data['data']['result'][0].get('values', []):
                             timestamp, value = point
                             
-                            # Skip NaN values but keep track of the timestamp
+                            # Include NaN values as null for proper gap rendering
                             if value == "NaN" or value == "nan":
-                                # Include NaN values as null for proper gap rendering
                                 if timestamp not in seen_timestamps:
                                     seen_timestamps.add(timestamp)
                                     values.append([timestamp, None])
@@ -421,7 +462,12 @@ def trends_data():
                                 
                             if timestamp not in seen_timestamps:
                                 seen_timestamps.add(timestamp)
-                                values.append([timestamp, float(value)])
+                                try:
+                                    # Convert string values to floats for consistent charting
+                                    values.append([timestamp, float(value)])
+                                except (ValueError, TypeError):
+                                    # If conversion fails, include as original value
+                                    values.append([timestamp, value])
                         
                         results[metric] = values
             except Exception as e:
@@ -488,6 +534,16 @@ def health_check():
         pass
     
     return jsonify({"status": "ok", "services": services})
+
+@app.route('/api/devices')
+def devices():
+    """Get a list of available devices"""
+    try:
+        devices = get_device_list()
+        return jsonify({"status": "success", "devices": devices})
+    except Exception as e:
+        app.logger.error(f"Error fetching devices: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=config['dashboard']['port'], debug=True) 
