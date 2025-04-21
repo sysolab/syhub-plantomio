@@ -32,6 +32,11 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         updateMainChart();
     }, 300);
+    
+    // Debug data retrieval after a short delay
+    setTimeout(() => {
+        debugDataRetrieval();
+    }, 2000);
 });
 
 // Setup metric selector buttons
@@ -324,6 +329,12 @@ function updateMainChart() {
         return;
     }
     
+    // Destroy any existing chart to prevent memory leaks
+    if (window.mainChart) {
+        window.mainChart.destroy();
+        window.mainChart = null;
+    }
+    
     // Create new canvas element to avoid any issues with re-rendering
     container.innerHTML = '';
     const canvas = document.createElement('canvas');
@@ -373,11 +384,16 @@ function updateMainChart() {
 
 // Function to handle individual metric charts
 function handleSingleMetricChart(metric, data, canvas, deviceId) {
+    console.log(`Handling individual chart for metric: ${metric}`);
+    console.log('Data received:', data);
+    
     if (!data.data[metric] || !Array.isArray(data.data[metric]) || data.data[metric].length === 0) {
+        console.error(`No data available for ${metric}. Data structure:`, data);
         throw new Error(`No data available for ${metric}`);
     }
     
     const chartData = data.data[metric];
+    console.log(`Chart data for ${metric}:`, chartData);
     const labels = [];
     const values = [];
     
@@ -404,24 +420,41 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
         }
     });
     
-    // Add 30% padding to min/max to determine axis range
-    const valuePadding = (maxValue - minValue) * 0.3;
-    let minY = minValue - valuePadding;
-    let maxY = maxValue + valuePadding;
-    
-    // Handle case where min and max are very close or equal
-    if (minValue === maxValue || Math.abs(maxValue - minValue) < 0.1) {
-        minY = minValue * 0.7;  // 30% below
-        maxY = maxValue * 1.3;  // 30% above
-    }
-    
-    // Ensure zero is included for metrics where it makes sense
-    if (minY > 0 && ['temperature', 'distance', 'TDS', 'EC', 'ORP'].includes(metric)) {
-        minY = 0;
-    }
+    console.log(`Processed ${values.length} data points with min: ${minValue}, max: ${maxValue}`);
+    console.log('Labels:', labels);
+    console.log('Values:', values);
     
     // Get chart colors and labels for the metric
     const chartConfig = getChartConfig(metric);
+    
+    // Set fixed scales based on metric
+    let minY, maxY;
+    if (metric === 'pH') {
+        minY = 0;
+        maxY = 14;
+    } else if (metric === 'temperature') {
+        minY = 0;
+        maxY = 100;
+    } else if (metric === 'EC') {
+        minY = 0;
+        maxY = 5.0;  // Updated based on actual data range
+    } else {
+        // Add 30% padding to min/max to determine axis range for other metrics
+        const valuePadding = (maxValue - minValue) * 0.3;
+        minY = minValue - valuePadding;
+        maxY = maxValue + valuePadding;
+        
+        // Handle case where min and max are very close or equal
+        if (minValue === maxValue || Math.abs(maxValue - minValue) < 0.1) {
+            minY = minValue * 0.7;  // 30% below
+            maxY = maxValue * 1.3;  // 30% above
+        }
+        
+        // Ensure zero is included for metrics where it makes sense
+        if (minY > 0 && ['temperature', 'distance', 'TDS', 'EC', 'ORP'].includes(metric)) {
+            minY = 0;
+        }
+    }
     
     try {
         if (!canvas.getContext) {
@@ -451,10 +484,13 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
                 plugins: {
                     legend: {
                         position: 'top',
+                        align: 'end'
                     },
                     title: {
                         display: true,
-                        text: `Device: ${deviceId}`
+                        text: `Device: ${deviceId}`,
+                        position: 'top',
+                        align: 'end'
                     },
                     tooltip: {
                         callbacks: {
@@ -474,15 +510,21 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
                 scales: {
                     y: {
                         beginAtZero: minY <= 0,
-                        suggestedMin: minY,
-                        suggestedMax: maxY,
+                        min: minY,
+                        max: maxY,
                         ticks: {
                             callback: function(value) {
                                 return value.toFixed(1);  // 1 decimal place on y-axis
-                            }
+                            },
+                            color: chartConfig.color
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        title: {
+                            display: true,
+                            text: chartConfig.label,
+                            color: chartConfig.color
                         }
                     },
                     x: {
@@ -493,6 +535,9 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
                 }
             }
         });
+        
+        // Store reference to chart to avoid memory leaks
+        window.mainChart = mainChart;
     } catch (e) {
         console.error(`Error creating ${metric} chart:`, e);
         throw new Error(`Error creating chart: ${e.message}`);
@@ -510,9 +555,9 @@ function handleCombinedChart(data, canvas, deviceId) {
     
     // Track min and max for each metric
     const ranges = {
-        temperature: { min: Number.MAX_VALUE, max: Number.MIN_VALUE },
-        pH: { min: Number.MAX_VALUE, max: Number.MIN_VALUE },
-        EC: { min: Number.MAX_VALUE, max: Number.MIN_VALUE }
+        temperature: { min: 0, max: 100 },  // Fixed range for temperature
+        pH: { min: 0, max: 14 },           // Fixed range for pH
+        EC: { min: 0, max: 5.0 }          // Fixed range for EC - updated based on actual data
     };
     
     // Collect all timestamps from all metrics
@@ -530,12 +575,6 @@ function handleCombinedChart(data, canvas, deviceId) {
                 if (value !== null && value !== "NaN" && value !== "nan") {
                     const numValue = parseFloat(value);
                     metricMaps[metric].set(timestamp, numValue);
-                    
-                    // Update min/max for this metric
-                    if (!isNaN(numValue)) {
-                        ranges[metric].min = Math.min(ranges[metric].min, numValue);
-                        ranges[metric].max = Math.max(ranges[metric].max, numValue);
-                    }
                 }
             }
         });
@@ -554,29 +593,6 @@ function handleCombinedChart(data, canvas, deviceId) {
     const temperatureData = sortedTimestamps.map(timestamp => metricMaps.temperature.get(timestamp) || null);
     const phData = sortedTimestamps.map(timestamp => metricMaps.pH.get(timestamp) || null);
     const ecData = sortedTimestamps.map(timestamp => metricMaps.EC.get(timestamp) || null);
-    
-    // Add 30% padding to each axis
-    Object.keys(ranges).forEach(metric => {
-        if (ranges[metric].min === Number.MAX_VALUE) {
-            ranges[metric].min = 0;
-            ranges[metric].max = 10;
-        } else {
-            const padding = (ranges[metric].max - ranges[metric].min) * 0.3;
-            // Handle case where min and max are very close or equal
-            if (Math.abs(ranges[metric].max - ranges[metric].min) < 0.1) {
-                ranges[metric].min = ranges[metric].min * 0.7;  // 30% below
-                ranges[metric].max = ranges[metric].max * 1.3;  // 30% above
-            } else {
-                ranges[metric].min -= padding;
-                ranges[metric].max += padding;
-            }
-            
-            // Ensure zero is included for metrics where it makes sense
-            if (ranges[metric].min > 0 && ['temperature', 'EC'].includes(metric)) {
-                ranges[metric].min = 0;
-            }
-        }
-    });
     
     try {
         // Clear canvas before drawing
@@ -626,10 +642,13 @@ function handleCombinedChart(data, canvas, deviceId) {
                 plugins: {
                     legend: {
                         position: 'top',
+                        align: 'end'
                     },
                     title: {
                         display: true,
-                        text: `Device: ${deviceId}`
+                        text: `Device: ${deviceId}`,
+                        position: 'top',
+                        align: 'end'
                     },
                     tooltip: {
                         callbacks: {
@@ -653,14 +672,16 @@ function handleCombinedChart(data, canvas, deviceId) {
                         position: 'left',
                         title: {
                             display: true,
-                            text: 'Temperature (°C)'
+                            text: 'Temperature (°C)',
+                            color: '#4e73df'
                         },
                         min: ranges.temperature.min,
                         max: ranges.temperature.max,
                         ticks: {
                             callback: function(value) {
                                 return value.toFixed(1);  // 1 decimal place
-                            }
+                            },
+                            color: '#4e73df'
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
@@ -672,14 +693,16 @@ function handleCombinedChart(data, canvas, deviceId) {
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'pH'
+                            text: 'pH',
+                            color: '#e74a3b'
                         },
                         min: ranges.pH.min,
                         max: ranges.pH.max,
                         ticks: {
                             callback: function(value) {
                                 return value.toFixed(1);  // 1 decimal place
-                            }
+                            },
+                            color: '#e74a3b'
                         },
                         grid: {
                             drawOnChartArea: false
@@ -691,14 +714,16 @@ function handleCombinedChart(data, canvas, deviceId) {
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'EC (μS/cm)'
+                            text: 'EC (μS/cm)',
+                            color: '#36b9cc'
                         },
                         min: ranges.EC.min,
                         max: ranges.EC.max,
                         ticks: {
                             callback: function(value) {
                                 return value.toFixed(1);  // 1 decimal place
-                            }
+                            },
+                            color: '#36b9cc'
                         },
                         grid: {
                             drawOnChartArea: false
@@ -764,4 +789,32 @@ function getChartConfig(metric) {
                 bgColor: 'rgba(133, 135, 150, 0.1)'
             };
     }
+}
+
+// Add this function at the end of the file
+function debugDataRetrieval() {
+    // Get current device
+    const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
+    const timeMinutes = 60; // 1 hour of data
+    const metrics = ['temperature', 'pH', 'TDS', 'EC', 'distance', 'ORP'];
+    
+    console.log('====== DEBUG DATA RETRIEVAL ======');
+    console.log(`Testing data retrieval for device: ${deviceId}`);
+    
+    metrics.forEach(metric => {
+        console.log(`Testing metric: ${metric}`);
+        fetch(`/api/trends?metrics=${metric}&device=${deviceId}&minutes=${timeMinutes}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log(`${metric} data:`, data);
+                if (data.status === 'success' && data.data && data.data[metric]) {
+                    console.log(`✅ ${metric}: Data found with ${data.data[metric].length} points`);
+                } else {
+                    console.log(`❌ ${metric}: No data found!`);
+                }
+            })
+            .catch(error => {
+                console.error(`Error testing ${metric}:`, error);
+            });
+    });
 }
