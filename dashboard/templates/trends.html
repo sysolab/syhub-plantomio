@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ project_name }} - Trends</title>
+    <title>Plantomio Trends</title>
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="stylesheet" href="/static/css/sidebar.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="/static/images/favicon.ico">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 </head>
 <body>
     <!-- Mobile menu toggle button -->
@@ -20,10 +21,16 @@
     </button>
 
     <div class="app-wrapper">
-        <!-- Icon-only Sidebar -->
-        <aside class="sidebar sidebar-icon-only">
+        <!-- Sidebar - SAME AS DASHBOARD PAGE -->
+        <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="logo-icon">{{ project_name|truncate(1, True, '') }}</div>
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                </div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
@@ -38,151 +45,312 @@
         <div class="main-content">
             <header class="main-header">
                 <div class="header-content">
-                    <h1>Sensor Trends</h1>
+                    <h1>Plantomio Trends</h1>
+                    <p class="subtitle">Historical data analysis</p>
                 </div>
-                <div class="time-controls">
-                    <button class="btn btn-sm time-btn active" data-range="24h">24 Hours</button>
-                    <button class="btn btn-sm time-btn" data-range="7d">7 Days</button>
-                    <button class="btn btn-sm time-btn" data-range="30d">30 Days</button>
-                    <button class="btn btn-sm time-btn" data-range="custom">Custom Range</button>
+                <div class="header-status">
+                    <span class="status-indicator live">Live Data</span>
+                    <span class="device-id">Device: <span id="device-id">plt-404cca470da0</span></span>
+                    <span class="last-update">Last update: <span id="last-update">08:19:57</span></span>
                 </div>
             </header>
 
             <div class="page-content">
-                <div class="main-grid">
-                    <div class="main-column">
-                        <!-- Charts Grid -->
-                        <div class="charts-grid">
-                            <!-- Temperature Chart -->
-                            <div class="panel chart-panel">
-                                <div class="panel-header">
-                                    <h2>Temperature</h2>
-                                    <div class="chart-controls">
-                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
-                                            <i class="fas fa-arrows-up-down"></i>
-                                        </button>
-                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
-                                            <i class="fas fa-equals"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="panel-content">
-                                    <div class="chart-container">
-                                        <canvas id="temperature-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- pH Chart -->
-                            <div class="panel chart-panel">
-                                <div class="panel-header">
-                                    <h2>pH Level</h2>
-                                    <div class="chart-controls">
-                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
-                                            <i class="fas fa-arrows-up-down"></i>
-                                        </button>
-                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
-                                            <i class="fas fa-equals"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="panel-content">
-                                    <div class="chart-container">
-                                        <canvas id="ph-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- TDS Chart -->
-                            <div class="panel chart-panel">
-                                <div class="panel-header">
-                                    <h2>TDS</h2>
-                                    <div class="chart-controls">
-                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
-                                            <i class="fas fa-arrows-up-down"></i>
-                                        </button>
-                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
-                                            <i class="fas fa-equals"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="panel-content">
-                                    <div class="chart-container">
-                                        <canvas id="tds-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Water Level Chart -->
-                            <div class="panel chart-panel">
-                                <div class="panel-header">
-                                    <h2>Water Level</h2>
-                                    <div class="chart-controls">
-                                        <button class="btn btn-icon chart-option" data-option="min" title="Show Min/Max">
-                                            <i class="fas fa-arrows-up-down"></i>
-                                        </button>
-                                        <button class="btn btn-icon chart-option" data-option="avg" title="Show Average">
-                                            <i class="fas fa-equals"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="panel-content">
-                                    <div class="chart-container">
-                                        <canvas id="water-level-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
+                <!-- Time Range Selection -->
+                <div class="time-range-panel">
+                    <div class="panel-header">
+                        <h2>Time Range</h2>
+                    </div>
+                    <div class="time-range-controls">
+                        <div class="time-control-buttons">
+                            <button class="time-btn active">24 Hours</button>
+                            <button class="time-btn">Week</button>
+                            <button class="time-btn">Month</button>
+                            <button class="time-btn">Custom</button>
                         </div>
-                        
-                        <!-- Export Panel -->
-                        <div class="panel">
-                            <div class="panel-header">
-                                <h2>Export Data</h2>
+                        <div class="date-range-selector" style="display: none;">
+                            <div class="date-input">
+                                <label for="start-date">Start Date</label>
+                                <input type="date" id="start-date" class="form-control">
                             </div>
-                            <div class="panel-content">
-                                <div class="export-controls">
-                                    <div class="form-group">
-                                        <label for="export-format">Export Format</label>
-                                        <select id="export-format" class="form-control">
-                                            <option value="csv">CSV</option>
-                                            <option value="json">JSON</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="export-range">Date Range</label>
-                                        <select id="export-range" class="form-control">
-                                            <option value="24h">Last 24 Hours</option>
-                                            <option value="7d">Last 7 Days</option>
-                                            <option value="30d">Last 30 Days</option>
-                                            <option value="all">All Data</option>
-                                        </select>
-                                    </div>
-                                    <button id="export-btn" class="btn btn-primary">
-                                        <i class="fas fa-download"></i> Export Data
-                                    </button>
-                                </div>
+                            <div class="date-input">
+                                <label for="end-date">End Date</label>
+                                <input type="date" id="end-date" class="form-control">
                             </div>
+                            <button class="btn btn-apply">Apply</button>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Temperature Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h2>Temperature</h2>
+                        <div class="chart-controls">
+                            <button class="btn btn-export">Export Data</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="temperature-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- pH Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h2>pH Level</h2>
+                        <div class="chart-controls">
+                            <button class="btn btn-export">Export Data</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="ph-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- EC/TDS Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h2>EC & TDS</h2>
+                        <div class="chart-controls">
+                            <button class="btn btn-export">Export Data</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="ec-tds-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Data Export -->
+                <div class="export-panel">
+                    <div class="panel-header">
+                        <h2>Data Export</h2>
+                    </div>
+                    <div class="export-options">
+                        <div class="form-group">
+                            <label for="export-format">Format</label>
+                            <select id="export-format" class="form-control">
+                                <option value="csv">CSV</option>
+                                <option value="json">JSON</option>
+                                <option value="excel">Excel</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="export-sensors">Sensors</label>
+                            <select id="export-sensors" class="form-control">
+                                <option value="all">All Sensors</option>
+                                <option value="temperature">Temperature</option>
+                                <option value="ph">pH</option>
+                                <option value="ec-tds">EC & TDS</option>
+                                <option value="orp">ORP</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary">Download Data</button>
+                    </div>
+                </div>
             </div>
-            
-            <footer>
-                <p>{{ project_name }} | <span id="current-year"></span></p>
-            </footer>
         </div>
     </div>
 
-    <script src="/static/js/chart.min.js" defer></script>
-    <script src="/static/js/trends.js" defer></script>
+    <script src="/static/js/trends.js"></script>
     <script>
         // Mobile sidebar toggle
         document.getElementById('mobile-toggle').addEventListener('click', function() {
             document.querySelector('.sidebar').classList.toggle('active');
         });
-
-        // Set current year in footer
-        document.getElementById('current-year').textContent = new Date().getFullYear();
+        
+        // Initialize charts
+        document.addEventListener('DOMContentLoaded', function() {
+            // Temperature Chart
+            const tempCanvas = document.getElementById('temperature-chart');
+            if (tempCanvas) {
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // Mock data (24 hours of data points)
+                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+                const temperatureData = Array.from({length: 24}, () => Math.random() * 5 + 18);
+                
+                new Chart(tempCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Temperature (°C)',
+                                data: temperatureData,
+                                borderColor: '#4e73df',
+                                backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // pH Chart
+            const phCanvas = document.getElementById('ph-chart');
+            if (phCanvas) {
+                const phCtx = phCanvas.getContext('2d');
+                
+                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+                const phData = Array.from({length: 24}, () => Math.random() * 2 + 6);
+                
+                new Chart(phCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'pH',
+                                data: phData,
+                                borderColor: '#e74a3b',
+                                backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // EC/TDS Chart
+            const ecTdsCanvas = document.getElementById('ec-tds-chart');
+            if (ecTdsCanvas) {
+                const ecTdsCtx = ecTdsCanvas.getContext('2d');
+                
+                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+                const ecData = Array.from({length: 24}, () => Math.random() * 20 + 20);
+                const tdsData = Array.from({length: 24}, () => Math.random() * 10000 + 50000);
+                
+                new Chart(ecTdsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'EC (μS/cm)',
+                                data: ecData,
+                                borderColor: '#36b9cc',
+                                backgroundColor: 'rgba(54, 185, 204, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'TDS (ppm)',
+                                data: tdsData,
+                                borderColor: '#1cc88a',
+                                backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                },
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'EC (μS/cm)'
+                                }
+                            },
+                            y1: {
+                                beginAtZero: false,
+                                grid: {
+                                    display: false
+                                },
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'TDS (ppm)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Toggle custom date range
+        document.querySelectorAll('.time-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                
+                if (this.textContent === 'Custom') {
+                    document.querySelector('.date-range-selector').style.display = 'flex';
+                } else {
+                    document.querySelector('.date-range-selector').style.display = 'none';
+                }
+            });
+        });
     </script>
 </body>
-</html> 
+</html>

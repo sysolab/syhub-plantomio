@@ -1,0 +1,385 @@
+/* Settings and Trends pages additional styles */
+
+/* Settings panels */
+.settings-panel {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+  }
+  
+  /* Information grid */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .info-item {
+    padding: 0.75rem;
+    background-color: rgba(0,0,0,0.02);
+    border-radius: var(--border-radius);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .info-label {
+    font-size: 0.85rem;
+    color: var(--secondary-color);
+  }
+  
+  .info-value {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--dark-color);
+  }
+  
+  /* Configuration table */
+  .config-table {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .config-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background-color: rgba(0,0,0,0.02);
+    border-radius: var(--border-radius);
+  }
+  
+  .config-label {
+    font-size: 0.85rem;
+    color: var(--secondary-color);
+    width: 150px;
+  }
+  
+  .config-value {
+    flex: 1;
+  }
+  
+  /* Form settings */
+  .settings-flex {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+  }
+  
+  .settings-form {
+    flex: 1;
+    min-width: 300px;
+  }
+  
+  .form-group {
+    margin-bottom: 1rem;
+  }
+  
+  .form-group label {
+    display: block;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+    color: var(--secondary-color);
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--card-border);
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+  }
+  
+  .form-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+  
+  /* Tank preview */
+  .tank-preview-container {
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .tank-preview-container h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--secondary-color);
+  }
+  
+  .tank-visualization.preview {
+    height: 150px;
+    border: 2px solid var(--dark-color);
+    border-top: none;
+    border-radius: 0 0 15px 15px;
+    width: 100px;
+    margin-bottom: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .tank-preview-info {
+    text-align: center;
+    font-size: 0.9rem;
+  }
+  
+  .tank-preview-info p {
+    margin: 0.25rem 0;
+    color: var(--secondary-color);
+  }
+  
+  .tank-preview-info span {
+    font-weight: 500;
+    color: var(--dark-color);
+  }
+  
+  /* Toggle switch */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 24px;
+  }
+  
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .toggle-switch label {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 24px;
+  }
+  
+  .toggle-switch label::before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+  }
+  
+  .toggle-switch input:checked + label {
+    background-color: var(--primary-color);
+  }
+  
+  .toggle-switch input:checked + label:before {
+    transform: translateX(24px);
+  }
+  
+  /* Maintenance actions */
+  .maintenance-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .action-group {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background-color: rgba(0,0,0,0.02);
+    border-radius: var(--border-radius);
+  }
+  
+  .action-desc {
+    margin-left: 1rem;
+    font-size: 0.85rem;
+    color: var(--secondary-color);
+  }
+  
+  /* Trends page styles */
+  .time-range-panel {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+  }
+  
+  .time-range-controls {
+    margin-top: 1rem;
+  }
+  
+  .time-control-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  
+  .date-range-selector {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    align-items: flex-end;
+  }
+  
+  .date-input {
+    flex: 1;
+  }
+  
+  /* Chart panels */
+  .chart-panel {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+  }
+  
+  .chart-container {
+    height: 300px;
+    margin-top: 1rem;
+  }
+  
+  .chart-controls {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  /* Export panel */
+  .export-panel {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+  }
+  
+  .export-options {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 1rem;
+    align-items: flex-end;
+  }
+  
+  .export-options .form-group {
+    flex: 1;
+    margin-bottom: 0;
+  }
+  
+  /* Button styles */
+  .btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .btn-primary:hover {
+    background-color: var(--primary-dark);
+  }
+  
+  .btn-secondary {
+    background-color: var(--light-color);
+    color: var(--dark-color);
+    border: 1px solid var(--card-border);
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #e9ecef;
+  }
+  
+  .btn-danger {
+    background-color: var(--danger-color);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .btn-danger:hover {
+    background-color: #d32f2f;
+  }
+  
+  /* Section headers */
+  .settings-section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--dark-color);
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .settings-flex {
+      flex-direction: column;
+    }
+    
+    .tank-preview-container {
+      width: 100%;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 1.5rem;
+    }
+    
+    .tank-preview-info {
+      flex: 1;
+      text-align: left;
+    }
+    
+    .export-options {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .export-options .form-group {
+      width: 100%;
+      margin-bottom: 1rem;
+    }
+    
+    .date-range-selector {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .config-item {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .config-label {
+      margin-bottom: 0.5rem;
+      width: 100%;
+    }
+    
+    .config-value {
+      width: 100%;
+    }
+  }
