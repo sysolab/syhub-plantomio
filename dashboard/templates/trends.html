@@ -258,12 +258,12 @@
                         }
                         
                         // Refresh all charts
-                        loadChartData('temperature', 'temperature-chart', timeMinutes);
-                        loadChartData('pH', 'ph-chart', timeMinutes);
-                        loadChartData('TDS', 'tds-chart', timeMinutes);
-                        loadChartData('EC', 'ec-chart', timeMinutes);
-                        loadChartData('distance', 'distance-chart', timeMinutes);
-                        loadChartData('ORP', 'orp-chart', timeMinutes);
+                        loadChart('temperature', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+                        loadChart('pH', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+                        loadChart('TDS', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+                        loadChart('EC', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+                        loadChart('distance', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+                        loadChart('ORP', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
                     }
                 });
             });
@@ -272,113 +272,60 @@
             updateServiceStatus();
             
             // Helper function to load chart data
-            function loadChartData(metric, chartId, minutes) {
-                const canvas = document.getElementById(chartId);
+            function loadChart(metric, timeMinutes, device) {
+                const canvas = document.getElementById(`${metric}-chart`);
                 if (!canvas) return;
                 
                 const ctx = canvas.getContext('2d');
-                
-                // Get current device ID for filtering
-                const deviceId = document.getElementById('device-id').textContent || 'plt-404cca470da0';
                 
                 // Show loading indicator
                 canvas.style.opacity = '0.5';
                 
                 // Fetch data from API with device ID filter
-                fetch(`/api/query?metric=${metric}&minutes=${minutes}&device=${deviceId}`)
-                    .then(response => response.json())
+                fetch(`/api/trends?metrics=${metric}&device=${device}&minutes=${timeMinutes}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         // Remove loading indicator
                         canvas.style.opacity = '1';
                         
-                        // Process data
-                        const timestamps = [];
-                        const values = [];
+                        if (!data || !data[metric] || data[metric].timestamps.length === 0) {
+                            document.getElementById(`${metric}-chart-message`).textContent = "No data available for the selected time range";
+                            document.getElementById(`${metric}-chart-container`).classList.add('no-data');
+                            
+                            // Clear any existing chart
+                            if (window.chartInstances && window.chartInstances[`${metric}-chart`]) {
+                                window.chartInstances[`${metric}-chart`].destroy();
+                                window.chartInstances[`${metric}-chart`] = null;
+                            }
+                            return;
+                        }
                         
-                        if (data.data && data.data.result && data.data.result.length > 0) {
-                            // Get device ID from result - corrected to use deviceID instead of device
-                            const resultDeviceId = data.data.result[0].metric?.device || deviceId;
-                            
-                            // Extract values and filter unique timestamps
-                            const uniqueTimestamps = new Set();
-                            data.data.result[0].values.forEach(point => {
-                                const [timestamp, value] = point;
-                                // Skip NaN values
-                                if (value === "NaN" || value === "nan") return;
-                                
-                                if (!uniqueTimestamps.has(timestamp)) {
-                                    uniqueTimestamps.add(timestamp);
-                                    const date = new Date(timestamp * 1000);
-                                    timestamps.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-                                    values.push(parseFloat(value));
-                                }
-                            });
-                            
-                            // Get chart color based on metric
-                            let borderColor, backgroundColor;
-                            switch (metric) {
-                                case 'temperature':
-                                    borderColor = '#4e73df';
-                                    backgroundColor = 'rgba(78, 115, 223, 0.1)';
-                                    break;
-                                case 'pH':
-                                    borderColor = '#e74a3b';
-                                    backgroundColor = 'rgba(231, 74, 59, 0.1)';
-                                    break;
-                                case 'TDS':
-                                    borderColor = '#1cc88a';
-                                    backgroundColor = 'rgba(28, 200, 138, 0.1)';
-                                    break;
-                                case 'EC':
-                                    borderColor = '#36b9cc';
-                                    backgroundColor = 'rgba(54, 185, 204, 0.1)';
-                                    break;
-                                case 'distance':
-                                    borderColor = '#f6c23e';
-                                    backgroundColor = 'rgba(246, 194, 62, 0.1)';
-                                    break;
-                                case 'ORP':
-                                    borderColor = '#6f42c1';
-                                    backgroundColor = 'rgba(111, 66, 193, 0.1)';
-                                    break;
-                                default:
-                                    borderColor = '#858796';
-                                    backgroundColor = 'rgba(133, 135, 150, 0.1)';
-                            }
-                            
-                            // Unit for display
-                            let unit = '';
-                            switch (metric) {
-                                case 'temperature': unit = '°C'; break;
-                                case 'pH': unit = ''; break;
-                                case 'TDS': unit = 'ppm'; break;
-                                case 'EC': unit = 'μS/cm'; break;
-                                case 'distance': unit = 'm'; break;
-                                case 'ORP': unit = 'mV'; break;
-                            }
-                            
-                            // Destroy previous chart if it exists
-                            if (window.charts && window.charts[chartId]) {
-                                window.charts[chartId].destroy();
-                            }
-                            
-                            // Create chart
-                            window.charts = window.charts || {};
-                            window.charts[chartId] = new Chart(ctx, {
+                        document.getElementById(`${metric}-chart-message`).textContent = "";
+                        document.getElementById(`${metric}-chart-container`).classList.remove('no-data');
+                        
+                        // Clear canvas again right before drawing
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        
+                        try {
+                            // Create chart configuration based on the metric
+                            let chartConfig = {
                                 type: 'line',
                                 data: {
-                                    labels: timestamps,
-                                    datasets: [
-                                        {
-                                            label: `${metric} ${unit}`,
-                                            data: values,
-                                            borderColor: borderColor,
-                                            backgroundColor: backgroundColor,
-                                            tension: 0.4,
-                                            borderWidth: 2,
-                                            fill: true
-                                        }
-                                    ]
+                                    labels: data[metric].timestamps,
+                                    datasets: [{
+                                        label: getMetricLabel(metric),
+                                        data: data[metric].values,
+                                        borderColor: getChartColor(metric).border,
+                                        backgroundColor: getChartColor(metric).background,
+                                        tension: 0.4,
+                                        borderWidth: 2,
+                                        fill: true
+                                    }]
                                 },
                                 options: {
                                     responsive: true,
@@ -389,7 +336,7 @@
                                         },
                                         title: {
                                             display: true,
-                                            text: `Device: ${resultDeviceId}`
+                                            text: `Device: ${device}`
                                         },
                                         tooltip: {
                                             callbacks: {
@@ -420,78 +367,34 @@
                                         }
                                     }
                                 }
-                            });
-                        } else {
-                            // No data
-                            // Destroy previous chart if it exists
-                            if (window.charts && window.charts[chartId]) {
-                                window.charts[chartId].destroy();
-                            }
+                            };
                             
-                            window.charts = window.charts || {};
-                            window.charts[chartId] = new Chart(ctx, {
-                                type: 'line',
-                                data: {
-                                    labels: [],
-                                    datasets: [{
-                                        label: metric,
-                                        data: [],
-                                        borderColor: '#858796',
-                                        backgroundColor: 'rgba(133, 135, 150, 0.1)'
-                                    }]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    plugins: {
-                                        title: {
-                                            display: true,
-                                            text: `No data available for device: ${deviceId}`
-                                        }
-                                    }
-                                }
-                            });
+                            // Create the chart
+                            window.chartInstances = window.chartInstances || {};
+                            window.chartInstances[`${metric}-chart`] = new Chart(ctx, chartConfig);
+                        } catch (e) {
+                            console.error(`Error creating ${metric} chart:`, e);
+                            document.getElementById(`${metric}-chart-message`).textContent = "Error creating chart";
+                            
+                            // Clear the canvas to avoid contamination
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
                         }
                     })
                     .catch(error => {
-                        // Remove loading indicator
+                        console.error(`Error fetching ${metric} data:`, error);
                         canvas.style.opacity = '1';
-                        
-                        console.error(`Error loading ${metric} chart:`, error);
-                        // Display error chart
-                        // Destroy previous chart if it exists
-                        if (window.charts && window.charts[chartId]) {
-                            window.charts[chartId].destroy();
-                        }
-                        
-                        window.charts = window.charts || {};
-                        window.charts[chartId] = new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: [],
-                                datasets: []
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: {
-                                    title: {
-                                        display: true,
-                                        text: `Error loading data for device: ${deviceId}`
-                                    }
-                                }
-                            }
-                        });
+                        document.getElementById(`${metric}-chart-message`).textContent = "Error loading data";
+                        document.getElementById(`${metric}-chart-container`).classList.add('no-data');
                     });
             }
             
             // Initialize all charts
-            loadChartData('temperature', 'temperature-chart', timeMinutes);
-            loadChartData('pH', 'ph-chart', timeMinutes);
-            loadChartData('TDS', 'tds-chart', timeMinutes);
-            loadChartData('EC', 'ec-chart', timeMinutes);
-            loadChartData('distance', 'distance-chart', timeMinutes);
-            loadChartData('ORP', 'orp-chart', timeMinutes);
+            loadChart('temperature', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+            loadChart('pH', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+            loadChart('TDS', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+            loadChart('EC', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+            loadChart('distance', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
+            loadChart('ORP', timeMinutes, document.getElementById('device-id').textContent || 'plt-404cca470da0');
         });
         
         // Update service status
@@ -536,6 +439,59 @@
                 .catch(error => {
                     console.error('Error checking service status:', error);
                 });
+        }
+
+        // Helper functions for chart styling
+        function getChartColor(metric) {
+            switch (metric) {
+                case 'temperature':
+                    return {
+                        border: '#4e73df',
+                        background: 'rgba(78, 115, 223, 0.1)'
+                    };
+                case 'pH':
+                    return {
+                        border: '#e74a3b',
+                        background: 'rgba(231, 74, 59, 0.1)'
+                    };
+                case 'TDS':
+                    return {
+                        border: '#1cc88a',
+                        background: 'rgba(28, 200, 138, 0.1)'
+                    };
+                case 'EC':
+                    return {
+                        border: '#36b9cc',
+                        background: 'rgba(54, 185, 204, 0.1)'
+                    };
+                case 'distance':
+                    return {
+                        border: '#f6c23e',
+                        background: 'rgba(246, 194, 62, 0.1)'
+                    };
+                case 'ORP':
+                    return {
+                        border: '#6f42c1',
+                        background: 'rgba(111, 66, 193, 0.1)'
+                    };
+                default:
+                    return {
+                        border: '#858796',
+                        background: 'rgba(133, 135, 150, 0.1)'
+                    };
+            }
+        }
+
+        function getMetricLabel(metric) {
+            switch (metric) {
+                case 'temperature': return 'Temperature (°C)';
+                case 'pH': return 'pH Level';
+                case 'TDS': return 'TDS (ppm)';
+                case 'EC': return 'EC (μS/cm)';
+                case 'distance': return 'Distance (m)';
+                case 'ORP': return 'ORP (mV)';
+                default: return metric;
+            }
         }
     </script>
 </body>
