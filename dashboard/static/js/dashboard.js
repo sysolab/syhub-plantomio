@@ -4,9 +4,18 @@
 // Chart state management
 let mainChart = null;  // Global reference to main chart
 let isChartInitializing = false;  // Flag to prevent concurrent chart operations
+let currentMetric = 'combined'; // Track the current metric globally
 
 // Initialize metric selectors
 document.addEventListener('DOMContentLoaded', function() {
+    // Set combined as default - make sure the correct button is active
+    document.querySelectorAll('.metric-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.metric === 'combined') {
+            btn.classList.add('active');
+        }
+    });
+    
     // Set up metric selector buttons
     setupMetricButtons();
     
@@ -30,6 +39,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initial chart load (after a short delay to ensure everything is ready)
     setTimeout(() => {
+        // Ensure combined is the default metric
+        currentMetric = 'combined';
         updateMainChart();
     }, 300);
     
@@ -53,6 +64,9 @@ function setupMetricButtons() {
             
             // Add active class to clicked button
             this.classList.add('active');
+            
+            // Update current metric
+            currentMetric = this.dataset.metric;
             
             // Update chart with new metric - add a small delay to ensure the class is applied
             setTimeout(() => {
@@ -314,8 +328,10 @@ function updateMainChart() {
     // Get current device
     const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
     
-    // Get selected metric and time range
-    const selectedMetric = document.querySelector('.metric-btn.active')?.dataset.metric || 'combined';
+    // Use our tracked metric variable rather than reading from DOM
+    // This ensures we always have a valid metric even if DOM elements aren't ready
+    const selectedMetric = currentMetric || 'combined';
+    
     const timeDropdown = document.getElementById('time-range-dropdown');
     const timeMinutes = parseInt(timeDropdown?.value || 60); // Default to 1 hour if not found
     const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '1m';
@@ -384,7 +400,7 @@ function updateMainChart() {
 
 // Function to handle individual metric charts
 function handleSingleMetricChart(metric, data, canvas, deviceId) {
-    console.log(`Handling individual chart for metric: ${metric} - Fixed scale version`);
+    console.log(`Handling individual chart for metric: ${metric} - Dynamic scale version`);
     
     if (!data.data[metric] || !Array.isArray(data.data[metric]) || data.data[metric].length === 0) {
         console.error(`No data available for ${metric}.`);
@@ -413,46 +429,68 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
     // Get chart colors and labels for the metric
     const chartConfig = getChartConfig(metric);
     
-    // Set hard-coded fixed scales based on metric
+    // Dynamic scale calculation with 30% padding
     let yMin, yMax;
     
-    switch(metric) {
-        case 'pH':
+    // Filter out null values
+    const validValues = values.filter(v => v !== null && !isNaN(v));
+    if (validValues.length > 0) {
+        const minValue = Math.min(...validValues);
+        const maxValue = Math.max(...validValues);
+        
+        // Calculate padding (30% of the range)
+        const range = maxValue - minValue;
+        const padding = range * 0.3;
+        
+        // Apply padding to min and max
+        yMin = minValue - padding;
+        yMax = maxValue + padding;
+        
+        // Ensure min is never negative for metrics that can't be negative
+        if (['EC', 'TDS', 'temperature', 'distance', 'ORP'].includes(metric) && yMin < 0) {
+            yMin = 0;
+        }
+        
+        // For sparse data or single point, ensure a reasonable range
+        if (range === 0 || isNaN(range)) {
+            yMin = Math.max(0, minValue * 0.7);
+            yMax = maxValue * 1.3;
+            
+            // For zero or near-zero values, use reasonable defaults
+            if (maxValue < 0.1) {
+                if (metric === 'pH') {
+                    yMin = 0;
+                    yMax = 14;
+                } else {
+                    yMin = 0;
+                    yMax = 1;
+                }
+            }
+        }
+    } else {
+        // Fallback defaults if there are no valid values
+        if (metric === 'pH') {
             yMin = 0;
             yMax = 14;
-            break;
-        case 'temperature':
+        } else if (metric === 'temperature') {
             yMin = 0;
             yMax = 100;
-            break;
-        case 'EC':
+        } else if (metric === 'EC') {
             yMin = 0;
             yMax = 5.0;
-            break;
-        case 'TDS':
+        } else if (metric === 'TDS') {
             yMin = 0;
             yMax = 2000;
-            break;
-        case 'ORP':
+        } else if (metric === 'ORP') {
             yMin = 0;
             yMax = 1000;
-            break;
-        case 'distance':
+        } else if (metric === 'distance') {
             yMin = 0;
             yMax = 10;
-            break;
-        default:
-            // Calculate from data with 30% padding if no fixed scale
-            const minValue = Math.min(...values.filter(v => v !== null));
-            const maxValue = Math.max(...values.filter(v => v !== null));
-            const padding = (maxValue - minValue) * 0.3;
-            yMin = minValue - padding;
-            yMax = maxValue + padding;
-            
-            // Ensure zero is included for metrics where it makes sense
-            if (yMin > 0) {
-                yMin = 0;
-            }
+        } else {
+            yMin = 0;
+            yMax = 100;
+        }
     }
     
     try {
@@ -460,29 +498,9 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
             throw new Error('Canvas context not available');
         }
         
-        // Add debug note to confirm code execution
-        const container = canvas.parentElement;
-        const debugEl = document.createElement('div');
-        debugEl.style.position = 'absolute';
-        debugEl.style.top = '5px';
-        debugEl.style.right = '5px';
-        debugEl.style.fontSize = '10px';
-        debugEl.style.background = 'rgba(255,255,255,0.7)';
-        debugEl.style.padding = '2px 5px';
-        debugEl.style.borderRadius = '3px';
-        debugEl.style.color = '#333';
-        debugEl.textContent = `${metric}: ${yMin}-${yMax} (Fixed)`;
-        container.appendChild(debugEl);
-        
         // Calculate the number of steps and step size
         const numSteps = 10;
         const stepSize = (yMax - yMin) / numSteps;
-        
-        // Create fixed ticks array with exactly 1 decimal place
-        const fixedTicks = [];
-        for (let i = 0; i <= numSteps; i++) {
-            fixedTicks.push(parseFloat((yMin + i * stepSize).toFixed(1)));
-        }
         
         const ctx = canvas.getContext('2d');
         
@@ -575,7 +593,7 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
 
 // Function to handle combined metric charts 
 function handleCombinedChart(data, canvas, deviceId) {
-    console.log(`Handling combined chart - Fixed scale version`);
+    console.log(`Handling combined chart - Dynamic scale version`);
     
     // Process data for combined chart
     const metricMaps = {
@@ -584,17 +602,17 @@ function handleCombinedChart(data, canvas, deviceId) {
         EC: new Map()
     };
     
-    // Hard-coded fixed ranges
-    const ranges = {
-        temperature: { min: 0, max: 100 },
-        pH: { min: 0, max: 14 },
-        EC: { min: 0, max: 5.0 }
+    // Calculate dynamic ranges with 30% padding
+    const metricValues = {
+        temperature: [],
+        pH: [],
+        EC: []
     };
     
     // Collect all timestamps from all metrics
     const allTimestamps = new Set();
     
-    // Process all metrics and gather their timestamps
+    // Process all metrics and gather their timestamps and values
     Object.entries(data.data).forEach(([metric, values]) => {
         if (!values || !values.length) return;
         
@@ -606,9 +624,58 @@ function handleCombinedChart(data, canvas, deviceId) {
                 if (value !== null && value !== "NaN" && value !== "nan") {
                     const numValue = parseFloat(value);
                     metricMaps[metric].set(timestamp, numValue);
+                    metricValues[metric].push(numValue);
                 }
             }
         });
+    });
+    
+    // Calculate dynamic ranges with 30% padding
+    const ranges = {};
+    Object.entries(metricValues).forEach(([metric, values]) => {
+        if (values.length > 0) {
+            const minValue = Math.min(...values);
+            const maxValue = Math.max(...values);
+            const range = maxValue - minValue;
+            const padding = range * 0.3;
+            
+            // Set min and max with padding
+            let min = minValue - padding;
+            let max = maxValue + padding;
+            
+            // Ensure min is never negative for metrics that can't be negative
+            if (['EC', 'temperature'].includes(metric) && min < 0) {
+                min = 0;
+            }
+            
+            // For sparse data or single point, ensure a reasonable range
+            if (range === 0 || isNaN(range)) {
+                min = Math.max(0, minValue * 0.7);
+                max = maxValue * 1.3;
+                
+                // For zero or near-zero values, use reasonable defaults
+                if (maxValue < 0.1) {
+                    if (metric === 'pH') {
+                        min = 0;
+                        max = 14;
+                    } else {
+                        min = 0;
+                        max = 1;
+                    }
+                }
+            }
+            
+            ranges[metric] = { min, max };
+        } else {
+            // Fallback defaults if there are no values
+            if (metric === 'pH') {
+                ranges[metric] = { min: 0, max: 14 };
+            } else if (metric === 'temperature') {
+                ranges[metric] = { min: 0, max: 100 };
+            } else if (metric === 'EC') {
+                ranges[metric] = { min: 0, max: 5.0 };
+            }
+        }
     });
     
     // Sort timestamps chronologically
@@ -626,20 +693,6 @@ function handleCombinedChart(data, canvas, deviceId) {
     const ecData = sortedTimestamps.map(timestamp => metricMaps.EC.get(timestamp) || null);
     
     try {
-        // Add debug note to confirm code execution
-        const container = canvas.parentElement;
-        const debugEl = document.createElement('div');
-        debugEl.style.position = 'absolute';
-        debugEl.style.top = '5px';
-        debugEl.style.right = '5px';
-        debugEl.style.fontSize = '10px';
-        debugEl.style.background = 'rgba(255,255,255,0.7)';
-        debugEl.style.padding = '2px 5px';
-        debugEl.style.borderRadius = '3px';
-        debugEl.style.color = '#333';
-        debugEl.textContent = `Combined: T(${ranges.temperature.min}-${ranges.temperature.max}), pH(${ranges.pH.min}-${ranges.pH.max}), EC(${ranges.EC.min}-${ranges.EC.max})`;
-        container.appendChild(debugEl);
-        
         // Calculate step sizes for each metric
         const tempStepSize = (ranges.temperature.max - ranges.temperature.min) / 10;
         const phStepSize = (ranges.pH.max - ranges.pH.min) / 10;
@@ -808,6 +861,9 @@ function handleCombinedChart(data, canvas, deviceId) {
 // Function to load the combined chart
 function loadCombinedChart(timeMinutes, stepSize) {
     console.log(`Loading combined chart for ${timeMinutes} minutes with step size ${stepSize}`);
+    
+    // Update current metric
+    currentMetric = 'combined';
     
     // Get current device
     const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';

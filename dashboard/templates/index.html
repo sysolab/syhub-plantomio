@@ -354,22 +354,40 @@
         
         // Function to safely destroy the chart and reset the canvas
         function resetChart() {
-            // Get the chart container
-            const chartContainer = document.getElementById('chartContainer');
-            if (!chartContainer) return;
+            // Don't try to destroy if already being reset
+            if (window.isChartInitializing) return;
             
-            // Clear any existing content
-            chartContainer.innerHTML = '';
-            
-            // Create a canvas element for the new chart
-            const canvas = document.createElement('canvas');
-            canvas.id = 'mainChart';
-            chartContainer.appendChild(canvas);
-            
-            // If there's a debug overlay, remove it
-            const debugOverlay = document.getElementById('chartDebugOverlay');
-            if (debugOverlay) {
-                debugOverlay.remove();
+            try {
+                // Mark as being created to prevent concurrent operations
+                window.isChartInitializing = true;
+                
+                // Destroy the existing chart if it exists
+                if (window.mainChart) {
+                    window.mainChart.destroy();
+                    window.mainChart = null;
+                }
+                
+                // Get the container and replace the canvas with a fresh one
+                const container = document.querySelector('.trends-container');
+                const oldCanvas = document.getElementById('main-chart');
+                
+                if (container && oldCanvas) {
+                    // Create a new canvas with the same ID
+                    const newCanvas = document.createElement('canvas');
+                    newCanvas.id = 'main-chart';
+                    newCanvas.className = 'trends-chart';
+                    
+                    // Replace the old canvas with the new one
+                    container.removeChild(oldCanvas);
+                    container.appendChild(newCanvas);
+                }
+            } catch (e) {
+                console.error("Error resetting chart:", e);
+            } finally {
+                // Reset the flag after a short delay to allow DOM to update
+                setTimeout(() => {
+                    window.isChartInitializing = false;
+                }, 50);
             }
         }
         
@@ -419,20 +437,6 @@
             
             // Calculate step size based on the range
             const stepSizeValue = (range.max - range.min) / 10;
-            
-            // Add debug overlay to confirm fixed scale
-            const container = chartCanvas.parentElement;
-            const debugEl = document.createElement('div');
-            debugEl.style.position = 'absolute';
-            debugEl.style.top = '5px';
-            debugEl.style.right = '5px';
-            debugEl.style.fontSize = '10px';
-            debugEl.style.background = 'rgba(255,255,255,0.7)';
-            debugEl.style.padding = '2px 5px';
-            debugEl.style.borderRadius = '3px';
-            debugEl.style.color = '#333';
-            debugEl.textContent = `Fixed scale: ${metric} (${range.min}-${range.max})`;
-            container.appendChild(debugEl);
             
             setTimeout(() => {
                 fetch(`/api/trends?metrics=${metric}&device=${currentDevice}&minutes=${timeMinutes}&step=${stepSize}`)
@@ -635,9 +639,21 @@
                 btn.classList.remove('active');
             });
             
+            // Set combined as default active button
+            document.querySelectorAll('.metric-btn').forEach(btn => {
+                if (btn.dataset.metric === 'combined') {
+                    btn.classList.add('active');
+                }
+            });
+            
             // Add click event listeners for metric buttons
             document.querySelectorAll('.metric-btn').forEach(button => {
                 button.addEventListener('click', function() {
+                    // Remove active class from all buttons
+                    document.querySelectorAll('.metric-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    
                     // Add active class to clicked button
                     this.classList.add('active');
                     
