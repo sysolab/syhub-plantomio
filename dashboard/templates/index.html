@@ -128,15 +128,15 @@
                             <i class="fas fa-sliders-h"></i>
                         </button>
                         <div class="tank-graphics-container">
-                            <div class="tank-visualization">
-                                <div class="tank-level" id="tank-water-level" style="height: 75%"></div>
-                                <div class="alert-level-indicator">
-                                    <div class="alert-level-line"></div>
-                                </div>
+                        <div class="tank-visualization">
+                            <div class="tank-level" id="tank-water-level" style="height: 75%"></div>
+                            <div class="alert-level-indicator">
+                                <div class="alert-level-line"></div>
                             </div>
-                            <div class="tank-info">
-                                <p>Water Level: <span id="water-level-value">2.7</span>m</p>
-                                <p><span id="water-level-percent">75</span>% Capacity</p>
+                        </div>
+                        <div class="tank-info">
+                            <p>Water Level: <span id="water-level-value">2.7</span>m</p>
+                            <p><span id="water-level-percent">75</span>% Capacity</p>
                             </div>
                         </div>
                     </div>
@@ -470,16 +470,16 @@
             });
             
             // Add click event listeners for metric buttons
-            document.querySelectorAll('.metric-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    // Remove active class from all buttons
-                    document.querySelectorAll('.metric-btn').forEach(btn => {
-                        btn.classList.remove('active');
-                    });
-                    
-                    // Add active class to clicked button
-                    this.classList.add('active');
-                    
+        document.querySelectorAll('.metric-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active class from all buttons
+                document.querySelectorAll('.metric-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
                     // Get the selected metric from the button's data attribute
                     const selectedMetric = this.dataset.metric;
                     
@@ -503,9 +503,9 @@
                     if (typeof updateMainChart === 'function') {
                         updateMainChart();
                     }
-                });
             });
-            
+        });
+        
             // Handle time range dropdown changes
             document.getElementById('time-range-dropdown')?.addEventListener('change', function() {
                 const activeButton = document.querySelector('.metric-btn.active');
@@ -527,7 +527,7 @@
                     
                     // Update the chart with the selected metric and new time range
                     if (typeof updateMainChart === 'function') {
-                        updateMainChart();
+                updateMainChart();
                     }
                 }
             });
@@ -657,7 +657,7 @@
                         if (!window.isChartInteractionActive) {
                             // Call the dashboard.js updateMainChart function that doesn't require parameters
                             if (typeof updateMainChart === 'function') {
-                                updateMainChart();
+                            updateMainChart();
                             }
                         }
                     }

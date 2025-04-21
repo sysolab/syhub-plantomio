@@ -1,4 +1,4 @@
-# SyHub - Plantomio IoT Monitoring System
+# SyHub - Basic IoT Stack 
 
 ![Plantomio](assets/logo.png)
 
@@ -33,6 +33,138 @@ An integrated IoT monitoring system for sensor data collection, storage, visuali
 - [Contributing](#contributing)
 - [License](#license)
 
+## Complete SD Card Setup Guide
+
+### 1. Prepare Fresh Raspberry Pi SD Card
+
+1. Download and install the [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+2. Insert your SD card into your computer
+3. Open Raspberry Pi Imager
+4. Choose Raspberry Pi OS Lite (64-bit) for a minimal headless installation
+5. Select your SD card
+6. Click on the gear icon (⚙️) to configure:
+   - Set hostname (e.g., `syhub.local`)
+   - Enable SSH
+   - Set username and password
+   - Configure WiFi (if needed for initial setup)
+7. Click "Write" and wait for the process to complete
+
+### 2. Initial Raspberry Pi Setup
+
+After booting your Raspberry Pi with the new SD card:
+
+```bash
+# Update the system
+sudo apt update
+sudo apt upgrade -y
+sudo apt autoremove -y
+
+# Install Git
+sudo apt install git -y
+
+# Configure WiFi country (important for RF regulations)
+sudo raspi-config
+# Navigate to Localisation Options > WLAN Country and select your country (e.g., DE for Germany)
+# Exit raspi-config and reboot if prompted
+```
+
+### 3. Install RaspAP (For WiFi Access Point)
+
+Install RaspAP manually for better control:
+
+```bash
+# Install RaspAP
+curl -sL https://install.raspap.com | bash
+```
+
+This will set up a WiFi access point. Default management URL: http://10.3.141.1 (Username: admin, Password: secret)
+
+### 4. Install SyHub
+
+Next, clone and install SyHub:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/syhub.git
+cd syhub
+
+# For full installation (interactive mode)
+sudo ./setup.sh
+```
+
+## Installation Component Sequence
+
+During interactive installation, you'll be prompted to install each component in this order:
+
+1. Install basic dependencies
+2. Install VictoriaMetrics time series database
+3. Install Mosquitto MQTT broker packages
+4. Install Node.js
+5. Install Node-RED flow editor
+6. Install Node-RED flows update
+7. Install Flask Dashboard
+8. Install Nginx web server
+9. Install WiFi in AP+STA mode (if not already installed manually)
+
+Answer "Y" to each prompt for a full installation, or selectively choose components.
+
+## Minimal Installation Options
+
+#### 1. MQTT Only
+
+For a minimal installation with just MQTT broker:
+
+```bash
+# Option 1: Using command line flags to skip components
+sudo ./setup.sh --skip-nodered --skip-dashboard --skip-vm
+
+# Option 2: Non-interactive minimal installation
+sudo ./setup.sh --non-interactive --skip-nodered --skip-dashboard --skip-vm
+```
+
+Alternatively, run the script interactively and answer:
+- Yes (Y) to "Install basic dependencies"
+- Yes (Y) to "Install Mosquitto MQTT broker packages" 
+- No (n) to all other installation prompts
+
+#### 2. MQTT + Node-RED Only
+
+For a lightweight installation with MQTT and Node-RED only:
+
+```bash
+# Skip VictoriaMetrics and Dashboard
+sudo ./setup.sh --skip-dashboard --skip-vm
+```
+
+#### 3. Minimal with Manual RaspAP
+
+For a minimal installation with manual RaspAP setup:
+
+```bash
+# First install RaspAP manually
+curl -sL https://install.raspap.com | bash
+
+# Configure RaspAP through the web interface at http://10.3.141.1
+# Default credentials: Username 'admin', Password 'secret'
+
+# Then install the minimal MQTT setup
+sudo ./setup.sh --skip-nodered --skip-dashboard --skip-vm --skip-wifi
+```
+
+This approach gives you more control over the RaspAP configuration while keeping the rest of the installation minimal.
+
+After installation, verify your MQTT broker is running:
+
+```bash
+sudo systemctl status mosquitto
+```
+
+Test publishing a message:
+
+```bash
+mosquitto_pub -h localhost -p 1883 -u plantomioX1 -P plantomioX1Pass -t "test/topic" -m "Hello SyHub"
+```
+
 ## Overview
 
 SyHub is a comprehensive IoT platform designed for monitoring sensor data. It provides a complete infrastructure for:
@@ -64,46 +196,6 @@ SyHub consists of several integrated components:
 
 The typical data flow is:
 - Sensors → MQTT → Node-RED → VictoriaMetrics → Dashboard
-
-## Installation
-
-### Prerequisites
-
-- Raspberry Pi (3B+ or newer) or similar device
-- Debian/Ubuntu based OS (Raspberry Pi OS recommended)
-- At least 1GB RAM
-- 8GB+ storage space
-- Internet connection for package installation
-
-### Setup Options
-
-SyHub can be installed with different options depending on your needs:
-
-- **Full Installation**: All components (recommended)
-- **Component Selection**: Choose which components to install
-- **Interactive Mode**: Guided installation with prompts
-- **Non-Interactive Mode**: Automated installation with defaults
-
-### Running the Setup
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/syhub.git
-   cd syhub
-   ```
-
-2. Run the setup script:
-   ```bash
-   sudo ./setup.sh -i
-   ```
-   The `-i` flag runs in interactive mode, allowing you to choose which components to install.
-
-3. For a specific component installation:
-   ```bash
-   sudo ./setup.sh --components=mqtt,nodered
-   ```
-
-4. Once installation completes, the system will be running automatically and set to start on boot.
 
 ## Usage
 
@@ -324,4 +416,104 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+# SyHub Installation Guide
+
+This guide provides instructions for installing SyHub on your Raspberry Pi, with options for both full and minimal installations.
+
+## System Requirements
+
+- Raspberry Pi (recommended: Pi 3B or newer)
+- Fresh Raspberry Pi OS installation
+- Internet connection for downloading packages
+
+## Preparation
+
+Before installation, prepare your system:
+
+```bash
+# Update your system
+sudo apt update
+sudo apt upgrade -y
+sudo apt autoremove -y
+
+# Install Git
+sudo apt install git -y
+
+# Set WiFi country code (important for WiFi functionality)
+sudo raspi-config
+# Navigate to Localisation Options > WLAN Country and select your country
+```
+
+## Installation Options
+
+### Full Installation
+
+To install all components (MQTT, VictoriaMetrics, Node-RED, Dashboard, Nginx, WiFi AP):
+
+```bash
+# Clone the repository if you haven't already
+git clone https://github.com/yourusername/syhub.git
+cd syhub
+
+# Run the setup script
+sudo ./setup.sh
+```
+
+### Minimal Installation (MQTT only)
+
+For a minimal installation with just MQTT broker:
+
+```bash
+# Option 1: Using command line flags to skip components
+sudo ./setup.sh --skip-nodered --skip-dashboard --skip-vm
+
+# Option 2: Non-interactive minimal installation
+sudo ./setup.sh --non-interactive --skip-nodered --skip-dashboard --skip-vm
+```
+
+Alternatively, run the script interactively and answer:
+- Yes (Y) to "Install basic dependencies"
+- Yes (Y) to "Install Mosquitto MQTT broker packages" 
+- No (n) to all other installation prompts
+
+### Manual RaspAP Installation
+
+If you want to manually install RaspAP (recommended if the automated installation has issues):
+
+1. Install RaspAP directly:
+```bash
+curl -sL https://install.raspap.com | bash
+```
+
+2. After RaspAP installation, run the SyHub installer for other components:
+```bash
+sudo ./setup.sh --skip-wifi
+```
+
+## Default Configuration
+
+After installation, services will be available at:
+
+- MQTT Broker: Port 1883 (Default credentials in config.yml)
+- RaspAP Admin Interface: http://10.3.141.1 (Default password: plantomioX1Pass)
+
+## Troubleshooting
+
+If you encounter issues during installation:
+
+- Check log files: `/home/[username]/syhub/log/syhub_setup.log`
+- Verify service status: `sudo systemctl status mosquitto`
+- Check RaspAP status: `sudo systemctl status hostapd dnsmasq`
+
+## Customization
+
+You can customize the installation by editing `config/config.yml` before running the setup script.
+
+Important configurations:
+- WiFi settings (SSID, password, country code)
+- MQTT credentials
+- Service ports
+
+After changing configurations, you may need to run the setup script again. 

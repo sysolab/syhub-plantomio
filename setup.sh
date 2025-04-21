@@ -999,12 +999,15 @@ EOF
 setup_wifi() {
   log_message "Setting up WiFi access point..."
   
-  # Set up WiFi access point settings
-  WIFI_SSID="SyHub"
-  WIFI_PASSWORD="syhub123"
-  WIFI_COUNTRY="US"
-  WIFI_CHANNEL="1"
-  ADMIN_PASS="syhub123"
+  # Use values from config.yml instead of hardcoded values
+  WIFI_SSID="$WIFI_AP_SSID"
+  WIFI_PASSWORD="$WIFI_AP_PASSWORD"
+  WIFI_COUNTRY="$WIFI_COUNTRY"
+  WIFI_CHANNEL="$WIFI_CHANNEL"
+  ADMIN_PASS="$MQTT_PASSWORD"  # Use MQTT password for RaspAP admin
+  
+  log_message "Using WiFi configuration from config.yml"
+  log_message "SSID: $WIFI_SSID, Country: $WIFI_COUNTRY"
   
   # Backup existing hostapd.conf if it exists
   if [ -f "/etc/hostapd/hostapd.conf" ]; then
@@ -1021,6 +1024,8 @@ setup_wifi() {
       sudo rfkill unblock all
     fi
   fi
+  
+  log_message "DEBUG: Reached after rfkill check"
   
   # Check if RaspAP is already installed
   if [ -d "/etc/raspap" ]; then
@@ -1048,6 +1053,8 @@ setup_wifi() {
       log_message "❌ Failed to install curl. Aborting WiFi setup."
       return 1
     fi
+  else
+    log_message "DEBUG: curl is available at $(which curl)"
   fi
   
   # Download RaspAP installer
