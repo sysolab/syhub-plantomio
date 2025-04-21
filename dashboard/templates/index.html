@@ -1,1061 +1,395 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plantomio Dashboard</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="stylesheet" href="/static/css/sidebar.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" href="/static/images/favicon.ico">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-</head>
-<body>
-    <!-- Mobile menu toggle button -->
-    <button class="mobile-toggle" id="mobile-toggle">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-    </button>
-
-    <div class="app-wrapper">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <a href="/" class="logo">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                        <line x1="8" y1="21" x2="16" y2="21"></line>
-                        <line x1="12" y1="17" x2="12" y2="21"></line>
-                    </svg>
-                </a>
-            </div>
-            <nav class="sidebar-nav">
-                <ul>
-                    <li><a href="/" class="active" title="Dashboard"><i class="fas fa-tachometer-alt"></i></a></li>
-                    <li><a href="/trends" title="Trends"><i class="fas fa-chart-line"></i></a></li>
-                    <li><a href="/settings" title="Settings"><i class="fas fa-cog"></i></a></li>
-                </ul>
-            </nav>
-        </aside>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <header class="main-header">
-                <div class="header-content">
-                    <h1>Plantomio Dashboard</h1>
-                    <p class="subtitle">Plant monitoring system</p>
-                </div>
-                <div class="header-status">
-                    <span class="status-indicator live">Live Data</span>
-                    <div class="device-selector">
-                        <span class="device-id">Device: <span id="device-id">--</span></span>
-                        <select id="device-dropdown" style="display: none;"></select>
-                    </div>
-                    <span class="last-update">Last update: <span id="last-update">08:19:57</span></span>
-                </div>
-            </header>
-
-            <div class="page-content">
-                <!-- Plant Health and Tank Level Row -->
-                <div class="health-tank-container">
-                    <!-- Plant Health Assessment -->
-                    <div class="health-content">
-                        <div class="health-header">
-                            <h2>Plant Health Assessment</h2>
-                            <div class="health-actions">
-                                <button class="btn btn-refresh">Refresh</button>
-                                <button class="btn btn-actions">Actions</button>
-                            </div>
-                        </div>
-                        <div class="health-status">
-                            <div class="status-icon good">
-                                <i class="fas fa-check"></i>
-                            </div>
-                            <div class="status-details">
-                                <h3>Good Condition</h3>
-                                <p>Based on sensor readings</p>
-                            </div>
-                        </div>
-                        
-                        <div class="health-metrics">
-                            <div class="health-metric">
-                                <label>Overall Health</label>
-                                <div class="progress-container">
-                                    <div class="progress-bar" style="width: 86%"></div>
-                                </div>
-                                <span class="progress-value">86%</span>
-                            </div>
-                            
-                            <div class="health-metric">
-                                <label>Water Quality</label>
-                                <div class="progress-container">
-                                    <div class="progress-bar water-quality" style="width: 62%"></div>
-                                </div>
-                                <span class="progress-value">62%</span>
-                            </div>
-                        </div>
-                        
-                        <div class="recommendation-box">
-                            <h4>Recommendation</h4>
-                            <p>Consider reducing nutrient solution concentration. TDS levels are above optimal range for this plant type.</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Tank Visualization -->
-                    <div class="tank-container">
-                        <div class="tank-visualization">
-                            <div class="tank-level" id="tank-water-level" style="height: 75%"></div>
-                            <div class="alert-level-indicator">
-                                <div class="alert-level-line"></div>
-                            </div>
-                        </div>
-                        <div class="tank-info">
-                            <p>Water Level: <span id="water-level-value">2.7</span>m</p>
-                            <p><span id="water-level-percent">75</span>% Capacity</p>
-                            <button class="btn btn-settings" id="tank-settings-btn">
-                                <i class="fas fa-sliders-h"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Sensor Parameters Grid -->
-                <div class="metrics-grid">
-                    <div class="metric-card temperature">
-                        <div class="metric-label">Temperature</div>
-                        <div class="metric-status">Ok</div>
-                        <div class="metric-value" id="temperature-value">25°C</div>
-                    </div>
-                    
-                    <div class="metric-card tds">
-                        <div class="metric-label">TDS</div>
-                        <div class="metric-status high">High</div>
-                        <div class="metric-value" id="tds-value">59923.9 ppm</div>
-                    </div>
-                    
-                    <div class="metric-card ph">
-                        <div class="metric-label">pH</div>
-                        <div class="metric-status">Ok</div>
-                        <div class="metric-value" id="ph-value">6.98</div>
-                    </div>
-                    
-                    <div class="metric-card orp">
-                        <div class="metric-label">ORP</div>
-                        <div class="metric-status">Ok</div>
-                        <div class="metric-value" id="orp-value">296.3 mV</div>
-                    </div>
-                    
-                    <div class="metric-card ec">
-                        <div class="metric-label">EC</div>
-                        <div class="metric-status high">High</div>
-                        <div class="metric-value" id="ec-value">38.35 μS/cm</div>
-                    </div>
-                </div>
-                
-                <!-- Sensor Trends -->
-                <div class="sensor-trends-panel">
-                    <div class="panel-header">
-                        <h2>Sensor Trends</h2>
-                        <div class="time-controls">
-                            <button class="time-btn active" data-minutes="1440">24 Hours</button>
-                            <button class="time-btn" data-minutes="10080">Week</button>
-                            <button class="time-btn" data-minutes="43200">Month</button>
-                        </div>
-                    </div>
-                    <div class="metric-selector">
-                        <button class="metric-btn" data-metric="temperature">Temperature</button>
-                        <button class="metric-btn" data-metric="pH">pH</button>
-                        <button class="metric-btn" data-metric="EC">EC</button>
-                        <button class="metric-btn" data-metric="TDS">TDS</button>
-                        <button class="metric-btn" data-metric="ORP">ORP</button>
-                        <button class="metric-btn" data-metric="distance">Distance</button>
-                        <button class="metric-btn active" data-metric="combined">Combined</button>
-                    </div>
-                    <div class="trends-container">
-                        <canvas id="main-chart" class="trends-chart"></canvas>
-                    </div>
-                </div>
-                
-                <!-- Service Status - Replaced with code from settings.html -->
-                <div class="service-status-panel">
-                    <div class="panel-header"><h2>Service Status</h2></div>
-                    <div class="status-grid">
-                        <!-- Dashboard status -->
-                        <div class="status-item">
-                            <div class="status-label">Dashboard</div>
-                            <div class="status-value" id="dashboard-status">--</div>
-                        </div>
-                        <!-- Node-RED status -->
-                        <div class="status-item">
-                            <div class="status-label">Node-RED</div>
-                            <div class="status-value" id="nodered-status">--</div>
-                        </div>
-                        <!-- VictoriaMetrics status -->
-                        <div class="status-item">
-                            <div class="status-label">VictoriaMetrics</div>
-                            <div class="status-value" id="vm-status">--</div>
-                        </div>
-                        <!-- MQTT status -->
-                        <div class="status-item">
-                            <div class="status-label">MQTT</div>
-                            <div class="status-value" id="mqtt-status">--</div>
-                        </div>
-                        <!-- AP Mode status -->
-                        <div class="status-item">
-                            <div class="status-label">AP Mode</div>
-                            <div class="status-value" id="ap-status">--</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Quick Actions Panel (Hidden) -->
-                <div class="quick-actions-panel" style="display: none;">
-                    <div class="panel-header">
-                        <h2>Quick Actions</h2>
-                    </div>
-                    <div class="actions-grid">
-                        <button class="action-btn start-pump">
-                            <i class="fas fa-tint"></i> Start Pump
-                        </button>
-                        <button class="action-btn toggle-light">
-                            <i class="fas fa-lightbulb"></i> Toggle Light
-                        </button>
-                        <button class="action-btn reset-sensors">
-                            <i class="fas fa-redo-alt"></i> Reset Sensors
-                        </button>
-                        <button class="action-btn settings">
-                            <i class="fas fa-cog"></i> Settings
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+// Simplified chart rendering function for dashboard
+function updateMainChart() {
+    // Get current device
+    const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
     
-    <!-- Settings Modal -->
-    <div class="settings-backdrop" id="settings-backdrop"></div>
-    <div class="tank-settings-panel" id="tank-settings-panel">
-        <div class="settings-header">
-            <h4>Tank Calibration</h4>
-            <button class="btn-close" id="tank-settings-close">×</button>
-        </div>
-        <div class="settings-form">
-            <div class="form-group">
-                <label for="min-level">Min Level (m)</label>
-                <input type="number" id="min-level" class="form-control" value="0" step="0.1">
-            </div>
-            <div class="form-group">
-                <label for="max-level">Max Level (m)</label>
-                <input type="number" id="max-level" class="form-control" value="10" step="0.1">
-            </div>
-            <div class="settings-actions">
-                <button class="btn btn-save" id="save-tank-settings">Save</button>
-            </div>
-        </div>
-    </div>
+    // Get selected metric and time range
+    const selectedMetric = document.querySelector('.metric-btn.active')?.dataset.metric || 'combined';
+    const timeMinutes = parseInt(document.querySelector('.time-btn.active')?.dataset.minutes || 1440);
+    
+    console.log(`Loading chart: ${selectedMetric}, device: ${deviceId}, minutes: ${timeMinutes}`);
+    
+    // Get chart container
+    const chartContainer = document.querySelector('.trends-container');
+    if (!chartContainer) {
+        console.error('Chart container not found');
+        return;
+    }
+    
+    // Show loading state
+    chartContainer.innerHTML = '<div class="loading-message">Loading chart data...</div>';
+    
+    // Handle combined chart separately
+    if (selectedMetric === 'combined') {
+        loadCombinedChart(deviceId, timeMinutes, chartContainer);
+        return;
+    }
+    
+    // For single metric charts, use direct API
+    fetch(`/api/query?metric=${selectedMetric}&device=${deviceId}&minutes=${timeMinutes}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Prepare chart data
+            const chartData = processChartData(data, selectedMetric);
+            
+            // Render chart
+            renderChart(chartContainer, selectedMetric, chartData);
+        })
+        .catch(error => {
+            console.error('Error loading chart:', error);
+            chartContainer.innerHTML = `<div class="error-message">Error loading chart: ${error.message}</div>`;
+        });
+}
 
-    <script src="/static/js/dashboard.js"></script>
-    <script>
-        // Dynamic device selection
-        let currentDevice = null;
-        let availableDevices = [];
+// Process data from API response
+function processChartData(response, metric) {
+    const labels = [];
+    const values = [];
+    
+    // Check for valid data structure
+    if (response.data && response.data.result && response.data.result.length > 0) {
+        const result = response.data.result[0];
         
-        // Fetch available devices on load
-        function fetchDevices() {
-            fetch('/api/devices')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === "success" && data.devices && data.devices.length > 0) {
-                        availableDevices = data.devices;
-                        
-                        // Set current device to first available device if not already set
-                        if (!currentDevice) {
-                            currentDevice = availableDevices[0];
-                        }
-                        
-                        // Update deviceID display
-                        const deviceElement = document.getElementById('device-id');
-                        if (deviceElement) {
-                            deviceElement.textContent = currentDevice;
-                        }
-                        
-                        // Get the device dropdown
-                        const deviceDropdown = document.getElementById('device-dropdown');
-                        
-                        // If we have multiple devices, populate and show the dropdown
-                        if (availableDevices.length > 1 && deviceDropdown) {
-                            // Clear existing options
-                            deviceDropdown.innerHTML = '';
-                            
-                            // Add options for each device
-                            availableDevices.forEach(device => {
-                                const option = document.createElement('option');
-                                option.value = device;
-                                option.text = device;
-                                
-                                // Set the current device as selected
-                                if (device === currentDevice) {
-                                    option.selected = true;
-                                }
-                                
-                                deviceDropdown.appendChild(option);
-                            });
-                            
-                            // Show the dropdown
-                            deviceDropdown.style.display = 'inline-block';
-                            
-                            // Add change event handler
-                            deviceDropdown.addEventListener('change', function() {
-                                // Set the new current device
-                                currentDevice = this.value;
-                                
-                                // Update deviceID display
-                                if (deviceElement) {
-                                    deviceElement.textContent = currentDevice;
-                                }
-                                
-                                // Reload charts with the new device
-                                updateMainChart();
-                            });
-                        }
-                        
-                        // Load initial data for the selected device
-                        updateMainChart();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching devices:', error);
-                });
-        }
-        
-        // Chart update tracking
-        window.lastChartUpdate = null;
-        window.lastChartRequestTime = Math.floor(Date.now() / 1000);
-        window.isChartInteractionActive = false;
-        window.mainChart = null; // Track the main chart globally
-        window.isChartBeingCreated = false; // Flag to prevent concurrent chart creation
-        
-        // Function to safely destroy the chart and reset the canvas
-        function resetChart() {
-            // Don't try to destroy if already being reset
-            if (window.isChartBeingCreated) return;
-            
-            try {
-                // Mark as being created to prevent concurrent operations
-                window.isChartBeingCreated = true;
-                
-                // Destroy the existing chart if it exists
-                if (window.mainChart) {
-                    window.mainChart.destroy();
-                    window.mainChart = null;
-                }
-                
-                // Get the container and replace the canvas with a fresh one
-                const container = document.querySelector('.trends-container');
-                const oldCanvas = document.getElementById('main-chart');
-                
-                if (container && oldCanvas) {
-                    // Create a new canvas with the same ID
-                    const newCanvas = document.createElement('canvas');
-                    newCanvas.id = 'main-chart';
-                    newCanvas.className = 'trends-chart';
+        // Process each data point
+        if (result.values && Array.isArray(result.values)) {
+            result.values.forEach(point => {
+                if (Array.isArray(point) && point.length === 2) {
+                    const [timestamp, value] = point;
                     
-                    // Replace the old canvas with the new one
-                    container.removeChild(oldCanvas);
-                    container.appendChild(newCanvas);
-                }
-            } catch (e) {
-                console.error("Error resetting chart:", e);
-            } finally {
-                // Reset the flag after a short delay to allow DOM to update
-                setTimeout(() => {
-                    window.isChartBeingCreated = false;
-                }, 50);
-            }
-        }
-        
-        // Handle chart data loading
-        function updateMainChart() {
-            // Ensure we have a valid device before trying to fetch data
-            if (!currentDevice) {
-                console.log("No device selected, skipping chart update");
-                return;
-            }
-            
-            // If chart is being created, don't try to update
-            if (window.isChartBeingCreated) {
-                console.log("Chart is being created, skipping update");
-                return;
-            }
-            
-            // Reset chart and canvas first
-            resetChart();
-            
-            // Wait a small amount of time for the canvas to be available
-            setTimeout(() => {
-                const ctx = document.getElementById('main-chart').getContext('2d');
-                const chartCanvas = document.getElementById('main-chart');
-                const timeMinutes = parseInt(document.querySelector('.time-btn.active').dataset.minutes || 1440);
-                const selectedMetric = document.querySelector('.metric-btn.active').dataset.metric || 'combined'; // Default to combined
-                
-                // Show loading indicator
-                chartCanvas.style.opacity = '0.6';
-                
-                // Handle "combined" special case
-                if (selectedMetric === 'combined') {
-                    loadCombinedChart(timeMinutes);
-                    return;
-                }
-                
-                // Use the simpler method from trends.html - load single metric with full 24h history
-                fetch(`/api/query?metric=${selectedMetric}&device=${currentDevice}&minutes=${timeMinutes}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Remove loading indicator
-                        chartCanvas.style.opacity = '1';
-                        
-                        const timestamps = [];
-                        const values = [];
-                        
-                        if (data && data.data && data.data.result && data.data.result.length > 0) {
-                            // Extract values and filter unique timestamps
-                            const uniqueTimestamps = new Set();
-                            data.data.result[0].values.forEach(point => {
-                                try {
-                                    const [timestamp, value] = point;
-                                    // Skip NaN values
-                                    if (value === "NaN" || value === "nan") return;
-                                    
-                                    if (!uniqueTimestamps.has(timestamp)) {
-                                        uniqueTimestamps.add(timestamp);
-                                        const date = new Date(timestamp * 1000);
-                                        timestamps.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-                                        values.push(parseFloat(value));
-                                    }
-                                } catch (e) {
-                                    console.error("Error processing data point:", e);
-                                }
-                            });
-                        }
-                        
-                        // Get chart color based on metric
-                        let borderColor, backgroundColor;
-                        let unit = '';
-                        switch (selectedMetric) {
-                            case 'temperature':
-                                borderColor = '#4e73df';
-                                backgroundColor = 'rgba(78, 115, 223, 0.1)';
-                                unit = '°C';
-                                break;
-                            case 'pH':
-                                borderColor = '#e74a3b';
-                                backgroundColor = 'rgba(231, 74, 59, 0.1)';
-                                unit = '';
-                                break;
-                            case 'TDS':
-                                borderColor = '#1cc88a';
-                                backgroundColor = 'rgba(28, 200, 138, 0.1)';
-                                unit = 'ppm';
-                                break;
-                            case 'EC':
-                                borderColor = '#36b9cc';
-                                backgroundColor = 'rgba(54, 185, 204, 0.1)';
-                                unit = 'μS/cm';
-                                break;
-                            case 'distance':
-                                borderColor = '#f6c23e';
-                                backgroundColor = 'rgba(246, 194, 62, 0.1)';
-                                unit = 'm';
-                                break;
-                            case 'ORP':
-                                borderColor = '#6f42c1';
-                                backgroundColor = 'rgba(111, 66, 193, 0.1)';
-                                unit = 'mV';
-                                break;
-                            default:
-                                borderColor = '#858796';
-                                backgroundColor = 'rgba(133, 135, 150, 0.1)';
-                        }
-                        
-                        // Create the chart with error handling
-                        try {
-                            window.mainChart = new Chart(ctx, {
-                                type: 'line',
-                                data: {
-                                    labels: timestamps,
-                                    datasets: [
-                                        {
-                                            label: `${selectedMetric} ${unit}`,
-                                            data: values,
-                                            borderColor: borderColor,
-                                            backgroundColor: backgroundColor,
-                                            tension: 0.4,
-                                            borderWidth: 2,
-                                            fill: true
-                                        }
-                                    ]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    plugins: {
-                                        legend: {
-                                            position: 'top',
-                                        },
-                                        title: {
-                                            display: true,
-                                            text: `Device: ${currentDevice}`
-                                        },
-                                        tooltip: {
-                                            callbacks: {
-                                                label: function(context) {
-                                                    let label = context.dataset.label || '';
-                                                    if (label) {
-                                                        label += ': ';
-                                                    }
-                                                    if (context.parsed.y !== null) {
-                                                        label += context.parsed.y.toFixed(2);
-                                                    }
-                                                    return label;
-                                                }
-                                            }
-                                        }
-                                    },
-                                    scales: {
-                                        y: {
-                                            beginAtZero: false,
-                                            grid: {
-                                                color: 'rgba(0, 0, 0, 0.05)'
-                                            }
-                                        },
-                                        x: {
-                                            grid: {
-                                                display: false
-                                            }
-                                        }
-                                    }
-                                }
-                            });
-                            
-                            // Reset the creation flag
-                            window.isChartBeingCreated = false;
-                        } catch (e) {
-                            console.error("Error creating single metric chart:", e);
-                            chartCanvas.style.opacity = '1';
-                            window.isChartBeingCreated = false;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching chart data:', error);
-                        // Remove loading indicator
-                        chartCanvas.style.opacity = '1';
-                        window.isChartBeingCreated = false;
-                    });
-            }, 100); // Wait 100ms for DOM to fully update
-        }
-        
-        // Function to load the combined chart (temp, pH, EC)
-        function loadCombinedChart(timeMinutes) {
-            const ctx = document.getElementById('main-chart').getContext('2d');
-            const chartCanvas = document.getElementById('main-chart');
-            
-            // Show loading indicator
-            chartCanvas.style.opacity = '0.6';
-            
-            // Always destroy any existing chart before creating a new one
-            if (window.mainChart) {
-                try {
-                    window.mainChart.destroy();
-                    window.mainChart = null;
+                    // Format timestamp
+                    const date = new Date(timestamp * 1000);
+                    const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                     
-                    // Clear canvas to ensure no artifacts remain
-                    ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                } catch (e) {
-                    console.error("Error destroying chart:", e);
-                }
-            }
-            
-            // Create flag to prevent concurrent chart creation
-            if (window.isMainChartBeingCreated) {
-                console.log("Chart creation already in progress, aborting");
-                return;
-            }
-            window.isMainChartBeingCreated = true;
-            
-            // Fetch data for all three metrics at once
-            setTimeout(() => {
-                fetch(`/api/trends?metrics=temperature,pH,EC&device=${currentDevice}&minutes=${timeMinutes}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Remove loading indicator
-                        chartCanvas.style.opacity = '1';
-                        
-                        if (data.status === "success") {
-                            const timestamps = [];
-                            const temperatureData = [];
-                            const phData = [];
-                            const ecData = [];
-                            
-                            // Create map of timestamps to values for each metric
-                            const metricMaps = {
-                                temperature: new Map(),
-                                pH: new Map(),
-                                EC: new Map()
-                            };
-                            
-                            // Collect all timestamps from all metrics
-                            const allTimestamps = new Set();
-                            
-                            // Process all metrics and gather their timestamps
-                            Object.entries(data.data).forEach(([metric, values]) => {
-                                if (!values || !values.length) return;
-                                
-                                values.forEach(point => {
-                                    const [timestamp, value] = point;
-                                    allTimestamps.add(timestamp);
-                                    
-                                    if (value !== null && value !== "NaN" && value !== "nan") {
-                                        metricMaps[metric].set(timestamp, parseFloat(value));
-                                    }
-                                });
-                            });
-                            
-                            // Sort timestamps chronologically
-                            const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
-                            
-                            // Format timestamps for display
-                            sortedTimestamps.forEach(timestamp => {
-                                const date = new Date(timestamp * 1000);
-                                timestamps.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-                            });
-                            
-                            // Extract values for each metric based on sorted timestamps
-                            sortedTimestamps.forEach(timestamp => {
-                                temperatureData.push(metricMaps.temperature.get(timestamp) || null);
-                                phData.push(metricMaps.pH.get(timestamp) || null);
-                                ecData.push(metricMaps.EC.get(timestamp) || null);
-                            });
-                            
-                            // Create chart - making sure we're working with a clean context
-                            try {
-                                // Clear canvas again right before drawing
-                                ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                                
-                                window.mainChart = new Chart(ctx, {
-                                    type: 'line',
-                                    data: {
-                                        labels: timestamps,
-                                        datasets: [
-                                            {
-                                                label: 'Temperature (°C)',
-                                                data: temperatureData,
-                                                borderColor: '#4e73df',
-                                                backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                                                tension: 0.4,
-                                                borderWidth: 2,
-                                                fill: false,
-                                                yAxisID: 'y-temperature'
-                                            },
-                                            {
-                                                label: 'pH',
-                                                data: phData,
-                                                borderColor: '#e74a3b',
-                                                backgroundColor: 'rgba(231, 74, 59, 0.1)',
-                                                tension: 0.4,
-                                                borderWidth: 2,
-                                                fill: false,
-                                                yAxisID: 'y-ph'
-                                            },
-                                            {
-                                                label: 'EC (μS/cm)',
-                                                data: ecData,
-                                                borderColor: '#36b9cc',
-                                                backgroundColor: 'rgba(54, 185, 204, 0.1)',
-                                                tension: 0.4,
-                                                borderWidth: 2,
-                                                fill: false,
-                                                yAxisID: 'y-ec'
-                                            }
-                                        ]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: {
-                                                position: 'top',
-                                            },
-                                            title: {
-                                                display: true,
-                                                text: `Device: ${currentDevice}`
-                                            },
-                                            tooltip: {
-                                                callbacks: {
-                                                    label: function(context) {
-                                                        let label = context.dataset.label || '';
-                                                        if (label) {
-                                                            label += ': ';
-                                                        }
-                                                        if (context.parsed.y !== null) {
-                                                            label += context.parsed.y.toFixed(2);
-                                                        }
-                                                        return label;
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        scales: {
-                                            'y-temperature': {
-                                                type: 'linear',
-                                                display: true,
-                                                position: 'left',
-                                                title: {
-                                                    display: true,
-                                                    text: 'Temperature (°C)'
-                                                },
-                                                grid: {
-                                                    color: 'rgba(0, 0, 0, 0.05)'
-                                                }
-                                            },
-                                            'y-ph': {
-                                                type: 'linear',
-                                                display: true,
-                                                position: 'right',
-                                                title: {
-                                                    display: true,
-                                                    text: 'pH'
-                                                },
-                                                grid: {
-                                                    drawOnChartArea: false
-                                                }
-                                            },
-                                            'y-ec': {
-                                                type: 'linear',
-                                                display: true,
-                                                position: 'right',
-                                                title: {
-                                                    display: true,
-                                                    text: 'EC (μS/cm)'
-                                                },
-                                                grid: {
-                                                    drawOnChartArea: false
-                                                }
-                                            },
-                                            x: {
-                                                grid: {
-                                                    display: false
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                            } catch (e) {
-                                console.error("Error creating combined chart:", e);
-                                chartCanvas.style.opacity = '1';
-                                // Clear the canvas to avoid contamination
-                                ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                            } finally {
-                                window.isMainChartBeingCreated = false;
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching combined chart data:', error);
-                        chartCanvas.style.opacity = '1';
-                        window.isMainChartBeingCreated = false;
-                        
-                        // Fallback to empty chart - only if we don't have a chart yet
-                        if (!window.mainChart) {
-                            try {
-                                // Clear the canvas first
-                                ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                                
-                                window.mainChart = new Chart(ctx, {
-                                    type: 'line',
-                                    data: {
-                                        labels: [],
-                                        datasets: []
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            title: {
-                                                display: true,
-                                                text: 'Error loading data'
-                                            }
-                                        }
-                                    }
-                                });
-                            } catch (e) {
-                                console.error("Error creating fallback chart:", e);
-                            }
-                        }
-                    });
-            }, 100); // Wait 100ms between chart destruction and creation
-        }
-        
-        // Update service status
-        function updateServiceStatus() {
-            fetch('/health')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.services) {
-                        // Update dashboard status
-                        document.getElementById('dashboard-status').textContent = 
-                            data.services.dashboard?.status === 'ok' ? 'Running' : 'Error';
-                        document.getElementById('dashboard-status').className = 
-                            data.services.dashboard?.status === 'ok' ? 'status-ok' : 'status-error';
-                        
-                        // Update Node-RED status
-                        document.getElementById('nodered-status').textContent = 
-                            data.services.node_red?.status === 'ok' ? 'Running' : 'Error';
-                        document.getElementById('nodered-status').className = 
-                            data.services.node_red?.status === 'ok' ? 'status-ok' : 'status-error';
-                        
-                        // Update VictoriaMetrics status
-                        document.getElementById('vm-status').textContent = 
-                            data.services.victoria_metrics?.status === 'ok' ? 'Running' : 'Error';
-                        document.getElementById('vm-status').className = 
-                            data.services.victoria_metrics?.status === 'ok' ? 'status-ok' : 'status-error';
-                        
-                        // Update MQTT status
-                        document.getElementById('mqtt-status').textContent = 
-                            data.services.mqtt?.status === 'ok' ? 'Running' : 'Error';
-                        document.getElementById('mqtt-status').className = 
-                            data.services.mqtt?.status === 'ok' ? 'status-ok' : 'status-error';
-                        
-                        // Update AP Mode status
-                        document.getElementById('ap-status').textContent = 
-                            data.services.ap_mode?.status === 'ok' ? 'Enabled' : 
-                            data.services.ap_mode?.status === 'inactive' ? 'Disabled' : 'Unknown';
-                        document.getElementById('ap-status').className = 
-                            data.services.ap_mode?.status === 'ok' ? 'status-ok' : 
-                            data.services.ap_mode?.status === 'inactive' ? '' : 'status-error';
+                    // Add to arrays
+                    labels.push(timeStr);
+                    
+                    // Handle null/NaN values
+                    if (value === null || value === 'NaN' || value === 'nan') {
+                        values.push(null);
+                    } else {
+                        values.push(parseFloat(value));
                     }
-                })
-                .catch(error => {
-                    console.error('Error checking service status:', error);
-                });
-        }
-        
-        // Metric selector buttons
-        document.querySelectorAll('.metric-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                // Set interaction active
-                window.isChartInteractionActive = true;
-                
-                // Remove active class from all buttons
-                document.querySelectorAll('.metric-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                
-                // Add active class to clicked button
-                this.classList.add('active');
-                
-                // Update chart with new metric
-                updateMainChart();
-                
-                // Reset interaction after a short delay
-                setTimeout(() => {
-                    window.isChartInteractionActive = false;
-                }, 5000);
+                }
             });
-        });
-        
-        // Time range buttons for chart
-        document.querySelectorAll('.time-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                // Set interaction active
-                window.isChartInteractionActive = true;
-                
-                // Remove active class from all buttons
-                document.querySelectorAll('.time-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                
-                // Add active class to clicked button
-                this.classList.add('active');
-                
-                // Update chart with new time range
-                updateMainChart();
-                
-                // Reset interaction after a short delay
-                setTimeout(() => {
-                    window.isChartInteractionActive = false;
-                }, 5000);
-            });
-        });
-        
-        // Initial load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Fetch available devices
-            fetchDevices();
-            
-            // Start SSE connection
-            setupSSE();
-            
-            // Update service status on page load
-            updateServiceStatus();
-            
-            // Check service status every 60 seconds
-            setInterval(updateServiceStatus, 60000);
-        });
+        }
+    }
+    
+    return { labels, values };
+}
 
-        // Mobile sidebar toggle
-        document.getElementById('mobile-toggle').addEventListener('click', function() {
-            document.querySelector('.sidebar').classList.toggle('active');
-        });
+// Render chart to container
+function renderChart(container, metric, chartData) {
+    // Clear container
+    container.innerHTML = '';
+    
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    canvas.id = 'main-chart';
+    canvas.className = 'trends-chart';
+    container.appendChild(canvas);
+    
+    // Get chart configuration based on metric
+    const chartConfig = getChartConfig(metric, chartData);
+    
+    // Create chart
+    try {
+        new Chart(canvas.getContext('2d'), chartConfig);
+    } catch (error) {
+        console.error('Error creating chart:', error);
+        container.innerHTML = `<div class="error-message">Failed to create chart: ${error.message}</div>`;
+    }
+}
 
-        // Handle live data using Server-Sent Events with reconnection logic
-        let evtSource = null;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
-        const baseReconnectDelay = 1000; // 1 second
-        
-        function setupSSE() {
-            if (evtSource) {
-                // Close existing connection before creating a new one
-                evtSource.close();
+// Get chart configuration based on metric
+function getChartConfig(metric, chartData) {
+    let color, bgColor, label;
+    
+    // Determine colors and label based on metric
+    switch (metric) {
+        case 'temperature':
+            color = '#4e73df';
+            bgColor = 'rgba(78, 115, 223, 0.1)';
+            label = 'Temperature (°C)';
+            break;
+        case 'pH':
+            color = '#e74a3b';
+            bgColor = 'rgba(231, 74, 59, 0.1)';
+            label = 'pH';
+            break;
+        case 'TDS':
+            color = '#1cc88a';
+            bgColor = 'rgba(28, 200, 138, 0.1)';
+            label = 'TDS (ppm)';
+            break;
+        case 'EC':
+            color = '#36b9cc';
+            bgColor = 'rgba(54, 185, 204, 0.1)';
+            label = 'EC (μS/cm)';
+            break;
+        case 'distance':
+            color = '#f6c23e';
+            bgColor = 'rgba(246, 194, 62, 0.1)';
+            label = 'Distance (m)';
+            break;
+        case 'ORP':
+            color = '#6f42c1';
+            bgColor = 'rgba(111, 66, 193, 0.1)';
+            label = 'ORP (mV)';
+            break;
+        default:
+            color = '#858796';
+            bgColor = 'rgba(133, 135, 150, 0.1)';
+            label = metric;
+    }
+    
+    // Chart.js configuration
+    return {
+        type: 'line',
+        data: {
+            labels: chartData.labels.length ? chartData.labels : ['No data'],
+            datasets: [{
+                label: label,
+                data: chartData.values.length ? chartData.values : [null],
+                borderColor: color,
+                backgroundColor: bgColor,
+                tension: 0.4,
+                borderWidth: 2,
+                fill: true,
+                spanGaps: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: chartData.labels.length ? `${label} Over Time` : 'No data available'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: metric === 'pH' || metric === 'distance',
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    };
+}
+
+// Load combined chart (temperature, pH, EC)
+function loadCombinedChart(deviceId, timeMinutes, container) {
+    fetch(`/api/trends?metrics=temperature,pH,EC&device=${deviceId}&minutes=${timeMinutes}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.status || data.status !== 'success' || !data.data) {
+                throw new Error('Invalid API response format');
             }
             
-            evtSource = new EventSource('/api/events');
-            
-            // Connection opened
-            evtSource.onopen = function() {
-                console.log("SSE connection established");
-                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-                
-                // Update the live status indicator
-                const liveIndicator = document.querySelector('.status-indicator.live');
-                if (liveIndicator) {
-                    liveIndicator.style.backgroundColor = "#1cc88a"; // Connected - green
+            renderCombinedChart(container, deviceId, data.data);
+        })
+        .catch(error => {
+            console.error('Error loading combined chart:', error);
+            container.innerHTML = `<div class="error-message">Error loading combined chart: ${error.message}</div>`;
+        });
+}
+
+// Render combined chart
+function renderCombinedChart(container, deviceId, data) {
+    // Clear container
+    container.innerHTML = '';
+    
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    canvas.id = 'main-chart';
+    canvas.className = 'trends-chart';
+    container.appendChild(canvas);
+    
+    // Process data
+    const allTimestamps = new Set();
+    
+    // Collect all timestamps
+    ['temperature', 'pH', 'EC'].forEach(metric => {
+        if (Array.isArray(data[metric])) {
+            data[metric].forEach(point => {
+                if (Array.isArray(point) && point.length === 2) {
+                    allTimestamps.add(point[0]);
                 }
-            };
-            
-            // Handle incoming messages
-            evtSource.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    // Skip status messages
-                    if (data.status) return;
-                    
-                    // Update device ID if available
-                    if (data.deviceID) {
-                        // Update the current device if needed
-                        if (!currentDevice) {
-                            currentDevice = data.deviceID;
-                        }
-                        
-                        // Always update device ID display
-                        document.getElementById('device-id').textContent = data.deviceID;
-                    }
-                    
-                    // Skip updates for devices that aren't the current focus
-                    if (data.deviceID && currentDevice && data.deviceID !== currentDevice) {
-                        return;
-                    }
-                    
-                    // Update last update timestamp
-                    if (data.lastUpdate) {
-                        const date = new Date(data.lastUpdate);
-                        document.getElementById('last-update').textContent = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-                    }
-                    
-                    // Update sensor values
-                    if (data.temperature) {
-                        const temperatureEl = document.getElementById('temperature-value');
-                        if (temperatureEl) temperatureEl.textContent = `${Number(data.temperature).toFixed(1)}°C`;
-                    }
-                    
-                    if (data.pH) {
-                        const phEl = document.getElementById('ph-value');
-                        if (phEl) phEl.textContent = Number(data.pH).toFixed(2);
-                    }
-                    
-                    if (data.EC) {
-                        const ecEl = document.getElementById('ec-value');
-                        if (ecEl) ecEl.textContent = `${Number(data.EC).toFixed(2)} μS/cm`;
-                    }
-                    
-                    if (data.TDS) {
-                        const tdsEl = document.getElementById('tds-value');
-                        if (tdsEl) tdsEl.textContent = `${Number(data.TDS).toFixed(1)} ppm`;
-                    }
-                    
-                    if (data.ORP) {
-                        const orpEl = document.getElementById('orp-value');
-                        if (orpEl) orpEl.textContent = `${Number(data.ORP).toFixed(1)} mV`;
-                    }
-                    
-                    // Update water level indicator and values
-                    if (data.waterLevel) {
-                        const tankEl = document.getElementById('tank-water-level');
-                        const levelEl = document.getElementById('water-level-percent');
-                        const valueEl = document.getElementById('water-level-value');
-                        
-                        if (tankEl) tankEl.style.height = `${data.waterLevel}%`;
-                        if (levelEl) levelEl.textContent = Math.round(data.waterLevel);
-                        if (valueEl && data.distance) valueEl.textContent = Number(data.distance).toFixed(1);
-                    }
-                    
-                    // Request chart update when new data arrives (only once per minute at most)
-                    const currentTime = Math.floor(Date.now() / 1000);
-                    if (data.timestamp && 
-                        (!window.lastChartUpdate || 
-                         data.timestamp > window.lastChartUpdate || 
-                         currentTime - window.lastChartRequestTime > 60)) {
-                        
-                        window.lastChartUpdate = data.timestamp;
-                        window.lastChartRequestTime = currentTime;
-                        
-                        // Throttle chart updates - only update if not actively using controls
-                        if (!window.isChartInteractionActive) {
-                            updateMainChart();
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error processing SSE message:", e);
-                }
-            };
-            
-            // Handle connection errors
-            evtSource.onerror = function(event) {
-                console.error("SSE connection error:", event);
-                
-                // Update the live status indicator
-                const liveIndicator = document.querySelector('.status-indicator.live');
-                if (liveIndicator) {
-                    liveIndicator.style.backgroundColor = "#e74a3b"; // Error - red
-                }
-                
-                // Close the current connection
-                evtSource.close();
-                
-                // Implement exponential backoff for reconnection
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    const delay = baseReconnectDelay * Math.pow(2, reconnectAttempts);
-                    console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
-                    
-                    setTimeout(() => {
-                        reconnectAttempts++;
-                        setupSSE();
-                    }, delay);
-                } else {
-                    console.error(`Max reconnection attempts (${maxReconnectAttempts}) reached.`);
-                    // Update UI to show disconnected state
-                    if (liveIndicator) {
-                        liveIndicator.textContent = "Disconnected";
-                        liveIndicator.classList.remove("live");
-                        liveIndicator.classList.add("error");
-                    }
-                }
-            };
+            });
         }
-    </script>
-</body>
-</html>
+    });
+    
+    // Sort timestamps
+    const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+    
+    // Create lookup maps for each metric
+    const tempMap = new Map();
+    const phMap = new Map();
+    const ecMap = new Map();
+    
+    // Populate lookup maps
+    ['temperature', 'pH', 'EC'].forEach(metric => {
+        if (Array.isArray(data[metric])) {
+            data[metric].forEach(point => {
+                if (Array.isArray(point) && point.length === 2) {
+                    const [timestamp, value] = point;
+                    if (metric === 'temperature') tempMap.set(timestamp, value);
+                    else if (metric === 'pH') phMap.set(timestamp, value);
+                    else if (metric === 'EC') ecMap.set(timestamp, value);
+                }
+            });
+        }
+    });
+    
+    // Format timestamps for display
+    const labels = sortedTimestamps.map(ts => {
+        const date = new Date(ts * 1000);
+        return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    });
+    
+    // Get values for each metric
+    const tempValues = sortedTimestamps.map(ts => {
+        const value = tempMap.get(ts);
+        return value === 'NaN' || value === 'nan' ? null : value;
+    });
+    
+    const phValues = sortedTimestamps.map(ts => {
+        const value = phMap.get(ts);
+        return value === 'NaN' || value === 'nan' ? null : value;
+    });
+    
+    const ecValues = sortedTimestamps.map(ts => {
+        const value = ecMap.get(ts);
+        return value === 'NaN' || value === 'nan' ? null : value;
+    });
+    
+    // Create chart
+    try {
+        new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Temperature (°C)',
+                        data: tempValues,
+                        borderColor: '#4e73df',
+                        backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        fill: false,
+                        yAxisID: 'y-temperature',
+                        spanGaps: true
+                    },
+                    {
+                        label: 'pH',
+                        data: phValues,
+                        borderColor: '#e74a3b',
+                        backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        fill: false,
+                        yAxisID: 'y-ph',
+                        spanGaps: true
+                    },
+                    {
+                        label: 'EC (μS/cm)',
+                        data: ecValues,
+                        borderColor: '#36b9cc',
+                        backgroundColor: 'rgba(54, 185, 204, 0.1)',
+                        tension: 0.4,
+                        borderWidth: 2,
+                        fill: false,
+                        yAxisID: 'y-ec',
+                        spanGaps: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: `Device: ${deviceId}`
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    'y-temperature': {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Temperature (°C)'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    'y-ph': {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'pH'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        },
+                        min: 0,
+                        max: 14
+                    },
+                    'y-ec': {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'EC (μS/cm)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error creating combined chart:', error);
+        container.innerHTML = `<div class="error-message">Failed to create combined chart: ${error.message}</div>`;
+    }
+}

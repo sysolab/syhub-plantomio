@@ -285,7 +285,7 @@ def latest_data():
 
 @app.route('/api/query')
 def query_data():
-    """Query historical data from VictoriaMetrics with improved error handling"""
+    """Query historical data from VictoriaMetrics"""
     try:
         # Get parameters
         metric = request.args.get('metric', 'temperature')
@@ -296,22 +296,22 @@ def query_data():
         
         # Calculate time range
         now = int(time.time())
-        start = now - (minutes * 60)  # Convert minutes to seconds
+        start = now - (minutes * 60)
         
         # Construct device filter if provided
         device_filter = f',device="{device_id}"' if device_id else ''
         
         # Optimize step size based on time range to reduce data points
         if minutes >= 10080:  # 7 days
-            step_size = '2h'  # 2 hour intervals for week view
+            step_size = '2h'
         elif minutes >= 1440:  # 24 hours
-            step_size = '15m'  # 15 minute intervals for day view
+            step_size = '15m'
         elif minutes >= 720:  # 12 hours
-            step_size = '8m'  # 8 minute intervals
+            step_size = '8m'
         else:
-            step_size = '1m'  # 1 minute for shorter ranges
+            step_size = '1m'
         
-        # Construct query with exact metric name
+        # Construct query
         query = f'{metric}{{{device_filter}}}'
         
         params = {
@@ -321,22 +321,19 @@ def query_data():
             'step': step_size
         }
         
-        # Log the query for debugging
         app.logger.info(f"VM Query: {query}")
         
-        # Use a longer timeout for range queries
+        # Increase timeout for larger queries
         response = requests.get(f"{VICTORIA_URL}/api/v1/query_range", params=params, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            result_count = len(data.get('data', {}).get('result', []))
-            app.logger.info(f"VM Response for {metric}: got {result_count} results")
             
             # Process data for frontend consumption
             if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
                 result = data['data']['result'][0]
                 
-                # Filter out NaN values and handle as null
+                # Process values to handle NaN
                 if 'values' in result:
                     processed_values = []
                     
@@ -345,39 +342,30 @@ def query_data():
                             processed_values.append([timestamp, None])
                         else:
                             try:
-                                # Convert to float for consistency
                                 processed_values.append([timestamp, float(value)])
                             except ValueError:
                                 processed_values.append([timestamp, None])
                     
                     # Replace values with processed ones
                     result['values'] = processed_values
-                    data['data']['result'][0] = result
-                
-                return jsonify({"status": "success", "data": data})
             
-            # Return empty result with success status
-            return jsonify({
-                "status": "success",
-                "data": {
-                    "resultType": "matrix",
-                    "result": []
-                }
-            })
-        else:
-            # Log error response
-            app.logger.error(f"VM Error response: {response.status_code} - {response.text}")
-            return jsonify({"status": "error", "message": f"VM API returned status {response.status_code}"}), 500
+            return jsonify({"status": "success", "data": data})
+        
+        # Return empty result with success status if no data
+        return jsonify({
+            "status": "success",
+            "data": {
+                "resultType": "matrix",
+                "result": []
+            }
+        })
     except Exception as e:
         app.logger.error(f"Error querying data: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/trends')
 def trends_data():
-    """
-    Query multiple metrics over time for trends page
-    Returns data in a format optimized for frontend charting
-    """
+    """Query multiple metrics over time for trends page"""
     try:
         # Get parameters
         metrics_str = request.args.get('metrics', 'temperature,pH,EC,TDS,distance,ORP')
@@ -394,34 +382,34 @@ def trends_data():
         now = int(time.time())
         start = now - (minutes * 60)
         
-        # Construct device filter
-        device_filter = f',device="{device_id}"' if device_id else ''
-        
-        # Optimize step size based on time range
-        if minutes >= 10080:  # 7 days
-            step_size = '2h'
-        elif minutes >= 1440:  # 24 hours
-            step_size = '15m'
-        elif minutes >= 720:  # 12 hours
-            step_size = '8m'
-        else:
-            step_size = '1m'
-        
-        # Create result object
+        # Initialize results
         results = {}
         
-        # Log request for debugging
-        app.logger.info(f"Trends data request: metrics={metrics_list}, device={device_id}, minutes={minutes}")
-        
-        # Query each metric with improved error handling
+        # Process each metric
         for metric in metrics_list:
+            metric = metric.strip()
+            if not metric:
+                continue
+                
             try:
-                metric_name = metric.strip()
-                if not metric_name:
-                    continue
+                # Build device filter
+                device_filter = f'device="{device_id}"' if device_id else ''
                 
-                query = f'{metric_name}{{{device_filter}}}'
+                # Build query
+                query = f'{metric}{{{device_filter}}}' if device_filter else metric
                 
+                # Determine step size based on time range
+                if minutes >= 10080:  # 7 days
+                    step_size = '2h'
+                elif minutes >= 1440:  # 24 hours
+                    step_size = '15m'
+                elif minutes >= 720:  # 12 hours
+                    step_size = '8m'
+                else:
+                    step_size = '1m'
+                
+                # Query Victoria Metrics
+                query_url = f"{VICTORIA_URL}/api/v1/query_range"
                 params = {
                     'query': query,
                     'start': start,
@@ -432,47 +420,39 @@ def trends_data():
                 app.logger.info(f"VM Query: {query}")
                 
                 # Use longer timeout for range queries
-                response = requests.get(f"{VICTORIA_URL}/api/v1/query_range", params=params, timeout=10)
+                response = requests.get(query_url, params=params, timeout=10)
                 
-                if response.status_code != 200:
-                    app.logger.error(f"VM Error response for {metric_name}: {response.status_code} - {response.text}")
-                    results[metric_name] = []
-                    continue
-                
-                data = response.json()
-                
-                if not data.get('data', {}).get('result') or len(data['data']['result']) == 0:
-                    # No data for this metric
-                    results[metric_name] = []
-                    continue
-                
-                # Extract and process values
+                # Process response
                 values = []
-                for point in data['data']['result'][0].get('values', []):
-                    timestamp, value = point
+                if response.status_code == 200:
+                    data = response.json()
                     
-                    # Format timestamp as epoch seconds (integer)
-                    ts = int(timestamp)
-                    
-                    # Handle NaN values as null
-                    if value == "NaN" or value == "nan":
-                        values.append([ts, None])
-                    else:
-                        try:
-                            # Convert to float
-                            values.append([ts, float(value)])
-                        except ValueError:
-                            values.append([ts, None])
+                    if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
+                        result = data['data']['result'][0]
+                        
+                        if 'values' in result:
+                            for point in result['values']:
+                                if len(point) == 2:
+                                    timestamp, value = point
+                                    
+                                    # Handle NaN values
+                                    if value == "NaN" or value == "nan":
+                                        values.append([int(timestamp), None])
+                                    else:
+                                        try:
+                                            values.append([int(timestamp), float(value)])
+                                        except (ValueError, TypeError):
+                                            values.append([int(timestamp), None])
                 
-                # Store values for this metric
-                results[metric_name] = values
+                # Store in results
+                results[metric] = values
             except Exception as e:
-                app.logger.error(f"Error processing metric {metric_name}: {str(e)}")
-                results[metric_name] = []
+                app.logger.error(f"Error processing metric {metric}: {str(e)}")
+                results[metric] = []
         
         return jsonify({"status": "success", "data": results})
     except Exception as e:
-        app.logger.error(f"Error fetching trends data: {str(e)}", exc_info=True)
+        app.logger.error(f"Error in trends_data: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/health')

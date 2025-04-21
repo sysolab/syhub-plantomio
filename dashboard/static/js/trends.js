@@ -1,108 +1,73 @@
-// trends.js - Optimized JavaScript for the trends page
-// Handles chart rendering and data loading with improved error handling
-
-// State management
-const state = {
-    timeRange: 1440, // Default time range in minutes (24 hours)
-    charts: {},
-    currentDevice: null,
-    isLoading: false
-};
-
-// Chart configuration for different metrics
-const chartConfig = {
-    temperature: {
-        label: 'Temperature (°C)',
-        color: '#4e73df',
-        background: 'rgba(78, 115, 223, 0.1)',
-        min: 10,
-        max: 40
-    },
-    pH: {
-        label: 'pH Level',
-        color: '#e74a3b',
-        background: 'rgba(231, 74, 59, 0.1)',
-        min: 0, 
-        max: 14
-    },
-    TDS: {
-        label: 'TDS (ppm)',
-        color: '#1cc88a',
-        background: 'rgba(28, 200, 138, 0.1)',
-        min: 0,
-        max: 2000
-    },
-    EC: {
-        label: 'EC (μS/cm)',
-        color: '#36b9cc',
-        background: 'rgba(54, 185, 204, 0.1)',
-        min: 0,
-        max: 50
-    },
-    distance: {
-        label: 'Distance (m)',
-        color: '#f6c23e',
-        background: 'rgba(246, 194, 62, 0.1)',
-        min: 0,
-        max: 10
-    },
-    ORP: {
-        label: 'ORP (mV)',
-        color: '#6f42c1',
-        background: 'rgba(111, 66, 193, 0.1)',
-        min: 0,
-        max: 500
-    }
-};
-
-// Format timestamp for display
-function formatTimestamp(timestamp) {
-    if (!timestamp) return '';
-    const date = new Date(timestamp * 1000);
+// Simplified trends.js - For reliable chart rendering
+document.addEventListener('DOMContentLoaded', function() {
+    // Get device ID
+    const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
     
-    // For time ranges > 24 hours, include date
-    if (state.timeRange > 1440) {
-        return date.toLocaleDateString([], {month: 'short', day: 'numeric'}) + ' ' +
-               date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    }
+    // Initialize charts with default time range (24 hours)
+    loadAllCharts(1440, deviceId);
     
-    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-}
-
-// Handle time range selection
-function setupTimeRangeButtons() {
+    // Set up time range buttons
     document.querySelectorAll('.time-btn').forEach(button => {
         button.addEventListener('click', function() {
-            // Remove active class from all buttons
+            // Update active button
             document.querySelectorAll('.time-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
-            // Add active class to this button
             this.classList.add('active');
             
-            // Get time range in minutes
-            const minutes = parseInt(this.dataset.minutes || 1440);
-            if (minutes !== state.timeRange) {
-                state.timeRange = minutes;
-                loadAllChartData();
+            // Get time range
+            let minutes = 1440;
+            if (this.textContent === '24 Hours') minutes = 1440;
+            else if (this.textContent === 'Week') minutes = 10080;
+            else if (this.textContent === 'Month') minutes = 43200;
+            else if (this.textContent === 'Custom') {
+                // Show date picker
+                document.querySelector('.date-range-selector').style.display = 'flex';
+                return;
             }
+            
+            // Hide date picker if not custom
+            document.querySelector('.date-range-selector').style.display = 'none';
+            
+            // Load charts with new time range
+            loadAllCharts(minutes, deviceId);
         });
     });
-}
-
-// Handle export buttons
-function setupExportButtons() {
+    
+    // Custom date range button
+    const applyBtn = document.querySelector('.btn-apply');
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function() {
+            const startDate = new Date(document.getElementById('start-date').value);
+            const endDate = new Date(document.getElementById('end-date').value);
+            
+            if (!startDate || !endDate) {
+                alert('Please select valid dates');
+                return;
+            }
+            
+            const diffMinutes = Math.round((endDate - startDate) / 60000);
+            if (diffMinutes <= 0) {
+                alert('End date must be after start date');
+                return;
+            }
+            
+            // Load charts with custom time range
+            loadAllCharts(diffMinutes, deviceId);
+        });
+    }
+    
+    // Export buttons
     document.querySelectorAll('.btn-export').forEach(button => {
         button.addEventListener('click', function() {
-            // Find parent panel to determine which chart to export
+            // Find the chart container
             const panel = this.closest('.chart-panel');
             if (!panel) return;
             
-            // Determine which chart to export based on panel heading
             const heading = panel.querySelector('h2');
             if (!heading) return;
             
+            // Get metric from heading
             const headingText = heading.textContent.trim().toLowerCase();
             let metric = '';
             
@@ -113,349 +78,306 @@ function setupExportButtons() {
             else if (headingText.includes('distance')) metric = 'distance';
             else if (headingText.includes('orp')) metric = 'ORP';
             
-            if (!metric || !state.charts[metric]) {
-                alert('Cannot export: Chart not found');
+            if (!metric) {
+                alert('Cannot identify chart metric');
                 return;
             }
             
-            // Create CSV data from chart
-            const chart = state.charts[metric];
-            const labels = chart.data.labels;
-            const data = chart.data.datasets[0].data;
-            
-            let csv = 'Time,' + chartConfig[metric].label + '\n';
-            for (let i = 0; i < labels.length; i++) {
-                csv += labels[i] + ',' + (data[i] !== null ? data[i] : '') + '\n';
+            // Get time range
+            let minutes = 1440;
+            const activeBtn = document.querySelector('.time-btn.active');
+            if (activeBtn) {
+                if (activeBtn.textContent === 'Week') minutes = 10080;
+                else if (activeBtn.textContent === 'Month') minutes = 43200;
             }
             
-            // Create download link
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${metric}_data.csv`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            // Get chart data and export
+            fetch(`/api/trends?metrics=${metric}&device=${deviceId}&minutes=${minutes}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.status || data.status !== 'success' || !data.data || !data.data[metric]) {
+                        throw new Error('No data available');
+                    }
+                    
+                    // Create CSV content
+                    let csv = 'Timestamp,' + getMetricLabel(metric) + '\n';
+                    data.data[metric].forEach(point => {
+                        if (Array.isArray(point) && point.length === 2) {
+                            const [timestamp, value] = point;
+                            const date = new Date(timestamp * 1000);
+                            const dateStr = date.toLocaleString();
+                            csv += dateStr + ',' + (value !== null ? value : '') + '\n';
+                        }
+                    });
+                    
+                    // Create download
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${metric}_data.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    alert('Error exporting data: ' + error.message);
+                });
         });
     });
-}
-
-// Initialize the page
-document.addEventListener('DOMContentLoaded', function() {
-    // Setup event handlers
-    setupTimeRangeButtons();
-    setupExportButtons();
     
-    // Mobile menu toggle
-    const mobileToggle = document.getElementById('mobile-toggle');
-    if (mobileToggle) {
-        mobileToggle.addEventListener('click', function() {
-            document.querySelector('.sidebar').classList.toggle('active');
-        });
-    }
-    
-    // Initialize charts and load data
-    initializeAllCharts();
-    
-    // Update service status
-    if (typeof updateServiceStatus === 'function') {
-        updateServiceStatus();
-        // Update every 60 seconds
-        setInterval(updateServiceStatus, 60000);
-    }
+    // Mobile sidebar toggle
+    document.getElementById('mobile-toggle').addEventListener('click', function() {
+        document.querySelector('.sidebar').classList.toggle('active');
+    });
 });
 
-// Set loading state for all charts
-function setLoading(isLoading) {
-    state.isLoading = isLoading;
+// Load all charts
+function loadAllCharts(minutes, deviceId) {
+    // Get list of metrics to load
+    const metrics = ['temperature', 'pH', 'TDS', 'EC', 'distance', 'ORP'];
     
-    // Update UI to reflect loading state
-    document.querySelectorAll('.chart-container').forEach(container => {
-        const messageEl = container.querySelector('.chart-message');
-        if (messageEl) {
-            if (isLoading) {
-                messageEl.textContent = "Loading data...";
-                messageEl.style.display = 'block';
-            } else {
-                messageEl.style.display = 'none';
-            }
-        }
+    // Set loading state for all charts
+    metrics.forEach(metric => {
+        const container = document.getElementById(`${metric}-chart-container`);
+        const messageEl = document.getElementById(`${metric}-chart-message`);
         
-        // Adjust opacity of canvas
-        const canvas = container.querySelector('canvas');
-        if (canvas) {
-            canvas.style.opacity = isLoading ? '0.5' : '1';
-        }
-    });
-}
-
-// Show error message for a specific chart
-function showChartError(metricId, message) {
-    const container = document.getElementById(`${metricId}-chart-container`);
-    const messageEl = document.getElementById(`${metricId}-chart-message`);
-    
-    if (container && messageEl) {
-        messageEl.textContent = message || "Error loading data";
-        messageEl.style.display = 'block';
-        container.classList.add('no-data');
-    }
-}
-
-// Clear error message for a specific chart
-function clearChartError(metricId) {
-    const container = document.getElementById(`${metricId}-chart-container`);
-    const messageEl = document.getElementById(`${metricId}-chart-message`);
-    
-    if (container && messageEl) {
-        messageEl.style.display = 'none';
-        container.classList.remove('no-data');
-    }
-}
-
-// Initialize a chart for a specific metric
-function initializeChart(metric) {
-    // Get canvas element
-    const canvasId = metric === 'pH' ? 'ph-chart' : `${metric.toLowerCase()}-chart`;
-    const canvas = document.getElementById(canvasId);
-    
-    if (!canvas) {
-        console.error(`Canvas for ${metric} not found`);
-        return;
-    }
-    
-    // Get chart configuration
-    const config = chartConfig[metric];
-    if (!config) {
-        console.error(`Configuration for ${metric} not found`);
-        return;
-    }
-    
-    // Initialize Chart.js instance with empty data
-    const ctx = canvas.getContext('2d');
-    
-    // Destroy existing chart if it exists
-    if (state.charts[metric]) {
-        state.charts[metric].destroy();
-        state.charts[metric] = null;
-    }
-    
-    // Create new chart
-    state.charts[metric] = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: config.label,
-                data: [],
-                borderColor: config.color,
-                backgroundColor: config.background,
-                tension: 0.4,
-                borderWidth: 2,
-                fill: true,
-                pointRadius: 2,
-                pointHoverRadius: 5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: {
-                        font: {
-                            size: 12
-                        }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y.toFixed(2);
-                            }
-                            return label;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: metric === 'pH' || metric === 'distance' ? true : false,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    },
-                    min: config.min,
-                    max: config.max,
-                    ticks: {
-                        maxTicksLimit: 6
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        maxTicksLimit: 8
-                    }
-                }
-            },
-            animation: {
-                duration: 150 // Faster animations for better performance
+        if (container && messageEl) {
+            messageEl.textContent = 'Loading data...';
+            messageEl.style.display = 'block';
+            
+            // Adjust canvas opacity
+            const canvas = container.querySelector('canvas');
+            if (canvas) {
+                canvas.style.opacity = '0.5';
             }
         }
     });
     
-    return state.charts[metric];
-}
-
-// Initialize all charts
-function initializeAllCharts() {
-    Object.keys(chartConfig).forEach(metric => {
-        initializeChart(metric);
-    });
-    
-    // Load initial data
-    loadAllChartData();
-}
-
-// Load data for all charts
-function loadAllChartData() {
-    // Get current device
-    const deviceElement = document.getElementById('device-id');
-    const deviceId = deviceElement ? deviceElement.textContent.trim() : 'plt-404cca470da0';
-    state.currentDevice = deviceId;
-    
-    // Set loading state
-    setLoading(true);
-    
-    // Fetch data for all metrics
-    const metrics = Object.keys(chartConfig).join(',');
-    const url = `/api/trends?metrics=${metrics}&device=${deviceId}&minutes=${state.timeRange}`;
-    
-    // Fetch with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-    
-    fetch(url, { signal: controller.signal })
+    // Fetch data for all metrics at once to reduce API calls
+    fetch(`/api/trends?metrics=${metrics.join(',')}&device=${deviceId}&minutes=${minutes}`)
         .then(response => {
-            clearTimeout(timeoutId);
             if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+                throw new Error(`HTTP error: ${response.status}`);
             }
             return response.json();
         })
         .then(result => {
-            if (result.status === 'success' && result.data) {
-                // Process each metric
-                let hasAnyData = false;
-                
-                Object.entries(result.data).forEach(([metric, data]) => {
-                    if (updateChart(metric, data)) {
-                        hasAnyData = true;
-                    }
-                });
-                
-                if (!hasAnyData) {
-                    console.warn('No data available for any metrics');
-                }
-            } else {
-                console.error('Invalid API response format:', result);
-                throw new Error('Invalid API response format');
+            if (result.status !== 'success' || !result.data) {
+                throw new Error('Invalid API response');
             }
-        })
-        .catch(error => {
-            console.error('Error fetching chart data:', error);
             
-            // Show error on all charts
-            Object.keys(chartConfig).forEach(metric => {
-                showChartError(metric, 'Error loading data: ' + (error.message || 'Unknown error'));
+            // Process each metric
+            metrics.forEach(metric => {
+                updateChart(metric, result.data[metric] || [], deviceId);
             });
         })
-        .finally(() => {
-            setLoading(false);
+        .catch(error => {
+            console.error('Error loading charts:', error);
+            
+            // Show error for all charts
+            metrics.forEach(metric => {
+                const container = document.getElementById(`${metric}-chart-container`);
+                const messageEl = document.getElementById(`${metric}-chart-message`);
+                
+                if (container && messageEl) {
+                    messageEl.textContent = 'Error loading data: ' + error.message;
+                    messageEl.style.display = 'block';
+                    
+                    // Reset canvas opacity
+                    const canvas = container.querySelector('canvas');
+                    if (canvas) {
+                        canvas.style.opacity = '1';
+                    }
+                }
+            });
         });
 }
 
-// Update a specific chart with new data
-function updateChart(metric, data) {
-    // Get chart
-    const chart = state.charts[metric];
-    if (!chart) {
-        console.error(`Chart for ${metric} not initialized`);
+// Update a specific chart
+function updateChart(metric, data, deviceId) {
+    // Get chart elements
+    const canvasId = metric === 'pH' ? 'ph-chart' : `${metric.toLowerCase()}-chart`;
+    const canvas = document.getElementById(canvasId);
+    
+    const containerId = `${metric}-chart-container`;
+    const container = document.getElementById(containerId);
+    
+    const messageId = `${metric}-chart-message`;
+    const messageEl = document.getElementById(messageId);
+    
+    if (!canvas || !container || !messageEl) {
+        console.error(`Elements not found for ${metric}`);
         return;
     }
     
-    // Extract timestamps and values
+    // Reset canvas opacity
+    canvas.style.opacity = '1';
+    
+    // Check if we have data
+    if (!Array.isArray(data) || data.length === 0) {
+        messageEl.textContent = 'No data available for the selected time range';
+        messageEl.style.display = 'block';
+        
+        // Clear canvas
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Destroy existing chart
+        if (window.chartInstances && window.chartInstances[metric]) {
+            window.chartInstances[metric].destroy();
+            window.chartInstances[metric] = null;
+        }
+        return;
+    }
+    
+    // Hide error message
+    messageEl.style.display = 'none';
+    
+    // Process data for chart
     const labels = [];
     const values = [];
-    let hasData = false;
     
-    if (Array.isArray(data)) {
-        // Process data points
-        data.forEach(point => {
-            if (Array.isArray(point) && point.length === 2) {
-                const [timestamp, value] = point;
-                
-                // Format timestamp
-                labels.push(formatTimestamp(timestamp));
-                
-                // Handle null values
-                values.push(value !== null && value !== undefined ? value : null);
-                
-                // Check if we have any valid data
-                if (value !== null && value !== undefined) {
-                    hasData = true;
+    data.forEach(point => {
+        if (Array.isArray(point) && point.length === 2) {
+            const [timestamp, value] = point;
+            
+            // Format timestamp
+            const date = new Date(timestamp * 1000);
+            labels.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+            
+            // Add value (null if missing)
+            values.push(value);
+        }
+    });
+    
+    // Get chart configuration
+    const config = getChartConfig(metric);
+    
+    // Destroy existing chart
+    if (window.chartInstances && window.chartInstances[metric]) {
+        window.chartInstances[metric].destroy();
+        window.chartInstances[metric] = null;
+    }
+    
+    // Create chart
+    const ctx = canvas.getContext('2d');
+    
+    try {
+        // Initialize chart instances object if it doesn't exist
+        window.chartInstances = window.chartInstances || {};
+        
+        // Create chart
+        window.chartInstances[metric] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: config.label,
+                    data: values,
+                    borderColor: config.color,
+                    backgroundColor: config.bgColor,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    fill: true,
+                    spanGaps: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: `Device: ${deviceId}`
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: metric === 'pH' || metric === 'distance',
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
                 }
             }
         });
-    }
-    
-    // Update chart data
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    
-    // Show or hide error message based on data availability
-    if (!hasData) {
-        showChartError(metric, "No data available for the selected time range");
-    } else {
-        clearChartError(metric);
+    } catch (e) {
+        console.error(`Error creating ${metric} chart:`, e);
+        messageEl.textContent = "Error creating chart";
+        messageEl.style.display = 'block';
         
-        // Dynamically adjust Y axis if needed
-        const config = chartConfig[metric];
-        if (config) {
-            const validValues = values.filter(v => v !== null && v !== undefined);
-            if (validValues.length > 0) {
-                const minValue = Math.min(...validValues);
-                const maxValue = Math.max(...validValues);
-                
-                // Determine if we need to adjust the scale
-                if (minValue < config.min || maxValue > config.max) {
-                    // Calculate new min/max with 10% padding
-                    const padding = (maxValue - minValue) * 0.1;
-                    const newMin = Math.max(0, Math.floor(minValue - padding));
-                    const newMax = Math.ceil(maxValue + padding);
-                    
-                    // Update chart scale
-                    chart.options.scales.y.min = newMin;
-                    chart.options.scales.y.max = newMax;
-                } else {
-                    // Reset to defaults
-                    chart.options.scales.y.min = config.min;
-                    chart.options.scales.y.max = config.max;
-                }
-            }
-        }
+        // Clear the canvas to avoid contamination
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
-    
-    // Update the chart
-    chart.update();
-    
-    return hasData;
+}
+
+// Get chart configuration
+function getChartConfig(metric) {
+    switch (metric) {
+        case 'temperature':
+            return {
+                label: 'Temperature (°C)',
+                color: '#4e73df',
+                bgColor: 'rgba(78, 115, 223, 0.1)'
+            };
+        case 'pH':
+            return {
+                label: 'pH Level',
+                color: '#e74a3b',
+                bgColor: 'rgba(231, 74, 59, 0.1)'
+            };
+        case 'TDS':
+            return {
+                label: 'TDS (ppm)',
+                color: '#1cc88a',
+                bgColor: 'rgba(28, 200, 138, 0.1)'
+            };
+        case 'EC':
+            return {
+                label: 'EC (μS/cm)',
+                color: '#36b9cc',
+                bgColor: 'rgba(54, 185, 204, 0.1)'
+            };
+        case 'distance':
+            return {
+                label: 'Distance (m)',
+                color: '#f6c23e',
+                bgColor: 'rgba(246, 194, 62, 0.1)'
+            };
+        case 'ORP':
+            return {
+                label: 'ORP (mV)',
+                color: '#6f42c1',
+                bgColor: 'rgba(111, 66, 193, 0.1)'
+            };
+        default:
+            return {
+                label: metric,
+                color: '#858796',
+                bgColor: 'rgba(133, 135, 150, 0.1)'
+            };
+    }
+}
+
+// Get metric label
+function getMetricLabel(metric) {
+    switch (metric) {
+        case 'temperature': return 'Temperature (°C)';
+        case 'pH': return 'pH Level';
+        case 'TDS': return 'TDS (ppm)';
+        case 'EC': return 'EC (μS/cm)';
+        case 'distance': return 'Distance (m)';
+        case 'ORP': return 'ORP (mV)';
+        default: return metric;
+    }
 }

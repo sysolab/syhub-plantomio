@@ -284,264 +284,317 @@ function resetChart() {
 }
 
 // Handle chart data loading
+// Simplified chart rendering function for dashboard.js
 function updateMainChart() {
-    // Ensure we have a valid device before trying to fetch data
-    if (!window.currentDevice) {
-        console.log("No device selected, skipping chart update");
+    // Get current device
+    const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
+    
+    // Get selected metric and time range
+    const selectedMetric = document.querySelector('.metric-btn.active')?.dataset.metric || 'combined';
+    const timeMinutes = parseInt(document.querySelector('.time-btn.active')?.dataset.minutes || 1440);
+    
+    console.log(`Loading chart: ${selectedMetric}, device: ${deviceId}, minutes: ${timeMinutes}`);
+    
+    // Get chart container and prepare canvas
+    const container = document.querySelector('.trends-container');
+    if (!container) {
+        console.error('Chart container not found');
         return;
     }
     
-    // If chart is being created, don't try to update
-    if (isChartInitializing) {
-        console.log("Chart is being created, skipping update");
-        return;
-    }
+    // Create new canvas element to avoid any issues with re-rendering
+    container.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvas.id = 'main-chart';
+    canvas.className = 'trends-chart';
+    container.appendChild(canvas);
     
-    // Reset chart and canvas first
-    resetChart();
+    // Show loading message
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-message';
+    loadingDiv.textContent = 'Loading chart data...';
+    container.appendChild(loadingDiv);
     
-    // Wait a small amount of time for the canvas to be available
-    setTimeout(() => {
-        const chartCanvas = document.getElementById('main-chart');
-        if (!chartCanvas) {
-            console.error("Chart canvas not found");
-            return;
-        }
-        
-        const ctx = chartCanvas.getContext('2d');
-        const timeMinutes = parseInt(document.querySelector('.time-btn.active')?.dataset.minutes || 1440);
-        const selectedMetric = document.querySelector('.metric-btn.active')?.dataset.metric || 'combined';
-        
-        // Show loading indicator
-        chartCanvas.style.opacity = '0.6';
-        
-        // Handle "combined" special case
-        if (selectedMetric === 'combined') {
-            loadCombinedChart(timeMinutes);
-            return;
-        }
-        
-        // Use the simpler method from trends.html - load single metric with full 24h history
-        fetch(`/api/query?metric=${selectedMetric}&device=${window.currentDevice}&minutes=${timeMinutes}`)
+    // Handle combined chart separately
+    if (selectedMetric === 'combined') {
+        fetch(`/api/trends?metrics=temperature,pH,EC&device=${deviceId}&minutes=${timeMinutes}`)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`HTTP error ${response.status}`);
                 }
                 return response.json();
             })
             .then(data => {
-                // Remove loading indicator
-                chartCanvas.style.opacity = '1';
+                // Remove loading message
+                container.removeChild(loadingDiv);
                 
-                if (!data || !data.status || data.status !== 'success') {
+                if (!data.status || data.status !== 'success' || !data.data) {
                     throw new Error('Invalid API response format');
                 }
                 
-                const timestamps = [];
-                const values = [];
+                // Process data
+                const allTimestamps = new Set();
+                const tempMap = {};
+                const phMap = {};
+                const ecMap = {};
                 
-                // Simplified data processing using directly returned format
-                if (data.data && data.data.result && data.data.result.length > 0) {
-                    const result = data.data.result[0];
-                    const seen = new Set(); // To deduplicate timestamps
-                    
-                    if (result.values && Array.isArray(result.values)) {
-                        result.values.forEach(point => {
-                            try {
-                                if (Array.isArray(point) && point.length === 2) {
-                                    const [timestamp, value] = point;
-                                    
-                                    // Skip already seen timestamps
-                                    if (seen.has(timestamp)) return;
-                                    seen.add(timestamp);
-                                    
-                                    // Format time
-                                    const date = new Date(timestamp * 1000);
-                                    const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                                    timestamps.push(timeStr);
-                                    
-                                    // Handle null or NaN values
-                                    if (value === null || value === 'NaN' || value === 'nan') {
-                                        values.push(null);
-                                    } else {
-                                        values.push(parseFloat(value));
-                                    }
-                                }
-                            } catch (e) {
-                                console.error("Error processing data point:", e);
+                // Collect timestamps and values
+                ['temperature', 'pH', 'EC'].forEach(metric => {
+                    if (Array.isArray(data.data[metric])) {
+                        data.data[metric].forEach(point => {
+                            if (Array.isArray(point) && point.length === 2) {
+                                const [timestamp, value] = point;
+                                allTimestamps.add(timestamp);
+                                
+                                if (metric === 'temperature') tempMap[timestamp] = value;
+                                else if (metric === 'pH') phMap[timestamp] = value;
+                                else if (metric === 'EC') ecMap[timestamp] = value;
                             }
                         });
                     }
-                }
+                });
                 
-                // Get chart color based on metric
-                let borderColor, backgroundColor, unit;
-                switch (selectedMetric) {
-                    case 'temperature':
-                        borderColor = '#4e73df';
-                        backgroundColor = 'rgba(78, 115, 223, 0.1)';
-                        unit = '°C';
-                        break;
-                    case 'pH':
-                        borderColor = '#e74a3b';
-                        backgroundColor = 'rgba(231, 74, 59, 0.1)';
-                        unit = '';
-                        break;
-                    case 'TDS':
-                        borderColor = '#1cc88a';
-                        backgroundColor = 'rgba(28, 200, 138, 0.1)';
-                        unit = 'ppm';
-                        break;
-                    case 'EC':
-                        borderColor = '#36b9cc';
-                        backgroundColor = 'rgba(54, 185, 204, 0.1)';
-                        unit = 'μS/cm';
-                        break;
-                    case 'distance':
-                        borderColor = '#f6c23e';
-                        backgroundColor = 'rgba(246, 194, 62, 0.1)';
-                        unit = 'm';
-                        break;
-                    case 'ORP':
-                        borderColor = '#6f42c1';
-                        backgroundColor = 'rgba(111, 66, 193, 0.1)';
-                        unit = 'mV';
-                        break;
-                    default:
-                        borderColor = '#858796';
-                        backgroundColor = 'rgba(133, 135, 150, 0.1)';
-                        unit = '';
-                }
+                // Convert timestamps to array and sort
+                const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
                 
-                                    // Create the chart with error handling
-                try {
-                    if (!timestamps.length) {
-                        // Draw empty chart with message if no data
-                        mainChart = new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: ['No data'],
-                                datasets: [{
-                                    label: `${selectedMetric} ${unit}`,
-                                    data: [null],
-                                    borderColor: borderColor,
-                                    backgroundColor: backgroundColor
-                                }]
+                // Format for display
+                const labels = sortedTimestamps.map(ts => {
+                    const date = new Date(ts * 1000);
+                    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                });
+                
+                // Create datasets
+                const tempValues = sortedTimestamps.map(ts => tempMap[ts]);
+                const phValues = sortedTimestamps.map(ts => phMap[ts]);
+                const ecValues = sortedTimestamps.map(ts => ecMap[ts]);
+                
+                // Create the chart
+                const ctx = canvas.getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Temperature (°C)',
+                                data: tempValues,
+                                borderColor: '#4e73df',
+                                backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false,
+                                yAxisID: 'y-temperature',
+                                spanGaps: true
                             },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: {
-                                    title: {
-                                        display: true,
-                                        text: 'No data available for selected time range'
-                                    }
-                                }
-                            }
-                        });
-                    } else {
-                        // Create chart with data
-                        mainChart = new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: timestamps,
-                                datasets: [
-                                    {
-                                        label: `${selectedMetric} ${unit}`,
-                                        data: values,
-                                        borderColor: borderColor,
-                                        backgroundColor: backgroundColor,
-                                        tension: 0.4,
-                                        borderWidth: 2,
-                                        fill: true,
-                                        spanGaps: true // Connect lines over null values
-                                    }
-                                ]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: {
-                                    legend: {
-                                        position: 'top',
-                                    },
-                                    title: {
-                                        display: true,
-                                        text: `Device: ${window.currentDevice}`
-                                    },
-                                    tooltip: {
-                                        callbacks: {
-                                            label: function(context) {
-                                                let label = context.dataset.label || '';
-                                                if (label) {
-                                                    label += ': ';
-                                                }
-                                                if (context.parsed.y !== null) {
-                                                    label += context.parsed.y.toFixed(2);
-                                                }
-                                                return label;
-                                            }
-                                        }
-                                    }
-                                },
-                                scales: {
-                                    y: {
-                                        beginAtZero: selectedMetric === 'pH' || selectedMetric === 'distance',
-                                        grid: {
-                                            color: 'rgba(0, 0, 0, 0.05)'
-                                        }
-                                    },
-                                    x: {
-                                        grid: {
-                                            display: false
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    }
-                    
-                    // Reset the creation flag
-                    isChartInitializing = false;
-                } catch (e) {
-                    console.error("Error creating chart:", e);
-                    chartCanvas.style.opacity = '1';
-                    isChartInitializing = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching chart data:', error);
-                // Remove loading indicator
-                chartCanvas.style.opacity = '1';
-                isChartInitializing = false;
-                
-                // Show error message in chart
-                try {
-                    mainChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: ['Error'],
-                            datasets: [{
-                                label: selectedMetric,
-                                data: [null],
+                            {
+                                label: 'pH',
+                                data: phValues,
                                 borderColor: '#e74a3b',
-                                backgroundColor: 'rgba(231, 74, 59, 0.1)'
-                            }]
+                                backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false,
+                                yAxisID: 'y-ph',
+                                spanGaps: true
+                            },
+                            {
+                                label: 'EC (μS/cm)',
+                                data: ecValues,
+                                borderColor: '#36b9cc',
+                                backgroundColor: 'rgba(54, 185, 204, 0.1)',
+                                tension: 0.4,
+                                borderWidth: 2,
+                                fill: false,
+                                yAxisID: 'y-ec',
+                                spanGaps: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: `Device: ${deviceId}`
+                            }
                         },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
+                        scales: {
+                            'y-temperature': {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
                                 title: {
                                     display: true,
-                                    text: 'Error loading data: ' + (error.message || 'Unknown error')
+                                    text: 'Temperature (°C)'
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            'y-ph': {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'pH'
+                                },
+                                grid: {
+                                    drawOnChartArea: false
+                                }
+                            },
+                            'y-ec': {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'EC (μS/cm)'
+                                },
+                                grid: {
+                                    drawOnChartArea: false
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
                                 }
                             }
                         }
-                    });
-                } catch (chartError) {
-                    console.error("Error creating error chart:", chartError);
-                }
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error loading combined chart:', error);
+                container.innerHTML = `<div class="error-message">Error loading chart: ${error.message}</div>`;
             });
-    }, 100); // Wait 100ms for DOM to fully update
+    } else {
+        // For single metrics
+        fetch(`/api/query?metric=${selectedMetric}&device=${deviceId}&minutes=${timeMinutes}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Remove loading message
+                container.removeChild(loadingDiv);
+                
+                // Process data
+                const labels = [];
+                const values = [];
+                
+                if (data.status === 'success' && data.data && data.data.result && data.data.result.length > 0) {
+                    const result = data.data.result[0];
+                    
+                    if (result.values && Array.isArray(result.values)) {
+                        result.values.forEach(point => {
+                            if (Array.isArray(point) && point.length === 2) {
+                                const [timestamp, value] = point;
+                                
+                                // Format timestamp
+                                const date = new Date(timestamp * 1000);
+                                const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                                
+                                labels.push(timeStr);
+                                values.push(value);
+                            }
+                        });
+                    }
+                }
+                
+                // Get chart color and label
+                let color, bgColor, label;
+                switch (selectedMetric) {
+                    case 'temperature':
+                        color = '#4e73df';
+                        bgColor = 'rgba(78, 115, 223, 0.1)';
+                        label = 'Temperature (°C)';
+                        break;
+                    case 'pH':
+                        color = '#e74a3b';
+                        bgColor = 'rgba(231, 74, 59, 0.1)';
+                        label = 'pH';
+                        break;
+                    case 'TDS':
+                        color = '#1cc88a';
+                        bgColor = 'rgba(28, 200, 138, 0.1)';
+                        label = 'TDS (ppm)';
+                        break;
+                    case 'EC':
+                        color = '#36b9cc';
+                        bgColor = 'rgba(54, 185, 204, 0.1)';
+                        label = 'EC (μS/cm)';
+                        break;
+                    case 'distance':
+                        color = '#f6c23e';
+                        bgColor = 'rgba(246, 194, 62, 0.1)';
+                        label = 'Distance (m)';
+                        break;
+                    case 'ORP':
+                        color = '#6f42c1';
+                        bgColor = 'rgba(111, 66, 193, 0.1)';
+                        label = 'ORP (mV)';
+                        break;
+                    default:
+                        color = '#858796';
+                        bgColor = 'rgba(133, 135, 150, 0.1)';
+                        label = selectedMetric;
+                }
+                
+                // Create chart
+                const ctx = canvas.getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels.length ? labels : ['No data'],
+                        datasets: [{
+                            label: label,
+                            data: values.length ? values : [null],
+                            borderColor: color,
+                            backgroundColor: bgColor,
+                            tension: 0.4,
+                            borderWidth: 2,
+                            fill: true,
+                            spanGaps: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: `Device: ${deviceId}`
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: selectedMetric === 'pH' || selectedMetric === 'distance',
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error loading chart:', error);
+                container.innerHTML = `<div class="error-message">Error loading chart: ${error.message}</div>`;
+            });
+    }
 }
