@@ -91,6 +91,11 @@ body {
   font-weight: 500;
 }
 
+.status-indicator.live {
+  position: relative;
+  padding-left: 20px;
+}
+
 .status-indicator.live::before {
   content: "";
   display: inline-block;
@@ -98,7 +103,12 @@ body {
   height: 8px;
   background-color: var(--success-color);
   border-radius: 50%;
-  margin-right: 0.5rem;
+  position: absolute;
+  left: 5px;
+}
+
+.status-indicator.offline::before {
+  background-color: var(--danger-color);
 }
 
 .device-id, .last-update {
@@ -342,26 +352,28 @@ body {
   align-items: center;
   min-width: 180px;
   width: 180px;
-  height: auto;
+  height: 280px;
   position: relative;
-}
-
-.tank-visualization {
-  width: 100px;
-  height: 150px;
-  border: 2px solid #ddd;
-  border-radius: 4px;
-  position: relative;
-  margin-bottom: 1rem;
-  overflow: hidden;
-  background-color: rgba(0,0,0,0.02);
 }
 
 .tank-graphics-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 80%;
+  height: 90%;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.tank-visualization {
+  width: 100px;
+  height: 200px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  position: relative;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  background-color: rgba(0,0,0,0.02);
 }
 
 .tank-level {
@@ -389,6 +401,7 @@ body {
 .tank-info {
   text-align: center;
   font-size: 0.8rem;
+  margin-top: auto;
 }
 
 .tank-info p {

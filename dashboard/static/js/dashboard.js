@@ -305,8 +305,8 @@ function updateMainChart() {
     // Get selected metric and time range
     const selectedMetric = document.querySelector('.metric-btn.active')?.dataset.metric || 'combined';
     const timeDropdown = document.getElementById('time-range-dropdown');
-    const timeMinutes = parseInt(timeDropdown?.value || 1440);
-    const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '15m';
+    const timeMinutes = parseInt(timeDropdown?.value || 5); // Default to 5 minutes if not found
+    const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '30s';
     
     console.log(`Loading chart: ${selectedMetric}, device: ${deviceId}, minutes: ${timeMinutes}, step: ${stepSize}`);
     
@@ -488,8 +488,8 @@ function updateMainChart() {
                 container.innerHTML = `<div class="error-message">Error loading chart: ${error.message}</div>`;
             });
     } else {
-        // For single metrics
-        fetch(`/api/query?metric=${selectedMetric}&device=${deviceId}&minutes=${timeMinutes}&step=${stepSize}`)
+        // For single metrics - use the trends API which has proven to work better
+        fetch(`/api/trends?metrics=${selectedMetric}&device=${deviceId}&minutes=${timeMinutes}&step=${stepSize}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error ${response.status}`);
@@ -500,115 +500,130 @@ function updateMainChart() {
                 // Remove loading message
                 container.removeChild(loadingDiv);
                 
+                if (!data.status || data.status !== 'success' || !data.data || !data.data[selectedMetric]) {
+                    throw new Error('No data available for the selected metric');
+                }
+                
                 // Process data
+                const chartData = data.data[selectedMetric];
                 const labels = [];
                 const values = [];
                 
-                if (data.status === 'success' && data.data && data.data.result && data.data.result.length > 0) {
-                    const result = data.data.result[0];
-                    
-                    if (result.values && Array.isArray(result.values)) {
-                        result.values.forEach(point => {
-                            if (Array.isArray(point) && point.length === 2) {
-                                const [timestamp, value] = point;
-                                
-                                // Format timestamp
-                                const date = new Date(timestamp * 1000);
-                                const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                                
-                                labels.push(timeStr);
-                                values.push(value);
-                            }
-                        });
+                // Format data for Chart.js
+                chartData.forEach(point => {
+                    if (Array.isArray(point) && point.length === 2) {
+                        const [timestamp, value] = point;
+                        const date = new Date(timestamp * 1000);
+                        labels.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                        values.push(value);
                     }
-                }
+                });
                 
-                // Get chart color and label
-                let color, bgColor, label;
+                // Get chart color based on metric
+                let borderColor, backgroundColor;
+                let unit = '';
                 switch (selectedMetric) {
                     case 'temperature':
-                        color = '#4e73df';
-                        bgColor = 'rgba(78, 115, 223, 0.1)';
-                        label = 'Temperature (°C)';
+                        borderColor = '#4e73df';
+                        backgroundColor = 'rgba(78, 115, 223, 0.1)';
+                        unit = '°C';
                         break;
                     case 'pH':
-                        color = '#e74a3b';
-                        bgColor = 'rgba(231, 74, 59, 0.1)';
-                        label = 'pH';
+                        borderColor = '#e74a3b';
+                        backgroundColor = 'rgba(231, 74, 59, 0.1)';
+                        unit = '';
                         break;
                     case 'TDS':
-                        color = '#1cc88a';
-                        bgColor = 'rgba(28, 200, 138, 0.1)';
-                        label = 'TDS (ppm)';
+                        borderColor = '#1cc88a';
+                        backgroundColor = 'rgba(28, 200, 138, 0.1)';
+                        unit = 'ppm';
                         break;
                     case 'EC':
-                        color = '#36b9cc';
-                        bgColor = 'rgba(54, 185, 204, 0.1)';
-                        label = 'EC (μS/cm)';
+                        borderColor = '#36b9cc';
+                        backgroundColor = 'rgba(54, 185, 204, 0.1)';
+                        unit = 'μS/cm';
                         break;
                     case 'distance':
-                        color = '#f6c23e';
-                        bgColor = 'rgba(246, 194, 62, 0.1)';
-                        label = 'Distance (m)';
+                        borderColor = '#f6c23e';
+                        backgroundColor = 'rgba(246, 194, 62, 0.1)';
+                        unit = 'm';
                         break;
                     case 'ORP':
-                        color = '#6f42c1';
-                        bgColor = 'rgba(111, 66, 193, 0.1)';
-                        label = 'ORP (mV)';
+                        borderColor = '#6f42c1';
+                        backgroundColor = 'rgba(111, 66, 193, 0.1)';
+                        unit = 'mV';
                         break;
                     default:
-                        color = '#858796';
-                        bgColor = 'rgba(133, 135, 150, 0.1)';
-                        label = selectedMetric;
+                        borderColor = '#858796';
+                        backgroundColor = 'rgba(133, 135, 150, 0.1)';
                 }
                 
-                // Create chart
-                const ctx = canvas.getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels.length ? labels : ['No data'],
-                        datasets: [{
-                            label: label,
-                            data: values.length ? values : [null],
-                            borderColor: color,
-                            backgroundColor: bgColor,
-                            tension: 0.4,
-                            borderWidth: 2,
-                            fill: true,
-                            spanGaps: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            },
-                            title: {
-                                display: true,
-                                text: `Device: ${deviceId}`
-                            }
+                // Create the chart with error handling
+                try {
+                    mainChart = new Chart(canvas.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: `${selectedMetric} ${unit}`,
+                                    data: values,
+                                    borderColor: borderColor,
+                                    backgroundColor: backgroundColor,
+                                    tension: 0.4,
+                                    borderWidth: 2,
+                                    fill: true
+                                }
+                            ]
                         },
-                        scales: {
-                            y: {
-                                beginAtZero: selectedMetric === 'pH' || selectedMetric === 'distance',
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                },
+                                title: {
+                                    display: true,
+                                    text: `Device: ${deviceId}`
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            if (context.parsed.y !== null) {
+                                                label += context.parsed.y.toFixed(2);
+                                            }
+                                            return label;
+                                        }
+                                    }
                                 }
                             },
-                            x: {
-                                grid: {
-                                    display: false
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    grid: {
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
+                                    }
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                } catch (e) {
+                    console.error("Error creating single metric chart:", e);
+                    container.innerHTML = `<div class="error-message">Error creating chart: ${e.message}</div>`;
+                }
             })
             .catch(error => {
-                console.error('Error loading chart:', error);
+                console.error('Error fetching chart data:', error);
                 container.innerHTML = `<div class="error-message">Error loading chart: ${error.message}</div>`;
             });
     }
