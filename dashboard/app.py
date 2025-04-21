@@ -17,7 +17,7 @@ app = Flask(__name__)
 NODERED_URL = f"http://localhost:{config['node_red']['port']}"
 VICTORIA_URL = f"http://localhost:{config['victoria_metrics']['port']}"
 PROJECT_NAME = config['project']['name']
-UPDATE_INTERVAL = 1  # Update interval in seconds
+UPDATE_INTERVAL = 60  # Update interval in seconds - CHANGED from 1 to 60 seconds to match device frequency
 
 # Available metrics and their last known values
 metrics = {
@@ -26,7 +26,8 @@ metrics = {
     "EC": {"value": 0, "last_updated": None},
     "TDS": {"value": 0, "last_updated": None},
     "waterLevel": {"value": 0, "last_updated": None},
-    "distance": {"value": 0, "last_updated": None}
+    "distance": {"value": 0, "last_updated": None},
+    "ORP": {"value": 0, "last_updated": None}  # Added ORP to available metrics
 }
 
 # Tank configuration with default values
@@ -53,16 +54,18 @@ def calculate_water_level(distance):
 
 def get_current_values():
     """Query VictoriaMetrics for the latest data points for each metric"""
+    now = int(time.time())
     result = {
         "deviceID": "plt-404cca470da0",
-        "lastUpdate": datetime.now().isoformat()
+        "lastUpdate": datetime.now().isoformat(),
+        "timestamp": now  # Default to current time, will be updated if we find an actual timestamp
     }
     
-    # Current timestamp for instant queries
-    now = int(time.time())
-    
     # Query each metric individually
-    for metric_name in metrics.keys():
+    available_metrics = ["temperature", "pH", "EC", "TDS", "distance", "ORP"]
+    metric_timestamps = []  # To track all timestamps from metrics
+    
+    for metric_name in available_metrics:
         try:
             # Use instant query for current value
             query_url = f"{VICTORIA_URL}/api/v1/query"
@@ -79,14 +82,20 @@ def get_current_values():
                     # Get the first result and extract value and timestamp
                     first_result = data['data']['result'][0]
                     if 'value' in first_result:
-                        value = float(first_result['value'][1])
-                        timestamp = first_result['value'][0]
+                        value = first_result['value'][1]
+                        timestamp = int(first_result['value'][0])  # Ensure it's an integer
                         
-                        # Store in metrics cache
-                        metrics[metric_name]['value'] = value
-                        metrics[metric_name]['last_updated'] = timestamp
+                        # Keep track of the timestamp for this metric
+                        metric_timestamps.append(timestamp)
                         
-                        # Add to result
+                        # Skip NaN values but include them in result as "NaN"
+                        if value != "NaN" and value != "nan":
+                            value = float(value)
+                            # Store in metrics cache
+                            metrics[metric_name]['value'] = value
+                            metrics[metric_name]['last_updated'] = timestamp
+                        
+                        # Always add to result, even if NaN
                         result[metric_name] = value
         except Exception as e:
             app.logger.error(f"Error querying {metric_name}: {str(e)}")
@@ -95,13 +104,22 @@ def get_current_values():
             if metrics[metric_name]['last_updated']:
                 result[metric_name] = metrics[metric_name]['value']
     
+    # Use the latest common timestamp as the device timestamp (all metrics should share the same timestamp)
+    if metric_timestamps:
+        # Find the most common timestamp (the one that appears most frequently)
+        from collections import Counter
+        timestamp_counts = Counter(metric_timestamps)
+        most_common_timestamp = timestamp_counts.most_common(1)[0][0]
+        result["timestamp"] = most_common_timestamp
+    
     # Add default values for missing metrics
     default_values = {
         "temperature": 25.0,
         "pH": 7.0,
         "EC": 1.0,
         "TDS": 500,
-        "distance": 10.0
+        "distance": 10.0,
+        "ORP": 300.0
     }
     
     for metric_name, default in default_values.items():
@@ -109,8 +127,13 @@ def get_current_values():
             result[metric_name] = default
     
     # Calculate water level if we have distance
-    if "distance" in result:
-        result["waterLevel"] = calculate_water_level(result["distance"])
+    if "distance" in result and result["distance"] != "NaN" and result["distance"] != "nan":
+        try:
+            # Ensure distance is a float for calculation
+            distance_value = float(result["distance"]) if isinstance(result["distance"], str) else result["distance"]
+            result["waterLevel"] = calculate_water_level(distance_value)
+        except (ValueError, TypeError):
+            result["waterLevel"] = 50.0  # Default if conversion fails
     elif "waterLevel" not in result:
         result["waterLevel"] = 50.0  # Default water level
     
@@ -136,12 +159,13 @@ def events():
     """SSE endpoint with real data from VictoriaMetrics"""
     def generate():
         sent_data = {}  # Track previously sent data to avoid duplicates
+        last_sent_timestamp = 0  # Track the last device timestamp we've sent
         
         try:
             # Send initial connection message
             yield f"data: {json.dumps({'status': 'connected', 'timestamp': datetime.now().isoformat()})}\n\n"
             
-            # Send data updates every second, but limit total time to avoid worker timeout
+            # Send data updates only when new device data is available, limiting total time to avoid worker timeout
             max_time = 25  # seconds (just under gunicorn's default 30 sec timeout)
             start_time = time.time()
             
@@ -149,17 +173,15 @@ def events():
                 # Get the latest data
                 current_data = get_current_values()
                 
-                # Check if data is different from last sent
-                current_hash = hash(json.dumps(current_data, sort_keys=True))
-                if current_hash not in sent_data or len(sent_data) > 100:
-                    # Reset sent_data if it gets too large
-                    if len(sent_data) > 100:
-                        sent_data = {}
+                # Check if data has a new timestamp from the device (not just our query timestamp)
+                device_timestamp = current_data.get("timestamp", 0)
+                
+                # Only send data if it's truly a new reading with a new timestamp
+                if device_timestamp > last_sent_timestamp:
+                    # Update last sent timestamp
+                    last_sent_timestamp = device_timestamp
                     
-                    # Add current hash to sent data
-                    sent_data[current_hash] = time.time()
-                    
-                    # Send data
+                    # Send the new data
                     yield f"data: {json.dumps(current_data)}\n\n"
                 
                 # Sleep for update interval, but don't exceed max time
@@ -320,8 +342,8 @@ def trends_data():
         metrics_list = request.args.get('metrics', 'temperature,pH,EC,TDS,distance,ORP').split(',')
         device_id = request.args.get('device', '')
         
-        # Parse time range (default to last 10 minutes)
-        minutes = int(request.args.get('minutes', 10))
+        # Parse time range (default to last 24 hours)
+        minutes = int(request.args.get('minutes', 1440))  # Default to 24 hours
         
         # Calculate time range
         now = int(time.time())
@@ -330,8 +352,17 @@ def trends_data():
         # Construct device filter if provided - using device as the field name (from VM data)
         device_filter = f',device="{device_id}"' if device_id else ''
         
-        # Adjust step size based on time range to reduce data points
-        step_size = '10m' if minutes >= 1440 else '5m' if minutes >= 720 else '1m'
+        # Optimize step size based on time range to reduce data points
+        # For 24 hours, use 15-minute steps to get approximately 96 points for a smoother chart
+        # that's still efficient on resources
+        if minutes >= 10080:  # 7 days
+            step_size = '2h'  # 2 hour intervals for week view (84 points)
+        elif minutes >= 1440:  # 24 hours
+            step_size = '15m'  # 15 minute intervals for day view (96 points)
+        elif minutes >= 720:  # 12 hours
+            step_size = '8m'  # 8 minute intervals (90 points)
+        else:
+            step_size = '1m'  # 1 minute for shorter ranges
         
         results = {}
         
@@ -351,18 +382,15 @@ def trends_data():
                     'query': query,
                     'start': start,
                     'end': now,
-                    'step': step_size  # Adjust step size to reduce data volume
+                    'step': step_size  # Optimized step size to reduce data volume
                 }
                 
                 # Log the specific query for debugging
                 app.logger.info(f"VM Query: {query}")
                 
-                response = requests.get(query_url, params=params, timeout=3)
+                response = requests.get(query_url, params=params, timeout=5)  # Increased timeout for bulk data
                 if response.status_code == 200:
                     data = response.json()
-                    
-                    # Log the response for debugging
-                    app.logger.info(f"VM Response for {metric_name}: {data.get('data', {}).get('result', [])[:1]}")
                     
                     if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
                         # Extract unique timestamps and values
@@ -371,13 +399,18 @@ def trends_data():
                         
                         for point in data['data']['result'][0].get('values', []):
                             timestamp, value = point
-                            # Skip NaN values
+                            
+                            # Skip NaN values but keep track of the timestamp
                             if value == "NaN" or value == "nan":
+                                # Include NaN values as null for proper gap rendering
+                                if timestamp not in seen_timestamps:
+                                    seen_timestamps.add(timestamp)
+                                    values.append([timestamp, None])
                                 continue
                                 
                             if timestamp not in seen_timestamps:
                                 seen_timestamps.add(timestamp)
-                                values.append([timestamp, value])
+                                values.append([timestamp, float(value)])
                         
                         results[metric] = values
             except Exception as e:

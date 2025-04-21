@@ -773,8 +773,6 @@ body {
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
-  left: 0;
-  right: 0;
 }
 
 .service-status-panel .panel-header {
