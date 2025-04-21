@@ -997,271 +997,131 @@ EOF
 
 # Setup WiFi
 setup_wifi() {
-  if [ "${config_configure_network}" != "true" ]; then
-    log_message "Network configuration skipped by config"
-    return 0
-  fi
+  log_message "Setting up WiFi access point..."
   
-  log_message "Setting up RaspAP for WiFi Access Point"
+  # Set up WiFi access point settings
+  WIFI_SSID="SyHub"
+  WIFI_PASSWORD="syhub123"
+  WIFI_COUNTRY="US"
+  WIFI_CHANNEL="1"
+  ADMIN_PASS="syhub123"
   
-  # Check required parameters
-  if [ -z "$WIFI_AP_SSID" ] || [ -z "$WIFI_AP_PASSWORD" ]; then
-    log_message "Error: Missing required WiFi configuration parameters."
-    log_message "Check your config.yml file for WiFi settings."
-    return 1
-  fi
-  
-  # Check country code
-  if [ -z "${config_wifi_country_code}" ]; then
-    log_message "Warning: WiFi country code not set. Using 'DE' as default."
-    config_wifi_country_code="DE"
-  fi
-  
-  # Install curl if not already installed
-  if ! command -v curl &> /dev/null; then
-    log_message "Installing curl for RaspAP installation"
-    apt install -y curl || {
-      log_message "Error installing curl. RaspAP setup failed."
-      return 1
-    }
-  fi
-  
-  # Create temporary directory for custom installer
-  RASAP_TMP_DIR=$(mktemp -d)
-  cd "$RASAP_TMP_DIR" || {
-    log_message "Failed to create temporary directory for RaspAP installation"
-    return 1
-  }
-  
-  # Download the RaspAP installer script
-  log_message "Downloading RaspAP installer"
-  curl -sL https://install.raspap.com -o installer.sh || {
-    log_message "Failed to download RaspAP installer"
-    return 1
-  }
-  
-  # Create options for unattended installation
-  log_message "Creating unattended installation file for RaspAP"
-  cat > "$RASAP_TMP_DIR/default_values" << EOF
-hostname=${PROJECT_NAME}
-ssid=${WIFI_AP_SSID}
-wpa_passphrase=${WIFI_AP_PASSWORD}
-channel=1
-country_code=${config_wifi_country_code}
-offline=0
-adblock=0
-openvpn=0
-vpn=0
-wireguard=0
-tor=0
-mode=unattended
-assume_yes=1
-EOF
-  
-  # Create custom config.php for RaspAP
-  log_message "Creating custom RaspAP configuration"
-  mkdir -p "$RASAP_TMP_DIR/config"
-  cat > "$RASAP_TMP_DIR/config/config.php" << EOF
-<?php
-
-/**
- * Raspbian WiFi Configuration Portal
- *
- * Enables use of simple web interface rather than SSH to control wifi and hostapd
- * Based on https://github.com/raspberrypi/documentation/tree/master/configuration/wireless/headless 
- * and https://github.com/billz/raspap-webgui
- *
- * @author     Lawrence Yau <sirlagz@gmail.com>
- * @author     Bill Zimmerman <billzimmerman@gmail.com>
- * @license    GNU General Public License, version 3 (GPL-3.0)
- * @version    4.8.0
- * @link       https://github.com/raspap/raspap-webgui/
- *
- */
-
-// Set configuration options
-define('RASPI_CONFIG', '/etc/raspap');
-define('RASPI_SUDOERS_FILE', '/etc/sudoers.d/raspap');
-define('RASPI_CONFIG_NETWORK', RASPI_CONFIG.'/networking');
-define('RASPI_LOG_PATH', '/var/log');
-define('RASPI_CONFIG_DHCPCD', '/etc/dhcpcd.conf');
-define('RASPI_ADMIN_DETAILS', RASPI_CONFIG.'/raspap.auth');
-define('RASPI_DNSMASQ_PREFIX', 'raspap-');
-define('RASPI_DNSMASQ_CONFIG', '/etc/dnsmasq.d/090_raspap.conf');
-define('RASPI_HOSTAPD_CONFIG', '/etc/hostapd/hostapd.conf');
-define('RASPI_DHCPCD_CONFIG', '/etc/dhcpcd.conf');
-define('RASPI_ADBLOCK_LISTPATH', '/etc/raspap/adblock/');
-define('RASPI_ADBLOCK_CONFIG', RASPI_ADBLOCK_LISTPATH.'adblock.conf');
-define('RASPI_ADBLOCK_LOG', RASPI_LOG_PATH.'/adblock.log');
-define('RASPI_OPENVPN_CLIENT_PATH', RASPI_CONFIG.'/openvpn/client');
-define('RASPI_OPENVPN_CLIENT_CONFIG', RASPI_CONFIG.'/openvpn/client/client.conf');
-define('RASPI_OPENVPN_CLIENT_LOGIN', RASPI_CONFIG.'/openvpn/client/login.conf');
-define('RASPI_OPENVPN_SERVER_CONFIG', '/etc/openvpn/server/server.conf');
-define('RASPI_TORPROXY_CONFIG', '/etc/tor/torrc');
-define('RASPI_WIREGUARD_PATH', RASPI_CONFIG.'/wireguard');
-define('RASPI_WIREGUARD_CONFIG', '/etc/wireguard/wg0.conf');
-define('RASPI_LIGHTTPD_CONFIG', '/etc/lighttpd/lighttpd.conf');
-define('RASPI_ACCESS_CHECK_IP', '1.1.1.1');
-define('RASPI_ACCESS_CHECK_DNS', '1.1.1.1');
-
-// Constants for configuration file paths
-define('RASPI_HOSTAPD_CTRL_INTERFACE', '/var/run/hostapd');
-define('RASPI_WPA_SUPPLICANT_CONFIG', '/etc/wpa_supplicant/wpa_supplicant.conf');
-define('RASPI_VERSION', '4.8.0');
-
-// Optional services, set to true to enable.
-define('RASPI_WIFICLIENT_ENABLED', true);
-define('RASPI_HOTSPOT_ENABLED', true);
-define('RASPI_NETWORK_ENABLED', true);
-define('RASPI_DHCP_ENABLED', true);
-define('RASPI_ADBLOCK_ENABLED', false);
-define('RASPI_OPENVPN_ENABLED', false);
-define('RASPI_VPN_PROVIDER_ENABLED', false);
-define('RASPI_WIREGUARD_ENABLED', false);
-define('RASPI_TORPROXY_ENABLED', false);
-define('RASPI_CONFAUTH_ENABLED', true);
-define('RASPI_CHANGETHEME_ENABLED', false);
-define('RASPI_VNSTAT_ENABLED', true);
-define('RASPI_SYSTEM_ENABLED', true);
-define('RASPI_MONITOR_ENABLED', false);
-
-// Theme options
-define('RASPI_THEME', 'default');
-
-// Authentication options
-define('RASPI_AUTH_ENABLED', 1);   // 1/0 - enables/disables session validation
-define('RASPI_AUTH_MAX_OVERRIDE', 10); // Max allowed attempts to bypass session check
-define('RASPI_USERID', 'admin');       // Default user account
-define('RASPI_PASSWD', 'secret');     // Default password (will be changed on first load)
-
-// Configuration
-define('RASPI_PREFER_IPVERSION', 4);
-
-// Enable/disable option to use the default DNS
-define('RASPI_USE_DEFAULTS_NAMES', true);
-
-// Locale settings, if any
-define('LOCALE_ROOT', './locale');
-define('LOCALE_DOMAIN', 'messages');
-EOF
-  
-  # Make the installer script executable
-  chmod +x "$RASAP_TMP_DIR/installer.sh"
-  
-  # Run the installer script with custom options
-  log_message "Installing RaspAP in manual mode"
-  cd "$RASAP_TMP_DIR" || return 1
-  ./installer.sh --yes || {
-    log_message "RaspAP installation failed"
-    return 1
-  }
-  
-  # Configure RaspAP with settings from config.yml
-  log_message "Configuring RaspAP with settings from config.yml"
-  
-  # Update hostapd configuration 
+  # Backup existing hostapd.conf if it exists
   if [ -f "/etc/hostapd/hostapd.conf" ]; then
-    log_message "Configuring hostapd with settings from config.yml"
-    
-    # Create backup of original file
-    cp /etc/hostapd/hostapd.conf /etc/hostapd/hostapd.conf.backup
-    
-    # Update hostapd configuration with our settings
-    cat > /etc/hostapd/hostapd.conf << EOF
-driver=nl80211
-ctrl_interface=/var/run/hostapd
-ctrl_interface_group=0
-auth_algs=1
-wpa_key_mgmt=WPA-PSK
-beacon_int=100
-ssid=${WIFI_AP_SSID}
-channel=1
-hw_mode=g
-ieee80211n=1
-wpa_passphrase=${WIFI_AP_PASSWORD}
-interface=wlan0
-wpa=2
-wpa_pairwise=CCMP
-country_code=${config_wifi_country_code}
-## IEEE 802.11 related configuration
-ieee80211d=1
-ieee80211ac=1
-wmm_enabled=1
-EOF
-  else
-    log_message "Warning: hostapd.conf not found. Unable to update configuration."
+    log_message "Backing up existing hostapd.conf..."
+    sudo cp /etc/hostapd/hostapd.conf /etc/hostapd/hostapd.conf.backup
   fi
-  
-  # Configure IP address settings in dnsmasq
-  if [ -f "/etc/dnsmasq.d/090_raspap.conf" ]; then
-    log_message "Configuring dnsmasq with settings from config.yml"
-    
-    # Create backup of original file
-    cp /etc/dnsmasq.d/090_raspap.conf /etc/dnsmasq.d/090_raspap.conf.backup
-    
-    # Update dnsmasq configuration with our settings
-    cat > /etc/dnsmasq.d/090_raspap.conf << EOF
-# RaspAP dnsmasq config - configured by SyHub installer
-domain-needed
-bogus-priv
-domain=lan
-dhcp-range=${config_wifi_ap_dhcp_range_start},${config_wifi_ap_dhcp_range_end},${config_wifi_ap_dhcp_lease_time}
-dhcp-option=option:dns-server,${config_wifi_ap_ip}
-dhcp-authoritative
-log-facility=/tmp/dnsmasq.log
-interface=wlan0
-EOF
-  else
-    log_message "Warning: dnsmasq configuration file not found. Unable to update configuration."
-  fi
-  
-  # Configure dhcpcd.conf for static IP
-  if [ -f "/etc/dhcpcd.conf" ]; then
-    log_message "Configuring dhcpcd with settings from config.yml"
-    
-    # Check if our static configuration already exists
-    if ! grep -q "interface wlan0" /etc/dhcpcd.conf; then
-      # Add static IP configuration to dhcpcd.conf
-      cat >> /etc/dhcpcd.conf << EOF
 
-# RaspAP wlan0 configuration - configured by SyHub installer
-interface wlan0
-    static ip_address=${config_wifi_ap_ip}/24
-    nohook wpa_supplicant
-EOF
-    else
-      log_message "Static IP configuration for wlan0 already exists in dhcpcd.conf"
+  # Check if wifi interfaces are blocked
+  if command -v rfkill &> /dev/null; then
+    log_message "Checking if WiFi interfaces are blocked..."
+    BLOCKED=$(sudo rfkill list | grep -i 'blocked: yes')
+    if [ -n "$BLOCKED" ]; then
+      log_message "Unblocking WiFi interfaces..."
+      sudo rfkill unblock all
     fi
-  else
-    log_message "Warning: dhcpcd.conf not found. Unable to update configuration."
   fi
   
-  # Update hostname
-  if [ "$HOSTNAME" != "$(hostname)" ]; then
-    log_message "Setting hostname to $HOSTNAME"
-    hostnamectl set-hostname "$HOSTNAME"
+  # Check if RaspAP is already installed
+  if [ -d "/etc/raspap" ]; then
+    log_message "RaspAP already appears to be installed."
     
-    # Update /etc/hosts if needed
-    if ! grep -q "$HOSTNAME" /etc/hosts; then
-      echo "127.0.1.1 $HOSTNAME" >> /etc/hosts
+    # Display current status
+    check_raspap_status
+    
+    read -p "Do you want to reconfigure RaspAP? (y/n): " reconfigure
+    if [[ "$reconfigure" != "y" && "$reconfigure" != "Y" ]]; then
+      log_message "Skipping RaspAP installation."
+      return 0
+    fi
+    log_message "Proceeding with RaspAP reconfiguration..."
+  fi
+  
+  # Install curl if not already present
+  if ! command -v curl &> /dev/null; then
+    log_message "Installing curl..."
+    sudo apt-get update
+    sudo apt-get install -y curl
+    
+    # Verify curl installation
+    if ! command -v curl &> /dev/null; then
+      log_message "❌ Failed to install curl. Aborting WiFi setup."
+      return 1
     fi
   fi
   
-  # Enable and restart services
-  log_message "Enabling and starting RaspAP services"
-  systemctl daemon-reload
-  systemctl unmask hostapd
-  systemctl enable hostapd
-  systemctl enable dnsmasq
-  systemctl restart hostapd
-  systemctl restart dnsmasq
+  # Download RaspAP installer
+  log_message "Downloading RaspAP installer..."
+  TEMP_INSTALLER="/tmp/raspap-installer.sh"
+  if ! curl -sL https://install.raspap.com -o "$TEMP_INSTALLER"; then
+    log_message "❌ Failed to download RaspAP installer. Check internet connection."
+    return 1
+  fi
   
-  # Clean up
-  log_message "Cleaning up temporary files"
-  rm -rf "$RASAP_TMP_DIR"
+  # Make installer executable
+  log_message "Making installer executable..."
+  if ! chmod +x "$TEMP_INSTALLER"; then
+    log_message "❌ Failed to make installer executable."
+    return 1
+  fi
   
-  log_message "RaspAP configuration completed successfully"
-  return 0
+  # Set up environment variables for installer
+  export RASPAP_HOTSPOT_NAME="$WIFI_SSID"
+  export RASPAP_HOTSPOT_PASSWORD="$WIFI_PASSWORD"
+  export RASPAP_COUNTRY_CODE="$WIFI_COUNTRY"
+  export RASPAP_CHANNEL="$WIFI_CHANNEL"
+  export RASPAP_ADMIN_PASSWORD="$ADMIN_PASS"
+  
+  # Run installer with detailed logs
+  log_message "Running RaspAP installer (this may take several minutes)..."
+  INSTALL_LOG="/tmp/raspap_install.log"
+  if ! sudo -E "$TEMP_INSTALLER" --yes > "$INSTALL_LOG" 2>&1; then
+    log_message "❌ RaspAP installation failed. Check log at $INSTALL_LOG"
+    log_message "Last 10 lines of installation log:"
+    tail -n 10 "$INSTALL_LOG" | while read -r line; do
+      log_message "   $line"
+    done
+    return 1
+  fi
+  
+  log_message "✅ RaspAP installation completed."
+  
+  # Apply custom hostapd.conf if exists
+  CUSTOM_HOSTAPD="$SCRIPT_DIR/configs/hostapd.conf"
+  if [ -f "$CUSTOM_HOSTAPD" ]; then
+    log_message "Applying custom hostapd configuration..."
+    sudo cp "$CUSTOM_HOSTAPD" /etc/hostapd/hostapd.conf
+  fi
+  
+  # Enable and start services
+  log_message "Enabling and starting services..."
+  sudo systemctl unmask hostapd.service
+  sudo systemctl enable hostapd.service
+  sudo systemctl start hostapd.service
+  sudo systemctl enable dnsmasq.service
+  sudo systemctl start dnsmasq.service
+  
+  # Wait for services to start
+  log_message "Waiting for services to start (30 seconds)..."
+  sleep 30
+  
+  # Verify installation and log configuration
+  log_message "Verifying RaspAP installation..."
+  check_raspap_status
+  
+  # Provide final configuration summary
+  log_message "✅ WiFi access point setup complete!"
+  log_message "Configuration summary:"
+  log_message "   SSID: $WIFI_SSID"
+  log_message "   Password: $WIFI_PASSWORD"
+  log_message "   Management interface: http://10.3.141.1"
+  log_message "   Admin password: $ADMIN_PASS"
+  
+  # Additional troubleshooting information
+  log_message "If you encounter issues:"
+  log_message "1. Try rebooting with: sudo reboot"
+  log_message "2. Run check_raspap_status function in this script"
+  log_message "3. Check system logs with: sudo journalctl -xe | grep hostapd"
 }
 
 # Uninstall VictoriaMetrics
@@ -1903,6 +1763,79 @@ save_system_info() {
   display_system_info > "$BASE_DIR/system_info.txt" 2>/dev/null || true
   chown "$SYSTEM_USER:$SYSTEM_USER" "$BASE_DIR/system_info.txt" 2>/dev/null || true
   log_message "System information saved to $BASE_DIR/system_info.txt"
+}
+
+# Function to check RaspAP installation status
+check_raspap_status() {
+  log_message "Checking RaspAP installation status..."
+  
+  # Check RaspAP directory
+  if [ -d "/etc/raspap" ]; then
+    log_message "✅ RaspAP configuration directory exists at /etc/raspap"
+  else
+    log_message "❌ RaspAP configuration directory NOT found at /etc/raspap"
+  fi
+  
+  # Check hostapd configuration
+  if [ -f "/etc/hostapd/hostapd.conf" ]; then
+    log_message "✅ Hostapd configuration exists at /etc/hostapd/hostapd.conf"
+    # Extract SSID from hostapd.conf
+    SSID=$(grep "^ssid=" /etc/hostapd/hostapd.conf 2>/dev/null | cut -d= -f2)
+    if [ -n "$SSID" ]; then
+      log_message "   SSID is configured as: $SSID"
+    fi
+  else
+    log_message "❌ Hostapd configuration NOT found at /etc/hostapd/hostapd.conf"
+  fi
+  
+  # Check dnsmasq configuration
+  if [ -f "/etc/dnsmasq.d/090_raspap.conf" ]; then
+    log_message "✅ Dnsmasq configuration exists at /etc/dnsmasq.d/090_raspap.conf"
+  else
+    log_message "❌ Dnsmasq configuration NOT found at /etc/dnsmasq.d/090_raspap.conf"
+  fi
+  
+  # Check for static IP configuration in dhcpcd.conf
+  if grep -q "interface wlan0" /etc/dhcpcd.conf 2>/dev/null; then
+    log_message "✅ Static IP configuration found in /etc/dhcpcd.conf"
+    # Extract IP address from dhcpcd.conf
+    IP_ADDR=$(grep -A 2 "interface wlan0" /etc/dhcpcd.conf 2>/dev/null | grep "static ip_address" | cut -d= -f2 | cut -d/ -f1)
+    if [ -n "$IP_ADDR" ]; then
+      log_message "   Static IP is configured as: $IP_ADDR"
+    fi
+  else
+    log_message "❌ Static IP configuration NOT found in /etc/dhcpcd.conf"
+  fi
+  
+  # Check service status
+  log_message "Checking service status:"
+  
+  if systemctl is-active --quiet hostapd; then
+    log_message "✅ Hostapd service is active and running"
+  else
+    log_message "❌ Hostapd service is NOT running"
+  fi
+  
+  if systemctl is-active --quiet dnsmasq; then
+    log_message "✅ Dnsmasq service is active and running"
+  else
+    log_message "❌ Dnsmasq service is NOT running"
+  fi
+  
+  if systemctl is-active --quiet lighttpd; then
+    log_message "✅ Lighttpd service is active and running"
+  else
+    log_message "❌ Lighttpd service is NOT running"
+  fi
+  
+  # Provide diagnostic commands
+  log_message "Diagnostic commands that may help troubleshoot issues:"
+  log_message "   sudo systemctl status hostapd"
+  log_message "   sudo systemctl status dnsmasq"
+  log_message "   sudo journalctl -xe | grep hostapd"
+  log_message "   sudo rfkill list"
+  log_message "   sudo iwconfig wlan0"
+  log_message "   grep -v \"^#\" /etc/hostapd/hostapd.conf"
 }
 
 # Handle command
