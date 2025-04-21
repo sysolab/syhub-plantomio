@@ -106,18 +106,20 @@
                     
                     <!-- Tank Visualization -->
                     <div class="tank-container">
-                        <div class="tank-visualization">
-                            <div class="tank-level" id="tank-water-level" style="height: 75%"></div>
-                            <div class="alert-level-indicator">
-                                <div class="alert-level-line"></div>
+                        <button class="btn btn-settings" id="tank-settings-btn">
+                            <i class="fas fa-sliders-h"></i>
+                        </button>
+                        <div class="tank-graphics-container">
+                            <div class="tank-visualization">
+                                <div class="tank-level" id="tank-water-level" style="height: 75%"></div>
+                                <div class="alert-level-indicator">
+                                    <div class="alert-level-line"></div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="tank-info">
-                            <p>Water Level: <span id="water-level-value">2.7</span>m</p>
-                            <p><span id="water-level-percent">75</span>% Capacity</p>
-                            <button class="btn btn-settings" id="tank-settings-btn">
-                                <i class="fas fa-sliders-h"></i>
-                            </button>
+                            <div class="tank-info">
+                                <p>Water Level: <span id="water-level-value">2.7</span>m</p>
+                                <p><span id="water-level-percent">75</span>% Capacity</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -160,9 +162,21 @@
                     <div class="panel-header">
                         <h2>Sensor Trends</h2>
                         <div class="time-controls">
-                            <button class="time-btn active" data-minutes="1440">24 Hours</button>
-                            <button class="time-btn" data-minutes="10080">Week</button>
-                            <button class="time-btn" data-minutes="43200">Month</button>
+                            <div class="time-dropdown-container">
+                                <i class="fas fa-clock"></i>
+                                <select id="time-range-dropdown">
+                                    <option value="1" data-minutes="1" data-step="2s">1 Minute</option>
+                                    <option value="5" data-minutes="5" data-step="30s">5 Minutes</option>
+                                    <option value="30" data-minutes="30" data-step="30s">30 Minutes</option>
+                                    <option value="60" data-minutes="60" data-step="1m">1 Hour</option>
+                                    <option value="360" data-minutes="360" data-step="5m">6 Hours</option>
+                                    <option value="720" data-minutes="720" data-step="10m">12 Hours</option>
+                                    <option value="1440" data-minutes="1440" data-step="15m" selected>24 Hours</option>
+                                    <option value="2880" data-minutes="2880" data-step="30m">48 Hours</option>
+                                    <option value="10080" data-minutes="10080" data-step="2h">7 Days</option>
+                                    <option value="43200" data-minutes="43200" data-step="6h">30 Days</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     <div class="metric-selector">
@@ -398,7 +412,9 @@
             setTimeout(() => {
                 const ctx = document.getElementById('main-chart').getContext('2d');
                 const chartCanvas = document.getElementById('main-chart');
-                const timeMinutes = parseInt(document.querySelector('.time-btn.active').dataset.minutes || 1440);
+                const timeDropdown = document.getElementById('time-range-dropdown');
+                const timeMinutes = parseInt(timeDropdown?.value || 1440);
+                const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '15m';
                 const selectedMetric = document.querySelector('.metric-btn.active').dataset.metric || 'combined'; // Default to combined
                 
                 // Show loading indicator
@@ -406,12 +422,12 @@
                 
                 // Handle "combined" special case
                 if (selectedMetric === 'combined') {
-                    loadCombinedChart(timeMinutes);
+                    loadCombinedChart(timeMinutes, stepSize);
                     return;
                 }
                 
                 // Use the simpler method from trends.html - load single metric with full 24h history
-                fetch(`/api/query?metric=${selectedMetric}&device=${currentDevice}&minutes=${timeMinutes}`)
+                fetch(`/api/query?metric=${selectedMetric}&device=${currentDevice}&minutes=${timeMinutes}&step=${stepSize}`)
                     .then(response => response.json())
                     .then(data => {
                         // Remove loading indicator
@@ -558,7 +574,7 @@
         }
         
         // Function to load the combined chart (temp, pH, EC)
-        function loadCombinedChart(timeMinutes) {
+        function loadCombinedChart(timeMinutes, stepSize) {
             const ctx = document.getElementById('main-chart').getContext('2d');
             const chartCanvas = document.getElementById('main-chart');
             
@@ -587,7 +603,7 @@
             
             // Fetch data for all three metrics at once
             setTimeout(() => {
-                fetch(`/api/trends?metrics=temperature,pH,EC&device=${currentDevice}&minutes=${timeMinutes}`)
+                fetch(`/api/trends?metrics=temperature,pH,EC&device=${currentDevice}&minutes=${timeMinutes}&step=${stepSize}`)
                     .then(response => response.json())
                     .then(data => {
                         // Remove loading indicator
@@ -866,33 +882,25 @@
             });
         });
         
-        // Time range buttons for chart
-        document.querySelectorAll('.time-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                // Set interaction active
-                window.isChartInteractionActive = true;
-                
-                // Remove active class from all buttons
-                document.querySelectorAll('.time-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                
-                // Add active class to clicked button
-                this.classList.add('active');
-                
-                // Update chart with new time range
-                updateMainChart();
-                
-                // Reset interaction after a short delay
-                setTimeout(() => {
-                    window.isChartInteractionActive = false;
-                }, 5000);
-            });
-        });
-        
-        // Initial load
+        // Time range dropdown event listener
         document.addEventListener('DOMContentLoaded', function() {
-            // Fetch available devices
+            const timeRangeDropdown = document.getElementById('time-range-dropdown');
+            if (timeRangeDropdown) {
+                timeRangeDropdown.addEventListener('change', function() {
+                    // Set interaction active
+                    window.isChartInteractionActive = true;
+                    
+                    // Update chart with new time range
+                    updateMainChart();
+                    
+                    // Reset interaction after a short delay
+                    setTimeout(() => {
+                        window.isChartInteractionActive = false;
+                    }, 5000);
+                });
+            }
+            
+            // Initialize the rest of the page
             fetchDevices();
             
             // Start SSE connection

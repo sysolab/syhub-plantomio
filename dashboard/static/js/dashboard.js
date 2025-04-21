@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up metric selector buttons
     setupMetricButtons();
     
-    // Set up time range buttons
+    // Set up time range dropdown
     setupTimeButtons();
     
     // Mobile sidebar toggle
@@ -55,20 +55,13 @@ function setupMetricButtons() {
     });
 }
 
-// Setup time range buttons
+// Setup time range dropdown
 function setupTimeButtons() {
-    document.querySelectorAll('.time-btn').forEach(button => {
-        button.addEventListener('click', function() {
+    const timeRangeDropdown = document.getElementById('time-range-dropdown');
+    if (timeRangeDropdown) {
+        timeRangeDropdown.addEventListener('change', function() {
             // Set interaction active
             window.isChartInteractionActive = true;
-            
-            // Remove active class from all buttons
-            document.querySelectorAll('.time-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Add active class to clicked button
-            this.classList.add('active');
             
             // Update chart with new time range
             updateMainChart();
@@ -78,7 +71,7 @@ function setupTimeButtons() {
                 window.isChartInteractionActive = false;
             }, 5000);
         });
-    });
+    }
 }
 
 // Setup mobile toggle button
@@ -175,6 +168,27 @@ function setupTankSettings() {
             });
         }
     }
+}
+
+// Function to update water level display with latest data
+function updateWaterLevel() {
+    // Fetch latest data to refresh the display
+    fetch('/api/latest')
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.waterLevel !== undefined) {
+                const tankEl = document.getElementById('tank-water-level');
+                const levelEl = document.getElementById('water-level-percent');
+                const valueEl = document.getElementById('water-level-value');
+                
+                if (tankEl) tankEl.style.height = `${data.waterLevel}%`;
+                if (levelEl) levelEl.textContent = Math.round(data.waterLevel);
+                if (valueEl && data.distance) valueEl.textContent = Number(data.distance).toFixed(1);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating water level:', error);
+        });
 }
 
 // Fetch list of available devices
@@ -284,16 +298,17 @@ function resetChart() {
 }
 
 // Handle chart data loading
-// Simplified chart rendering function for dashboard.js
 function updateMainChart() {
     // Get current device
     const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
     
     // Get selected metric and time range
     const selectedMetric = document.querySelector('.metric-btn.active')?.dataset.metric || 'combined';
-    const timeMinutes = parseInt(document.querySelector('.time-btn.active')?.dataset.minutes || 1440);
+    const timeDropdown = document.getElementById('time-range-dropdown');
+    const timeMinutes = parseInt(timeDropdown?.value || 1440);
+    const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '15m';
     
-    console.log(`Loading chart: ${selectedMetric}, device: ${deviceId}, minutes: ${timeMinutes}`);
+    console.log(`Loading chart: ${selectedMetric}, device: ${deviceId}, minutes: ${timeMinutes}, step: ${stepSize}`);
     
     // Get chart container and prepare canvas
     const container = document.querySelector('.trends-container');
@@ -317,7 +332,7 @@ function updateMainChart() {
     
     // Handle combined chart separately
     if (selectedMetric === 'combined') {
-        fetch(`/api/trends?metrics=temperature,pH,EC&device=${deviceId}&minutes=${timeMinutes}`)
+        fetch(`/api/trends?metrics=temperature,pH,EC&device=${deviceId}&minutes=${timeMinutes}&step=${stepSize}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error ${response.status}`);
@@ -474,7 +489,7 @@ function updateMainChart() {
             });
     } else {
         // For single metrics
-        fetch(`/api/query?metric=${selectedMetric}&device=${deviceId}&minutes=${timeMinutes}`)
+        fetch(`/api/query?metric=${selectedMetric}&device=${deviceId}&minutes=${timeMinutes}&step=${stepSize}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error ${response.status}`);

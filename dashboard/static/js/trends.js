@@ -91,23 +91,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 else if (activeBtn.textContent === 'Month') minutes = 43200;
             }
             
-            // Get chart data and export
-            fetch(`/api/trends?metrics=${metric}&device=${deviceId}&minutes=${minutes}`)
+            // Get the time range from the dropdown if available
+            const timeDropdown = document.getElementById('time-range-dropdown');
+            if (timeDropdown) {
+                minutes = parseInt(timeDropdown.value) || 1440;
+            }
+            
+            // Get chart data and export (using full resolution export endpoint)
+            fetch(`/api/export?metric=${metric}&device=${deviceId}&minutes=${minutes}`)
                 .then(response => response.json())
                 .then(data => {
-                    if (!data.status || data.status !== 'success' || !data.data || !data.data[metric]) {
+                    if (!data.status || data.status !== 'success' || !data.data || data.data.length === 0) {
                         throw new Error('No data available');
                     }
                     
                     // Create CSV content
                     let csv = 'Timestamp,' + getMetricLabel(metric) + '\n';
-                    data.data[metric].forEach(point => {
-                        if (Array.isArray(point) && point.length === 2) {
-                            const [timestamp, value] = point;
-                            const date = new Date(timestamp * 1000);
-                            const dateStr = date.toLocaleString();
-                            csv += dateStr + ',' + (value !== null ? value : '') + '\n';
-                        }
+                    data.data.forEach(point => {
+                        csv += point.datetime + ',' + (point.value !== null ? point.value : '') + '\n';
                     });
                     
                     // Create download

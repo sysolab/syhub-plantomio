@@ -131,6 +131,11 @@
   transform: translateX(0);
 }
 
+/* Hide trends tab but keep it in the DOM */
+.sidebar-nav ul li:nth-child(2) {
+    display: none;
+}
+
 /* Responsive sidebar behavior */
 @media (max-width: 768px) {
   .sidebar {

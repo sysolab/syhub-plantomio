@@ -294,6 +294,9 @@ def query_data():
         # Parse time range parameters (default to last 24 hours)
         minutes = int(request.args.get('minutes', 1440))
         
+        # Get custom step size if provided, otherwise calculate based on time range
+        step_size = request.args.get('step')
+        
         # Calculate time range
         now = int(time.time())
         start = now - (minutes * 60)
@@ -301,15 +304,16 @@ def query_data():
         # Construct device filter if provided
         device_filter = f',device="{device_id}"' if device_id else ''
         
-        # Optimize step size based on time range to reduce data points
-        if minutes >= 10080:  # 7 days
-            step_size = '2h'
-        elif minutes >= 1440:  # 24 hours
-            step_size = '15m'
-        elif minutes >= 720:  # 12 hours
-            step_size = '8m'
-        else:
-            step_size = '1m'
+        # If step size is not provided, calculate it based on time range
+        if not step_size:
+            if minutes >= 10080:  # 7 days
+                step_size = '2h'
+            elif minutes >= 1440:  # 24 hours
+                step_size = '15m'
+            elif minutes >= 720:  # 12 hours
+                step_size = '8m'
+            else:
+                step_size = '1m'
         
         # Construct query
         query = f'{metric}{{{device_filter}}}'
@@ -321,7 +325,7 @@ def query_data():
             'step': step_size
         }
         
-        app.logger.info(f"VM Query: {query}")
+        app.logger.info(f"VM Query: {query}, Step: {step_size}")
         
         # Increase timeout for larger queries
         response = requests.get(f"{VICTORIA_URL}/api/v1/query_range", params=params, timeout=10)
@@ -377,6 +381,9 @@ def trends_data():
             minutes = int(request.args.get('minutes', 1440))
         except ValueError:
             minutes = 1440
+            
+        # Get custom step size if provided
+        step_size = request.args.get('step')
         
         # Calculate time range
         now = int(time.time())
@@ -398,15 +405,17 @@ def trends_data():
                 # Build query
                 query = f'{metric}{{{device_filter}}}' if device_filter else metric
                 
-                # Determine step size based on time range
-                if minutes >= 10080:  # 7 days
-                    step_size = '2h'
-                elif minutes >= 1440:  # 24 hours
-                    step_size = '15m'
-                elif minutes >= 720:  # 12 hours
-                    step_size = '8m'
-                else:
-                    step_size = '1m'
+                # If step size is not provided, calculate it based on time range
+                current_step = step_size
+                if not current_step:
+                    if minutes >= 10080:  # 7 days
+                        current_step = '2h'
+                    elif minutes >= 1440:  # 24 hours
+                        current_step = '15m'
+                    elif minutes >= 720:  # 12 hours
+                        current_step = '8m'
+                    else:
+                        current_step = '1m'
                 
                 # Query Victoria Metrics
                 query_url = f"{VICTORIA_URL}/api/v1/query_range"
@@ -414,10 +423,10 @@ def trends_data():
                     'query': query,
                     'start': start,
                     'end': now,
-                    'step': step_size
+                    'step': current_step
                 }
                 
-                app.logger.info(f"VM Query: {query}")
+                app.logger.info(f"VM Query: {query}, Step: {current_step}")
                 
                 # Use longer timeout for range queries
                 response = requests.get(query_url, params=params, timeout=10)
@@ -518,6 +527,71 @@ def devices():
         return jsonify({"status": "success", "devices": devices})
     except Exception as e:
         app.logger.error(f"Error fetching devices: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/export')
+def export_data():
+    """Export full resolution data without step size for a given metric"""
+    try:
+        # Get parameters
+        metric = request.args.get('metric', 'temperature')
+        device_id = request.args.get('device', '')
+        
+        # Parse time range parameters (default to last 24 hours)
+        minutes = int(request.args.get('minutes', 1440))
+        
+        # Calculate time range
+        now = int(time.time())
+        start = now - (minutes * 60)
+        
+        # Construct device filter if provided
+        device_filter = f',device="{device_id}"' if device_id else ''
+        
+        # Construct query - we don't use step size for export to get all data points
+        query = f'{metric}{{{device_filter}}}'
+        
+        params = {
+            'query': query,
+            'start': start,
+            'end': now
+        }
+        
+        app.logger.info(f"Export Query: {query} (full resolution)")
+        
+        # Increase timeout for export queries as they might be larger
+        response = requests.get(f"{VICTORIA_URL}/api/v1/query_range", params=params, timeout=20)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Process data for export
+            result = {
+                "status": "success",
+                "metric": metric,
+                "device": device_id,
+                "data": []
+            }
+            
+            if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
+                values = data['data']['result'][0].get('values', [])
+                
+                for timestamp, value in values:
+                    try:
+                        if value != "NaN" and value != "nan":
+                            result["data"].append({
+                                "timestamp": int(timestamp),
+                                "datetime": datetime.fromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H:%M:%S'),
+                                "value": float(value)
+                            })
+                    except (ValueError, TypeError):
+                        # Skip invalid values
+                        pass
+            
+            return jsonify(result)
+        
+        return jsonify({"status": "error", "message": "No data available"}), 404
+    except Exception as e:
+        app.logger.error(f"Error exporting data: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
