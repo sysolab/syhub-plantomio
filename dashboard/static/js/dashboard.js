@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up metric selector buttons
     setupMetricButtons();
     
-    // Set up time range dropdown
+    // Set up time range buttons
     setupTimeButtons();
     
     // Mobile sidebar toggle
@@ -27,6 +27,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup tank settings panel
     setupTankSettings();
+    
+    // Initial chart load (after a short delay to ensure everything is ready)
+    setTimeout(() => {
+        updateMainChart();
+    }, 300);
 });
 
 // Setup metric selector buttons
@@ -44,8 +49,10 @@ function setupMetricButtons() {
             // Add active class to clicked button
             this.classList.add('active');
             
-            // Update chart with new metric
-            updateMainChart();
+            // Update chart with new metric - add a small delay to ensure the class is applied
+            setTimeout(() => {
+                updateMainChart();
+            }, 50);
             
             // Reset interaction after a short delay
             setTimeout(() => {
@@ -305,8 +312,8 @@ function updateMainChart() {
     // Get selected metric and time range
     const selectedMetric = document.querySelector('.metric-btn.active')?.dataset.metric || 'combined';
     const timeDropdown = document.getElementById('time-range-dropdown');
-    const timeMinutes = parseInt(timeDropdown?.value || 5); // Default to 5 minutes if not found
-    const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '30s';
+    const timeMinutes = parseInt(timeDropdown?.value || 60); // Default to 1 hour if not found
+    const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '1m';
     
     console.log(`Loading chart: ${selectedMetric}, device: ${deviceId}, minutes: ${timeMinutes}, step: ${stepSize}`);
     
@@ -498,14 +505,20 @@ function updateMainChart() {
             })
             .then(data => {
                 // Remove loading message
-                container.removeChild(loadingDiv);
+                if (container.contains(loadingDiv)) {
+                    container.removeChild(loadingDiv);
+                }
                 
-                if (!data.status || data.status !== 'success' || !data.data || !data.data[selectedMetric]) {
+                if (!data.status || data.status !== 'success' || !data.data) {
                     throw new Error('No data available for the selected metric');
                 }
                 
                 // Process data
-                const chartData = data.data[selectedMetric];
+                const chartData = data.data[selectedMetric] || [];
+                if (!chartData || chartData.length === 0) {
+                    throw new Error(`No data available for ${selectedMetric}`);
+                }
+                
                 const labels = [];
                 const values = [];
                 
@@ -560,7 +573,12 @@ function updateMainChart() {
                 
                 // Create the chart with error handling
                 try {
-                    mainChart = new Chart(canvas.getContext('2d'), {
+                    if (!canvas.getContext) {
+                        throw new Error('Canvas context not available');
+                    }
+                    
+                    const ctx = canvas.getContext('2d');
+                    mainChart = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: labels,

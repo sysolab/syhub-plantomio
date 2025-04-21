@@ -3,8 +3,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get device ID
     const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
     
-    // Initialize charts with default time range (24 hours)
-    loadAllCharts(1440, deviceId);
+    // Initialize charts with default time range (1 hour)
+    loadAllCharts(60, deviceId);
     
     // Set up time range buttons
     document.querySelectorAll('.time-btn').forEach(button => {
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.add('active');
             
             // Get time range
-            let minutes = 1440;
+            let minutes = 60;
             if (this.textContent === '24 Hours') minutes = 1440;
             else if (this.textContent === 'Week') minutes = 10080;
             else if (this.textContent === 'Month') minutes = 43200;
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const timeRangeDropdown = document.getElementById('time-range-dropdown');
     if (timeRangeDropdown) {
         timeRangeDropdown.addEventListener('change', function() {
-            const minutes = parseInt(this.value) || 1440;
+            const minutes = parseInt(this.value) || 60;
             loadAllCharts(minutes, deviceId);
         });
     }
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Get time range
-            let minutes = 1440;
+            let minutes = 60;
             const activeBtn = document.querySelector('.time-btn.active');
             if (activeBtn) {
                 if (activeBtn.textContent === 'Week') minutes = 10080;
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get the time range from the dropdown if available
             const timeDropdown = document.getElementById('time-range-dropdown');
             if (timeDropdown) {
-                minutes = parseInt(timeDropdown.value) || 1440;
+                minutes = parseInt(timeDropdown.value) || 60;
             }
             
             // Get chart data and export (using full resolution export endpoint)
@@ -150,7 +150,7 @@ function loadAllCharts(minutes, deviceId) {
     
     // Get step size from dropdown if available
     const timeDropdown = document.getElementById('time-range-dropdown');
-    let stepSize = '15m'; // Default step size
+    let stepSize = '1m'; // Default step size
     
     if (timeDropdown) {
         // Get selected option
@@ -161,7 +161,7 @@ function loadAllCharts(minutes, deviceId) {
         
         // Update minutes if needed
         if (minutes === undefined) {
-            minutes = parseInt(timeDropdown.value) || 1440;
+            minutes = parseInt(timeDropdown.value) || 60;
         }
     }
     
