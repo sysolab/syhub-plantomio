@@ -6,7 +6,6 @@
   --sidebar-active: rgba(255, 255, 255, 0.15);
   --sidebar-text: #f8f9fc;
   --sidebar-icon: #b0b5c3;
-  --transition-speed: 0.3s;
 }
 
 /* Sidebar base */
@@ -19,7 +18,7 @@
   left: 0;
   top: 0;
   z-index: 1000;
-  transition: transform var(--transition-speed);
+  transition: transform 0.3s;
   overflow-x: hidden;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
@@ -37,7 +36,7 @@
 .logo {
   color: var(--sidebar-text);
   font-size: 1.5rem;
-  transition: all var(--transition-speed) ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -71,7 +70,7 @@
   padding: 0.75rem 0;
   color: var(--sidebar-icon);
   text-decoration: none;
-  transition: all var(--transition-speed) ease;
+  transition: all 0.3s ease;
   position: relative;
 }
 
