@@ -396,7 +396,10 @@ def trends_data():
         device_id = request.args.get('device', '')
         
         # Parse time range (default to last 24 hours)
-        minutes = int(request.args.get('minutes', 1440))  # Default to 24 hours
+        try:
+            minutes = int(request.args.get('minutes', 1440))  # Default to 24 hours
+        except ValueError:
+            minutes = 1440  # Fallback if parsing fails
         
         # Calculate time range
         now = int(time.time())
@@ -406,8 +409,6 @@ def trends_data():
         device_filter = f',device="{device_id}"' if device_id else ''
         
         # Optimize step size based on time range to reduce data points
-        # For 24 hours, use 15-minute steps to get approximately 96 points for a smoother chart
-        # that's still efficient on resources
         if minutes >= 10080:  # 7 days
             step_size = '2h'  # 2 hour intervals for week view (84 points)
         elif minutes >= 1440:  # 24 hours
@@ -451,32 +452,38 @@ def trends_data():
                         seen_timestamps = set()
                         
                         for point in data['data']['result'][0].get('values', []):
-                            timestamp, value = point
-                            
-                            # Include NaN values as null for proper gap rendering
-                            if value == "NaN" or value == "nan":
+                            try:
+                                timestamp, value = point
+                                
+                                # Include NaN values as null for proper gap rendering
+                                if value == "NaN" or value == "nan":
+                                    if timestamp not in seen_timestamps:
+                                        seen_timestamps.add(timestamp)
+                                        values.append([timestamp, None])
+                                    continue
+                                    
                                 if timestamp not in seen_timestamps:
                                     seen_timestamps.add(timestamp)
-                                    values.append([timestamp, None])
+                                    try:
+                                        # Convert string values to floats for consistent charting
+                                        values.append([timestamp, float(value)])
+                                    except (ValueError, TypeError):
+                                        # If conversion fails, include as original value
+                                        values.append([timestamp, value])
+                            except Exception as e:
+                                app.logger.error(f"Error processing data point {point}: {str(e)}")
+                                # Skip this point if there's an error
                                 continue
-                                
-                            if timestamp not in seen_timestamps:
-                                seen_timestamps.add(timestamp)
-                                try:
-                                    # Convert string values to floats for consistent charting
-                                    values.append([timestamp, float(value)])
-                                except (ValueError, TypeError):
-                                    # If conversion fails, include as original value
-                                    values.append([timestamp, value])
                         
                         results[metric] = values
             except Exception as e:
                 app.logger.error(f"Error querying {metric} for trends: {str(e)}")
+                # Continue with next metric
         
         return jsonify({"status": "success", "data": results})
     except Exception as e:
-        app.logger.error(f"Error fetching trends data: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Error fetching trends data: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route('/health')
 def health_check():
