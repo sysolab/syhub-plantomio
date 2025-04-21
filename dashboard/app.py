@@ -240,6 +240,9 @@ def query_data():
         # Construct device filter if provided - using device as the field name (from VM data)
         device_filter = f',device="{device_id}"' if device_id else ''
         
+        # Log the request for debugging
+        app.logger.info(f"Query data request: metric={metric}, device={device_id}, minutes={minutes}")
+        
         # Query VictoriaMetrics for range data
         query_url = f"{VICTORIA_URL}/api/v1/query_range"
         
@@ -247,20 +250,35 @@ def query_data():
         # For 24 hours, a 10-minute step is reasonable (~144 points)
         step_size = '10m' if minutes >= 1440 else '5m' if minutes >= 720 else '1m'
         
+        # Construct query with exact metric name
+        query = f'{metric}{{{device_filter}}}'
+        
         params = {
-            'query': f'{metric}{{{device_filter}}}',
+            'query': query,
             'start': start,
             'end': now,
             'step': step_size  # Adjust step size for data reduction
         }
         
+        # Log the actual query for debugging
+        app.logger.info(f"VM Query: {query}")
+        
         response = requests.get(query_url, params=params, timeout=5)
         
         if response.status_code == 200:
             data = response.json()
+            
+            # Log the result briefly for debugging
+            result_count = len(data.get('data', {}).get('result', []))
+            app.logger.info(f"VM Response for {metric}: got {result_count} results")
+            
             # Check if we have actual data
             if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
                 result = data['data']['result'][0]
+                
+                # Check if the metric exists in the response
+                if 'metric' in result:
+                    app.logger.info(f"Metric in response: {result['metric']}")
                 
                 # Filter out duplicate timestamps and keep only unique data points
                 unique_values = []
@@ -317,20 +335,35 @@ def trends_data():
         
         results = {}
         
-        # Query each metric
+        # Log the request for debugging
+        app.logger.info(f"Trends data request: metrics={metrics_list}, device={device_id}, minutes={minutes}")
+        
+        # Query each metric - with exact case matching
         for metric in metrics_list:
             try:
+                # Ensure exact case match for metric name in VM
+                metric_name = metric
+                
                 query_url = f"{VICTORIA_URL}/api/v1/query_range"
+                query = f'{metric_name}{{{device_filter}}}'
+                
                 params = {
-                    'query': f'{metric}{{{device_filter}}}',
+                    'query': query,
                     'start': start,
                     'end': now,
                     'step': step_size  # Adjust step size to reduce data volume
                 }
                 
+                # Log the specific query for debugging
+                app.logger.info(f"VM Query: {query}")
+                
                 response = requests.get(query_url, params=params, timeout=3)
                 if response.status_code == 200:
                     data = response.json()
+                    
+                    # Log the response for debugging
+                    app.logger.info(f"VM Response for {metric_name}: {data.get('data', {}).get('result', [])[:1]}")
+                    
                     if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
                         # Extract unique timestamps and values
                         values = []
@@ -366,10 +399,14 @@ def health_check():
         "ap_mode": {"status": "unknown"}
     }
     
-    # Check Node-RED
+    # Check Node-RED - just check if port is open instead of HTTP
     try:
-        resp = requests.get(f"{NODERED_URL}/", timeout=1)
-        services["node_red"]["status"] = "ok" if resp.status_code == 200 else "error"
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        result = s.connect_ex(('localhost', config['node_red']['port']))
+        services["node_red"]["status"] = "ok" if result == 0 else "error"
+        s.close()
     except:
         services["node_red"]["status"] = "error"
     
@@ -380,20 +417,22 @@ def health_check():
     except:
         services["victoria_metrics"]["status"] = "error"
     
-    # Try to check Node-RED MQTT status via Node-RED API
+    # Check MQTT (assuming standard port 1883)
     try:
-        # This assumes Node-RED has an endpoint to check MQTT status
-        # If not available, you'll need to implement alternative checks
-        resp = requests.get(f"{NODERED_URL}/mqtt/status", timeout=1)
-        if resp.status_code == 200:
-            services["mqtt"]["status"] = "ok" if resp.json().get("connected", False) else "error"
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        # Check if MQTT port is open (typically 1883)
+        mqtt_port = 1883
+        result = s.connect_ex(('localhost', mqtt_port))
+        services["mqtt"]["status"] = "ok" if result == 0 else "error"
+        s.close()
     except:
-        # If Node-RED doesn't expose MQTT status, leave as unknown
+        # If we can't check MQTT, leave as unknown
         pass
     
-    # Check AP mode status using system commands (requires sudo privileges)
+    # Check AP mode status using system commands
     try:
-        # This is a simplistic check and may need adjustment for your setup
         import subprocess
         result = subprocess.run(["iwconfig"], capture_output=True, text=True)
         if "Mode:Master" in result.stdout:

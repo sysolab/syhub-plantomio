@@ -282,26 +282,29 @@
                 
                 <!-- Service Status -->
                 <div class="service-status-panel">
-                    <div class="panel-header">
-                        <h2><i class="fas fa-server"></i> Service Status</h2>
-                    </div>
+                    <div class="panel-header"><h2>Service Status</h2></div>
                     <div class="status-grid">
+                        <!-- Dashboard status -->
                         <div class="status-item">
                             <div class="status-label">Dashboard</div>
                             <div class="status-value" id="dashboard-status">--</div>
                         </div>
+                        <!-- Node-RED status -->
                         <div class="status-item">
                             <div class="status-label">Node-RED</div>
                             <div class="status-value" id="nodered-status">--</div>
                         </div>
+                        <!-- VictoriaMetrics status -->
                         <div class="status-item">
                             <div class="status-label">VictoriaMetrics</div>
                             <div class="status-value" id="vm-status">--</div>
                         </div>
+                        <!-- MQTT status -->
                         <div class="status-item">
                             <div class="status-label">MQTT</div>
                             <div class="status-value" id="mqtt-status">--</div>
                         </div>
+                        <!-- AP Mode status -->
                         <div class="status-item">
                             <div class="status-label">AP Mode</div>
                             <div class="status-value" id="ap-status">--</div>
@@ -376,7 +379,54 @@
                 // Update preview with loaded settings
                 updateTankPreview();
             }
+            
+            // Update service status
+            updateServiceStatus();
         });
+
+        // Update service status
+        function updateServiceStatus() {
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.services) {
+                        // Update dashboard status
+                        document.getElementById('dashboard-status').textContent = 
+                            data.services.dashboard?.status === 'ok' ? 'Running' : 'Error';
+                        document.getElementById('dashboard-status').className = 
+                            data.services.dashboard?.status === 'ok' ? 'status-ok' : 'status-error';
+                        
+                        // Update Node-RED status
+                        document.getElementById('nodered-status').textContent = 
+                            data.services.node_red?.status === 'ok' ? 'Running' : 'Error';
+                        document.getElementById('nodered-status').className = 
+                            data.services.node_red?.status === 'ok' ? 'status-ok' : 'status-error';
+                        
+                        // Update VictoriaMetrics status
+                        document.getElementById('vm-status').textContent = 
+                            data.services.victoria_metrics?.status === 'ok' ? 'Running' : 'Error';
+                        document.getElementById('vm-status').className = 
+                            data.services.victoria_metrics?.status === 'ok' ? 'status-ok' : 'status-error';
+                        
+                        // Update MQTT status
+                        document.getElementById('mqtt-status').textContent = 
+                            data.services.mqtt?.status === 'ok' ? 'Running' : 'Error';
+                        document.getElementById('mqtt-status').className = 
+                            data.services.mqtt?.status === 'ok' ? 'status-ok' : 'status-error';
+                        
+                        // Update AP Mode status
+                        document.getElementById('ap-status').textContent = 
+                            data.services.ap_mode?.status === 'ok' ? 'Enabled' : 
+                            data.services.ap_mode?.status === 'inactive' ? 'Disabled' : 'Unknown';
+                        document.getElementById('ap-status').className = 
+                            data.services.ap_mode?.status === 'ok' ? 'status-ok' : 
+                            data.services.ap_mode?.status === 'inactive' ? '' : 'status-error';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking service status:', error);
+                });
+        }
     </script>
 </body>
 </html>
