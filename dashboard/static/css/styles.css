@@ -977,3 +977,32 @@ body {
   border-radius: 3px;
   background-color: rgba(255,255,255,0.8);
 }
+
+/* Chart message and error states */
+.chart-message {
+  text-align: center;
+  color: #e74a3b;
+  font-size: 0.8rem;
+  padding: 0.5rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(255,255,255,0.8);
+  border-radius: 4px;
+  z-index: 10;
+  display: none;
+}
+
+.chart-container.no-data .chart-message {
+  display: block;
+}
+
+.chart-container.no-data canvas {
+  opacity: 0.3;
+}
+
+.chart-container {
+  position: relative;
+  height: 300px;
+}

@@ -392,7 +392,8 @@ def trends_data():
     """Query multiple metrics over time for trends page"""
     try:
         # Get parameters
-        metrics_list = request.args.get('metrics', 'temperature,pH,EC,TDS,distance,ORP').split(',')
+        metrics_str = request.args.get('metrics', 'temperature,pH,EC,TDS,distance,ORP')
+        metrics_list = metrics_str.split(',')
         device_id = request.args.get('device', '')
         
         # Parse time range (default to last 24 hours)
@@ -418,69 +419,160 @@ def trends_data():
         else:
             step_size = '1m'  # 1 minute for shorter ranges
         
-        results = {}
+        # Check if we need the older format used by trends.html or the newer format
+        is_trends_page = 'trends=' in request.query_string.decode('utf-8')
+        is_single_metric = len(metrics_list) == 1
         
-        # Log the request for debugging
-        app.logger.info(f"Trends data request: metrics={metrics_list}, device={device_id}, minutes={minutes}")
-        
-        # Query each metric - with exact case matching
-        for metric in metrics_list:
-            try:
-                # Ensure exact case match for metric name in VM
-                metric_name = metric
-                
-                query_url = f"{VICTORIA_URL}/api/v1/query_range"
-                query = f'{metric_name}{{{device_filter}}}'
-                
-                params = {
-                    'query': query,
-                    'start': start,
-                    'end': now,
-                    'step': step_size  # Optimized step size to reduce data volume
-                }
-                
-                # Log the specific query for debugging
-                app.logger.info(f"VM Query: {query}")
-                
-                response = requests.get(query_url, params=params, timeout=5)  # Increased timeout for bulk data
-                if response.status_code == 200:
-                    data = response.json()
+        # This section is for the trends.html page that expects a specific format
+        if request.path == '/api/trends' and not is_trends_page:
+            # Create result object for each metric
+            results = {}
+            
+            # Log the request for debugging
+            app.logger.info(f"Trends data request: metrics={metrics_list}, device={device_id}, minutes={minutes}")
+            
+            # Query each metric
+            for metric in metrics_list:
+                try:
+                    # Ensure exact case match for metric name in VM
+                    metric_name = metric.strip()
+                    if not metric_name:
+                        continue
                     
-                    if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
-                        # Extract unique timestamps and values
-                        values = []
-                        seen_timestamps = set()
+                    query_url = f"{VICTORIA_URL}/api/v1/query_range"
+                    query = f'{metric_name}{{{device_filter}}}'
+                    
+                    params = {
+                        'query': query,
+                        'start': start,
+                        'end': now,
+                        'step': step_size  # Optimized step size to reduce data volume
+                    }
+                    
+                    # Log the specific query for debugging
+                    app.logger.info(f"VM Query: {query}")
+                    
+                    response = requests.get(query_url, params=params, timeout=5)  # Increased timeout for bulk data
+                    if response.status_code == 200:
+                        data = response.json()
                         
-                        for point in data['data']['result'][0].get('values', []):
-                            try:
-                                timestamp, value = point
-                                
-                                # Include NaN values as null for proper gap rendering
-                                if value == "NaN" or value == "nan":
+                        # Format for trends.html
+                        timestamps = []
+                        values = []
+                        
+                        if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
+                            # Extract unique timestamps and values
+                            seen_timestamps = set()
+                            
+                            for point in data['data']['result'][0].get('values', []):
+                                try:
+                                    timestamp, value = point
+                                    
+                                    # Include NaN values as null for proper gap rendering
+                                    if value == "NaN" or value == "nan":
+                                        if timestamp not in seen_timestamps:
+                                            seen_timestamps.add(timestamp)
+                                            # Format timestamp for display
+                                            date = datetime.fromtimestamp(timestamp)
+                                            time_str = date.strftime('%H:%M')
+                                            timestamps.append(time_str)
+                                            values.append(None)
+                                        continue
+                                        
                                     if timestamp not in seen_timestamps:
                                         seen_timestamps.add(timestamp)
-                                        values.append([timestamp, None])
+                                        # Format timestamp for display
+                                        date = datetime.fromtimestamp(timestamp)
+                                        time_str = date.strftime('%H:%M')
+                                        timestamps.append(time_str)
+                                        try:
+                                            # Convert string values to floats for consistent charting
+                                            values.append(float(value))
+                                        except (ValueError, TypeError):
+                                            # If conversion fails, include as null
+                                            values.append(None)
+                                except Exception as e:
+                                    app.logger.error(f"Error processing data point {point}: {str(e)}")
+                                    # Skip this point if there's an error
                                     continue
-                                    
-                                if timestamp not in seen_timestamps:
-                                    seen_timestamps.add(timestamp)
-                                    try:
-                                        # Convert string values to floats for consistent charting
-                                        values.append([timestamp, float(value)])
-                                    except (ValueError, TypeError):
-                                        # If conversion fails, include as original value
-                                        values.append([timestamp, value])
-                            except Exception as e:
-                                app.logger.error(f"Error processing data point {point}: {str(e)}")
-                                # Skip this point if there's an error
-                                continue
                         
-                        results[metric] = values
-            except Exception as e:
-                app.logger.error(f"Error querying {metric} for trends: {str(e)}")
-                # Continue with next metric
-        
-        return jsonify({"status": "success", "data": results})
+                        # Add to results
+                        results[metric_name] = {
+                            "timestamps": timestamps,
+                            "values": values
+                        }
+                except Exception as e:
+                    app.logger.error(f"Error querying {metric} for trends: {str(e)}")
+                    # Continue with next metric
+                    results[metric] = {
+                        "timestamps": [],
+                        "values": []
+                    }
+            
+            return jsonify(results)
+        # This is the original format used by the main dashboard
+        else:
+            # Legacy format with the "data" wrapper
+            results = {}
+            
+            # Query each metric
+            for metric in metrics_list:
+                try:
+                    # Ensure exact case match for metric name in VM
+                    metric_name = metric.strip()
+                    
+                    query_url = f"{VICTORIA_URL}/api/v1/query_range"
+                    query = f'{metric_name}{{{device_filter}}}'
+                    
+                    params = {
+                        'query': query,
+                        'start': start,
+                        'end': now,
+                        'step': step_size  # Optimized step size to reduce data volume
+                    }
+                    
+                    # Log the specific query for debugging
+                    app.logger.info(f"VM Query: {query}")
+                    
+                    response = requests.get(query_url, params=params, timeout=5)  # Increased timeout for bulk data
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
+                            # Extract unique timestamps and values
+                            values = []
+                            seen_timestamps = set()
+                            
+                            for point in data['data']['result'][0].get('values', []):
+                                try:
+                                    timestamp, value = point
+                                    
+                                    # Include NaN values as null for proper gap rendering
+                                    if value == "NaN" or value == "nan":
+                                        if timestamp not in seen_timestamps:
+                                            seen_timestamps.add(timestamp)
+                                            values.append([timestamp, None])
+                                        continue
+                                        
+                                    if timestamp not in seen_timestamps:
+                                        seen_timestamps.add(timestamp)
+                                        try:
+                                            # Convert string values to floats for consistent charting
+                                            values.append([timestamp, float(value)])
+                                        except (ValueError, TypeError):
+                                            # If conversion fails, include as original value
+                                            values.append([timestamp, value])
+                                except Exception as e:
+                                    app.logger.error(f"Error processing data point {point}: {str(e)}")
+                                    # Skip this point if there's an error
+                                    continue
+                            
+                            results[metric] = values
+                except Exception as e:
+                    app.logger.error(f"Error querying {metric} for trends: {str(e)}")
+                    # Continue with next metric
+            
+            return jsonify({"status": "success", "data": results})
     except Exception as e:
         app.logger.error(f"Error fetching trends data: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "error": str(e)}), 500

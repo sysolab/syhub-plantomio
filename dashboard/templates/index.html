@@ -904,6 +904,158 @@
             // Check service status every 60 seconds
             setInterval(updateServiceStatus, 60000);
         });
+
+        // Mobile sidebar toggle
+        document.getElementById('mobile-toggle').addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+
+        // Handle live data using Server-Sent Events with reconnection logic
+        let evtSource = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const baseReconnectDelay = 1000; // 1 second
+        
+        function setupSSE() {
+            if (evtSource) {
+                // Close existing connection before creating a new one
+                evtSource.close();
+            }
+            
+            evtSource = new EventSource('/api/events');
+            
+            // Connection opened
+            evtSource.onopen = function() {
+                console.log("SSE connection established");
+                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+                
+                // Update the live status indicator
+                const liveIndicator = document.querySelector('.status-indicator.live');
+                if (liveIndicator) {
+                    liveIndicator.style.backgroundColor = "#1cc88a"; // Connected - green
+                }
+            };
+            
+            // Handle incoming messages
+            evtSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    // Skip status messages
+                    if (data.status) return;
+                    
+                    // Update device ID if available
+                    if (data.deviceID) {
+                        // Update the current device if needed
+                        if (!currentDevice) {
+                            currentDevice = data.deviceID;
+                        }
+                        
+                        // Always update device ID display
+                        document.getElementById('device-id').textContent = data.deviceID;
+                    }
+                    
+                    // Skip updates for devices that aren't the current focus
+                    if (data.deviceID && currentDevice && data.deviceID !== currentDevice) {
+                        return;
+                    }
+                    
+                    // Update last update timestamp
+                    if (data.lastUpdate) {
+                        const date = new Date(data.lastUpdate);
+                        document.getElementById('last-update').textContent = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                    }
+                    
+                    // Update sensor values
+                    if (data.temperature) {
+                        const temperatureEl = document.getElementById('temperature-value');
+                        if (temperatureEl) temperatureEl.textContent = `${Number(data.temperature).toFixed(1)}°C`;
+                    }
+                    
+                    if (data.pH) {
+                        const phEl = document.getElementById('ph-value');
+                        if (phEl) phEl.textContent = Number(data.pH).toFixed(2);
+                    }
+                    
+                    if (data.EC) {
+                        const ecEl = document.getElementById('ec-value');
+                        if (ecEl) ecEl.textContent = `${Number(data.EC).toFixed(2)} μS/cm`;
+                    }
+                    
+                    if (data.TDS) {
+                        const tdsEl = document.getElementById('tds-value');
+                        if (tdsEl) tdsEl.textContent = `${Number(data.TDS).toFixed(1)} ppm`;
+                    }
+                    
+                    if (data.ORP) {
+                        const orpEl = document.getElementById('orp-value');
+                        if (orpEl) orpEl.textContent = `${Number(data.ORP).toFixed(1)} mV`;
+                    }
+                    
+                    // Update water level indicator and values
+                    if (data.waterLevel) {
+                        const tankEl = document.getElementById('tank-water-level');
+                        const levelEl = document.getElementById('water-level-percent');
+                        const valueEl = document.getElementById('water-level-value');
+                        
+                        if (tankEl) tankEl.style.height = `${data.waterLevel}%`;
+                        if (levelEl) levelEl.textContent = Math.round(data.waterLevel);
+                        if (valueEl && data.distance) valueEl.textContent = Number(data.distance).toFixed(1);
+                    }
+                    
+                    // Request chart update when new data arrives (only once per minute at most)
+                    const currentTime = Math.floor(Date.now() / 1000);
+                    if (data.timestamp && 
+                        (!window.lastChartUpdate || 
+                         data.timestamp > window.lastChartUpdate || 
+                         currentTime - window.lastChartRequestTime > 60)) {
+                        
+                        window.lastChartUpdate = data.timestamp;
+                        window.lastChartRequestTime = currentTime;
+                        
+                        // Throttle chart updates - only update if not actively using controls
+                        if (!window.isChartInteractionActive) {
+                            updateMainChart();
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error processing SSE message:", e);
+                }
+            };
+            
+            // Handle connection errors
+            evtSource.onerror = function(event) {
+                console.error("SSE connection error:", event);
+                
+                // Update the live status indicator
+                const liveIndicator = document.querySelector('.status-indicator.live');
+                if (liveIndicator) {
+                    liveIndicator.style.backgroundColor = "#e74a3b"; // Error - red
+                }
+                
+                // Close the current connection
+                evtSource.close();
+                
+                // Implement exponential backoff for reconnection
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    const delay = baseReconnectDelay * Math.pow(2, reconnectAttempts);
+                    console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
+                    
+                    setTimeout(() => {
+                        reconnectAttempts++;
+                        setupSSE();
+                    }, delay);
+                } else {
+                    console.error(`Max reconnection attempts (${maxReconnectAttempts}) reached.`);
+                    // Update UI to show disconnected state
+                    if (liveIndicator) {
+                        liveIndicator.textContent = "Disconnected";
+                        liveIndicator.classList.remove("live");
+                        liveIndicator.classList.add("error");
+                    }
+                }
+            };
+        }
     </script>
 </body>
 </html>
