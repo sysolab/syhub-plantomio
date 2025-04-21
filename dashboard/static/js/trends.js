@@ -381,3 +381,12 @@ function getMetricLabel(metric) {
         default: return metric;
     }
 }
+
+// Update service status if the function exists
+if (typeof updateServiceStatus === 'function') {
+    // Initial update
+    updateServiceStatus();
+    
+    // Update every 60 seconds
+    setInterval(updateServiceStatus, 60000);
+}
