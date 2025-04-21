@@ -391,202 +391,7 @@
             }
         }
         
-        // Handle chart data loading
-        function updateMainChart(metric, timeMinutes, stepSize) {
-            const ctx = document.getElementById('main-chart').getContext('2d');
-            const chartCanvas = document.getElementById('main-chart');
-            
-            // Show loading indicator
-            chartCanvas.style.opacity = '0.6';
-            
-            // Always destroy any existing chart before creating a new one
-            if (window.mainChart) {
-                try {
-                    window.mainChart.destroy();
-                    window.mainChart = null;
-                    
-                    // Clear canvas to ensure no artifacts remain
-                    ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                } catch (e) {
-                    console.error("Error destroying chart:", e);
-                }
-            }
-            
-            // Create flag to prevent concurrent chart creation
-            if (window.isMainChartBeingCreated) {
-                console.log("Chart creation already in progress, aborting");
-                return;
-            }
-            window.isMainChartBeingCreated = true;
-            
-            // Define fixed ranges for all metrics
-            const fixedRanges = {
-                temperature: { min: 0, max: 100, color: '#4e73df', unit: '°C' },
-                pH: { min: 0, max: 14, color: '#e74a3b', unit: '' },
-                ec: { min: 0, max: 5.0, color: '#36b9cc', unit: 'μS/cm' },
-                EC: { min: 0, max: 5.0, color: '#36b9cc', unit: 'μS/cm' },
-                tds: { min: 0, max: 1000, color: '#1cc88a', unit: 'ppm' },
-                TDS: { min: 0, max: 1000, color: '#1cc88a', unit: 'ppm' },
-                orp: { min: 0, max: 800, color: '#f6c23e', unit: 'mV' },
-                ORP: { min: 0, max: 800, color: '#f6c23e', unit: 'mV' },
-                distance: { min: 0, max: 200, color: '#858796', unit: 'cm' }
-            };
-            
-            // Get range for the current metric, fallback to dynamic range if not defined
-            let range = fixedRanges[metric] || { min: 0, max: 100, color: '#4e73df', unit: '' };
-            
-            // Calculate step size based on the range
-            const stepSizeValue = (range.max - range.min) / 10;
-            
-            setTimeout(() => {
-                fetch(`/api/trends?metrics=${metric}&device=${currentDevice}&minutes=${timeMinutes}&step=${stepSize}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Remove loading indicator
-                        chartCanvas.style.opacity = '1';
-                        
-                        if (data.status === "success" && data.data[metric]) {
-                            const values = data.data[metric];
-                            
-                            if (!values || !values.length) {
-                                console.warn(`No data available for metric: ${metric}`);
-                                window.isMainChartBeingCreated = false;
-                                return;
-                            }
-                            
-                            const labels = [];
-                            const chartData = [];
-                            
-                            values.forEach(([timestamp, value]) => {
-                                if (value !== null && value !== "NaN" && value !== "nan") {
-                                    const date = new Date(timestamp * 1000);
-                                    labels.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-                                    chartData.push(parseFloat(value));
-                                }
-                            });
-                            
-                            // Clear canvas again right before drawing
-                            ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                            
-                            // Get display name with units
-                            const metricLabel = `${metric.charAt(0).toUpperCase() + metric.slice(1)}${range.unit ? ' (' + range.unit + ')' : ''}`;
-                            
-                            window.mainChart = new Chart(ctx, {
-                                type: 'line',
-                                data: {
-                                    labels: labels,
-                                    datasets: [{
-                                        label: metricLabel,
-                                        data: chartData,
-                                        borderColor: range.color,
-                                        backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                                        tension: 0.4,
-                                        borderWidth: 2,
-                                        fill: true
-                                    }]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    animation: false, // Disable animation for faster rendering
-                                    plugins: {
-                                        legend: {
-                                            position: 'top',
-                                            align: 'end'
-                                        },
-                                        title: {
-                                            display: true,
-                                            text: `Device: ${currentDevice}`,
-                                            position: 'top',
-                                            align: 'end'
-                                        },
-                                        tooltip: {
-                                            callbacks: {
-                                                label: function(context) {
-                                                    let label = context.dataset.label || '';
-                                                    if (label) {
-                                                        label += ': ';
-                                                    }
-                                                    if (context.parsed.y !== null) {
-                                                        label += context.parsed.y.toFixed(1);
-                                                    }
-                                                    return label;
-                                                }
-                                            }
-                                        }
-                                    },
-                                    scales: {
-                                        y: {
-                                            beginAtZero: true,
-                                            min: range.min,
-                                            max: range.max,
-                                            title: {
-                                                display: true,
-                                                text: metricLabel,
-                                                color: range.color
-                                            },
-                                            ticks: {
-                                                precision: 1,
-                                                stepSize: stepSizeValue,
-                                                callback: function(value) {
-                                                    return parseFloat(value).toFixed(1);
-                                                },
-                                                color: range.color
-                                            },
-                                            grid: {
-                                                color: 'rgba(0, 0, 0, 0.05)'
-                                            }
-                                        },
-                                        x: {
-                                            grid: {
-                                                display: false
-                                            }
-                                        }
-                                    }
-                                }
-                            });
-                            
-                            window.isMainChartBeingCreated = false;
-                        } else {
-                            console.error("Error fetching trend data:", data.error || "Unknown error");
-                            window.isMainChartBeingCreated = false;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching trend data:', error);
-                        chartCanvas.style.opacity = '1';
-                        window.isMainChartBeingCreated = false;
-                        
-                        // Fallback to empty chart - only if we don't have a chart yet
-                        if (!window.mainChart) {
-                            try {
-                                // Clear the canvas first
-                                ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                                
-                                window.mainChart = new Chart(ctx, {
-                                    type: 'line',
-                                    data: {
-                                        labels: [],
-                                        datasets: []
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            title: {
-                                                display: true,
-                                                text: 'Error loading data'
-                                            }
-                                        }
-                                    }
-                                });
-                            } catch (e) {
-                                console.error("Error creating fallback chart:", e);
-                            }
-                        }
-                    });
-            }, 100); // Wait 100ms between chart destruction and creation
-        }
+        // Handle chart data loading - REMOVED: now handled by dashboard.js
         
         // Update service status
         function updateServiceStatus() {
@@ -660,22 +465,26 @@
                     // Get the selected metric from the button's data attribute
                     const selectedMetric = this.dataset.metric;
                     
+                    // Update the global currentMetric variable used by dashboard.js
+                    window.currentMetric = selectedMetric;
+                    
                     // Get time range values
                     const timeDropdown = document.getElementById('time-range-dropdown');
                     const timeMinutes = parseInt(timeDropdown?.value || 1440);
                     const stepSize = timeDropdown?.options[timeDropdown.selectedIndex]?.dataset.step || '15m';
                     
-                    // Clear any existing chart
-                    resetChart();
-                    
                     // Handle "combined" special case
                     if (selectedMetric === 'combined') {
-                        loadCombinedChart(timeMinutes, stepSize);
+                        if (typeof loadCombinedChart === 'function') {
+                            loadCombinedChart(timeMinutes, stepSize);
+                        }
                         return;
                     }
                     
                     // Update the chart with the selected metric
-                    updateMainChart(selectedMetric, timeMinutes, stepSize);
+                    if (typeof updateMainChart === 'function') {
+                        updateMainChart();
+                    }
                 });
             });
             
@@ -687,17 +496,21 @@
                     const timeMinutes = parseInt(this.value);
                     const stepSize = this.options[this.selectedIndex].dataset.step;
                     
-                    // Clear any existing chart
-                    resetChart();
+                    // Update the global currentMetric variable used by dashboard.js
+                    window.currentMetric = selectedMetric;
                     
                     // Handle "combined" special case
                     if (selectedMetric === 'combined') {
-                        loadCombinedChart(timeMinutes, stepSize);
+                        if (typeof loadCombinedChart === 'function') {
+                            loadCombinedChart(timeMinutes, stepSize);
+                        }
                         return;
                     }
                     
                     // Update the chart with the selected metric and new time range
-                    updateMainChart(selectedMetric, timeMinutes, stepSize);
+                    if (typeof updateMainChart === 'function') {
+                        updateMainChart();
+                    }
                 }
             });
             
@@ -824,7 +637,10 @@
                         
                         // Throttle chart updates - only update if not actively using controls
                         if (!window.isChartInteractionActive) {
-                            updateMainChart();
+                            // Call the dashboard.js updateMainChart function that doesn't require parameters
+                            if (typeof updateMainChart === 'function') {
+                                updateMainChart();
+                            }
                         }
                     }
                 } catch (e) {
