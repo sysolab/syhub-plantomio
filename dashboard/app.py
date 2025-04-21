@@ -141,8 +141,11 @@ def events():
             # Send initial connection message
             yield f"data: {json.dumps({'status': 'connected', 'timestamp': datetime.now().isoformat()})}\n\n"
             
-            # Send data updates every second
-            while True:
+            # Send data updates every second, but limit total time to avoid worker timeout
+            max_time = 25  # seconds (just under gunicorn's default 30 sec timeout)
+            start_time = time.time()
+            
+            while (time.time() - start_time) < max_time:
                 # Get the latest data
                 current_data = get_current_values()
                 
@@ -159,8 +162,16 @@ def events():
                     # Send data
                     yield f"data: {json.dumps(current_data)}\n\n"
                 
-                # Sleep for update interval
-                time.sleep(UPDATE_INTERVAL)
+                # Sleep for update interval, but don't exceed max time
+                remaining = max(0, min(UPDATE_INTERVAL, max_time - (time.time() - start_time)))
+                if remaining > 0:
+                    time.sleep(remaining)
+                else:
+                    break
+                    
+            # Tell client to reconnect
+            yield f"retry: 100\n\n"
+            
         except Exception as e:
             app.logger.error(f"Error in SSE stream: {str(e)}")
             yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"

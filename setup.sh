@@ -1542,7 +1542,7 @@ main() {
   fi
   
   if should_process_component "nodered" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
-    echo "Node-RED: http://$HOSTNAME/node-red/admin"
+    echo "Node-RED: http://$HOSTNAME:1880/admin"
   fi
   
   if should_process_component "vm" || [ -z "$COMPONENTS_TO_UPDATE" ]; then
@@ -1658,7 +1658,7 @@ display_system_info() {
       echo "MQTT Username: $MQTT_USERNAME"
       echo "MQTT Password: $MQTT_PASSWORD"
     fi
-    echo "MQTT Web Access: http://$(hostname -I | awk '{print $1}'):9001"
+#    echo "MQTT Web Access: http://$(hostname -I | awk '{print $1}'):9001"
   else
     echo "MQTT Broker: Not installed"
   fi
