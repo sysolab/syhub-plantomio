@@ -168,7 +168,7 @@ body {
 .btn-settings {
   position: absolute;
   top: 8px;
-  left: 8px;
+  right: 8px;
   z-index: 10;
   width: 24px;
   height: 24px;
@@ -354,7 +354,7 @@ body {
   align-items: center;
   min-width: 180px;
   width: 180px;
-  height: 280px;
+  height: 320px;
   position: relative;
   overflow: hidden;
 }
@@ -372,7 +372,7 @@ body {
 
 .tank-visualization {
   width: 100px;
-  height: 200px;
+  height: 240px;
   border: 2px solid #ddd;
   border-radius: 8px;
   position: relative;

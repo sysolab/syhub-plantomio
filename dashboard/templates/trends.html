@@ -371,6 +371,19 @@
                                 scales: {
                                     y: {
                                         beginAtZero: false,
+                                        ticks: {
+                                            callback: function(value) {
+                                                return value.toFixed(1);
+                                            }
+                                        },
+                                        suggestedMin: function() {
+                                            const minValue = Math.min(...data[metric].values);
+                                            return minValue - (minValue * 0.3);
+                                        }(),
+                                        suggestedMax: function() {
+                                            const maxValue = Math.max(...data[metric].values);
+                                            return maxValue + (maxValue * 0.3);
+                                        }(),
                                         grid: {
                                             color: 'rgba(0, 0, 0, 0.05)'
                                         }
