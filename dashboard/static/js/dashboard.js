@@ -512,11 +512,18 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
                         beginAtZero: minY <= 0,
                         min: minY,
                         max: maxY,
+                        grace: 0,
+                        suggestedMin: minY,
+                        suggestedMax: maxY,
+                        bounds: 'ticks',
                         ticks: {
+                            precision: 1,
                             callback: function(value) {
-                                return value.toFixed(1);  // 1 decimal place on y-axis
+                                return Number(value).toFixed(1);
                             },
-                            color: chartConfig.color
+                            color: chartConfig.color,
+                            stepSize: (maxY - minY) / 10,
+                            autoSkip: false
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
@@ -677,11 +684,18 @@ function handleCombinedChart(data, canvas, deviceId) {
                         },
                         min: ranges.temperature.min,
                         max: ranges.temperature.max,
+                        grace: 0,
+                        suggestedMin: ranges.temperature.min,
+                        suggestedMax: ranges.temperature.max,
+                        bounds: 'ticks',
                         ticks: {
+                            precision: 1,
                             callback: function(value) {
-                                return value.toFixed(1);  // 1 decimal place
+                                return Number(value).toFixed(1);
                             },
-                            color: '#4e73df'
+                            color: '#4e73df',
+                            stepSize: (ranges.temperature.max - ranges.temperature.min) / 10,
+                            autoSkip: false
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
@@ -698,11 +712,18 @@ function handleCombinedChart(data, canvas, deviceId) {
                         },
                         min: ranges.pH.min,
                         max: ranges.pH.max,
+                        grace: 0,
+                        suggestedMin: ranges.pH.min,
+                        suggestedMax: ranges.pH.max,
+                        bounds: 'ticks',
                         ticks: {
+                            precision: 1,
                             callback: function(value) {
-                                return value.toFixed(1);  // 1 decimal place
+                                return Number(value).toFixed(1);
                             },
-                            color: '#e74a3b'
+                            color: '#e74a3b',
+                            stepSize: (ranges.pH.max - ranges.pH.min) / 10,
+                            autoSkip: false
                         },
                         grid: {
                             drawOnChartArea: false
@@ -719,11 +740,18 @@ function handleCombinedChart(data, canvas, deviceId) {
                         },
                         min: ranges.EC.min,
                         max: ranges.EC.max,
+                        grace: 0,
+                        suggestedMin: ranges.EC.min,
+                        suggestedMax: ranges.EC.max,
+                        bounds: 'ticks',
                         ticks: {
+                            precision: 1,
                             callback: function(value) {
-                                return value.toFixed(1);  // 1 decimal place
+                                return Number(value).toFixed(1);
                             },
-                            color: '#36b9cc'
+                            color: '#36b9cc',
+                            stepSize: (ranges.EC.max - ranges.EC.min) / 10,
+                            autoSkip: false
                         },
                         grid: {
                             drawOnChartArea: false
