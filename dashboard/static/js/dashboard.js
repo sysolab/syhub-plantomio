@@ -805,6 +805,54 @@ function handleCombinedChart(data, canvas, deviceId) {
     }
 }
 
+// Function to load the combined chart
+function loadCombinedChart(timeMinutes, stepSize) {
+    console.log(`Loading combined chart for ${timeMinutes} minutes with step size ${stepSize}`);
+    
+    // Get current device
+    const deviceId = document.getElementById('device-id')?.textContent || 'plt-404cca470da0';
+    
+    // Get chart container and canvas
+    const canvas = document.getElementById('main-chart');
+    if (!canvas) {
+        console.error('Chart canvas not found');
+        return;
+    }
+    
+    // Show loading indicator
+    canvas.style.opacity = '0.6';
+    
+    // Fetch data for combined chart
+    fetch(`/api/trends?metrics=temperature,pH,EC&device=${deviceId}&minutes=${timeMinutes}&step=${stepSize}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Remove loading indicator
+            canvas.style.opacity = '1';
+            
+            if (!data.status || data.status !== 'success' || !data.data) {
+                throw new Error('No data available');
+            }
+            
+            // Process the combined chart
+            handleCombinedChart(data, canvas, deviceId);
+        })
+        .catch(error => {
+            console.error('Error loading combined chart:', error);
+            canvas.style.opacity = '1';
+            
+            // Display error message
+            const container = canvas.parentElement;
+            if (container) {
+                container.innerHTML = `<div class="error-message">Error loading chart: ${error.message}</div>`;
+            }
+        });
+}
+
 // Helper function to get chart config by metric
 function getChartConfig(metric) {
     switch (metric) {
