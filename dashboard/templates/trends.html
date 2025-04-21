@@ -46,38 +46,31 @@
             <header class="main-header">
                 <div class="header-content">
                     <h1>Plantomio Trends</h1>
-                    <p class="subtitle">Historical data analysis</p>
+                    <p class="subtitle">Advanced data visualization</p>
                 </div>
                 <div class="header-status">
-                    <span class="status-indicator live">Live Data</span>
-                    <span class="device-id">Device: <span id="device-id">plt-404cca470da0</span></span>
-                    <span class="last-update">Last update: <span id="last-update">08:19:57</span></span>
+                    <span class="device-id">Device: <span id="device-id">--</span></span>
                 </div>
             </header>
 
             <div class="page-content">
-                <!-- Time Range Selection -->
-                <div class="time-range-panel">
-                    <div class="panel-header">
-                        <h2>Time Range</h2>
-                    </div>
-                    <div class="time-range-controls">
-                        <div class="time-control-buttons">
-                            <button class="time-btn active">24 Hours</button>
-                            <button class="time-btn">Week</button>
-                            <button class="time-btn">Month</button>
-                            <button class="time-btn">Custom</button>
-                        </div>
-                        <div class="date-range-selector" style="display: none;">
-                            <div class="date-input">
-                                <label for="start-date">Start Date</label>
-                                <input type="date" id="start-date" class="form-control">
-                            </div>
-                            <div class="date-input">
-                                <label for="end-date">End Date</label>
-                                <input type="date" id="end-date" class="form-control">
-                            </div>
-                            <button class="btn btn-apply">Apply</button>
+                <div class="time-controls-section">
+                    <h2>Time Range</h2>
+                    <div class="time-controls">
+                        <div class="time-dropdown-container">
+                            <i class="fas fa-clock"></i>
+                            <select id="time-range-dropdown">
+                                <option value="1" data-minutes="1" data-step="2s">1 Minute</option>
+                                <option value="5" data-minutes="5" data-step="30s">5 Minutes</option>
+                                <option value="30" data-minutes="30" data-step="30s">30 Minutes</option>
+                                <option value="60" data-minutes="60" data-step="1m">1 Hour</option>
+                                <option value="360" data-minutes="360" data-step="5m">6 Hours</option>
+                                <option value="720" data-minutes="720" data-step="10m">12 Hours</option>
+                                <option value="1440" data-minutes="1440" data-step="15m" selected>24 Hours</option>
+                                <option value="2880" data-minutes="2880" data-step="30m">48 Hours</option>
+                                <option value="10080" data-minutes="10080" data-step="2h">7 Days</option>
+                                <option value="43200" data-minutes="43200" data-step="6h">30 Days</option>
+                            </select>
                         </div>
                     </div>
                 </div>

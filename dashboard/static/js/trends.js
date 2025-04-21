@@ -57,6 +57,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Set up time range dropdown
+    const timeRangeDropdown = document.getElementById('time-range-dropdown');
+    if (timeRangeDropdown) {
+        timeRangeDropdown.addEventListener('change', function() {
+            const minutes = parseInt(this.value) || 1440;
+            loadAllCharts(minutes, deviceId);
+        });
+    }
+    
     // Export buttons
     document.querySelectorAll('.btn-export').forEach(button => {
         button.addEventListener('click', function() {
@@ -139,6 +148,23 @@ function loadAllCharts(minutes, deviceId) {
     // Get list of metrics to load
     const metrics = ['temperature', 'pH', 'TDS', 'EC', 'distance', 'ORP'];
     
+    // Get step size from dropdown if available
+    const timeDropdown = document.getElementById('time-range-dropdown');
+    let stepSize = '15m'; // Default step size
+    
+    if (timeDropdown) {
+        // Get selected option
+        const selectedOption = timeDropdown.options[timeDropdown.selectedIndex];
+        if (selectedOption && selectedOption.dataset.step) {
+            stepSize = selectedOption.dataset.step;
+        }
+        
+        // Update minutes if needed
+        if (minutes === undefined) {
+            minutes = parseInt(timeDropdown.value) || 1440;
+        }
+    }
+    
     // Set loading state for all charts
     metrics.forEach(metric => {
         const container = document.getElementById(`${metric}-chart-container`);
@@ -157,7 +183,7 @@ function loadAllCharts(minutes, deviceId) {
     });
     
     // Fetch data for all metrics at once to reduce API calls
-    fetch(`/api/trends?metrics=${metrics.join(',')}&device=${deviceId}&minutes=${minutes}`)
+    fetch(`/api/trends?metrics=${metrics.join(',')}&device=${deviceId}&minutes=${minutes}&step=${stepSize}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error: ${response.status}`);
