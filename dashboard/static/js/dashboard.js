@@ -440,7 +440,7 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
         
         // Calculate padding (30% of the range)
         const range = maxValue - minValue;
-        const padding = range * 0.3;
+        const padding = range * 1.3;
         
         // Apply padding to min and max
         yMin = minValue - padding;
@@ -453,7 +453,7 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
         
         // For sparse data or single point, ensure a reasonable range
         if (range === 0 || isNaN(range)) {
-            yMin = Math.max(0, minValue * 0.7);
+            yMin = Math.max(0, minValue * 1.7);
             yMax = maxValue * 1.3;
             
             // For zero or near-zero values, use reasonable defaults
@@ -637,7 +637,7 @@ function handleCombinedChart(data, canvas, deviceId) {
             const minValue = Math.min(...values);
             const maxValue = Math.max(...values);
             const range = maxValue - minValue;
-            const padding = range * 0.3;
+            const padding = range * 1.3;
             
             // Set min and max with padding
             let min = minValue - padding;
@@ -650,7 +650,7 @@ function handleCombinedChart(data, canvas, deviceId) {
             
             // For sparse data or single point, ensure a reasonable range
             if (range === 0 || isNaN(range)) {
-                min = Math.max(0, minValue * 0.7);
+                min = Math.max(0, minValue * 1.7);
                 max = maxValue * 1.3;
                 
                 // For zero or near-zero values, use reasonable defaults
