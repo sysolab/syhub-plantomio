@@ -923,3 +923,41 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Metric selector */
+.metric-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.metric-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.7rem;
+  border: 1px solid rgba(0,0,0,0.05);
+  border-radius: 1rem;
+  background-color: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.metric-btn:hover {
+  background-color: rgba(78, 115, 223, 0.05);
+}
+
+.metric-btn.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+@media (max-width: 576px) {
+  .metric-selector {
+    justify-content: flex-start;
+  }
+  
+  .metric-btn {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+  }
+}

@@ -252,8 +252,8 @@ def query_data():
         metric = request.args.get('metric', 'temperature')
         device_id = request.args.get('device', '')
         
-        # Parse time range parameters (default to last 10 minutes)
-        minutes = int(request.args.get('minutes', 10))
+        # Parse time range parameters (default to last 24 hours)
+        minutes = int(request.args.get('minutes', 1440))
         
         # Calculate time range
         now = int(time.time())
@@ -268,9 +268,16 @@ def query_data():
         # Query VictoriaMetrics for range data
         query_url = f"{VICTORIA_URL}/api/v1/query_range"
         
-        # Adjust step size based on time range to reduce data points
-        # For 24 hours, a 10-minute step is reasonable (~144 points)
-        step_size = '10m' if minutes >= 1440 else '5m' if minutes >= 720 else '1m'
+        # Optimize step size based on time range to reduce data points
+        # This ensures we get a reasonable number of data points (~100) for any time range
+        if minutes >= 10080:  # 7 days
+            step_size = '2h'  # 2 hour intervals for week view (84 points)
+        elif minutes >= 1440:  # 24 hours
+            step_size = '15m'  # 15 minute intervals for day view (96 points)
+        elif minutes >= 720:  # 12 hours
+            step_size = '8m'  # 8 minute intervals (90 points)
+        else:
+            step_size = '1m'  # 1 minute for shorter ranges
         
         # Construct query with exact metric name
         query = f'{metric}{{{device_filter}}}'
@@ -279,7 +286,7 @@ def query_data():
             'query': query,
             'start': start,
             'end': now,
-            'step': step_size  # Adjust step size for data reduction
+            'step': step_size  # Optimized step size
         }
         
         # Log the actual query for debugging
@@ -298,23 +305,27 @@ def query_data():
             if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
                 result = data['data']['result'][0]
                 
-                # Check if the metric exists in the response
-                if 'metric' in result:
-                    app.logger.info(f"Metric in response: {result['metric']}")
-                
                 # Filter out duplicate timestamps and keep only unique data points
                 unique_values = []
                 seen_timestamps = set()
                 
                 if 'values' in result:
                     for timestamp, value in result['values']:
-                        # Skip NaN values
+                        # Include NaN values with null for proper gap rendering in chart
                         if value == "NaN" or value == "nan":
+                            if timestamp not in seen_timestamps:
+                                seen_timestamps.add(timestamp)
+                                unique_values.append([timestamp, None])
                             continue
                             
                         if timestamp not in seen_timestamps:
                             seen_timestamps.add(timestamp)
-                            unique_values.append([timestamp, value])
+                            try:
+                                # Convert string values to floats for consistency
+                                unique_values.append([timestamp, float(value)])
+                            except (ValueError, TypeError):
+                                # If conversion fails, include as string
+                                unique_values.append([timestamp, value])
                     
                     # Replace the values with unique ones
                     result['values'] = unique_values
