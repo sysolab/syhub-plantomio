@@ -384,35 +384,25 @@ function updateMainChart() {
 
 // Function to handle individual metric charts
 function handleSingleMetricChart(metric, data, canvas, deviceId) {
-    console.log(`Handling individual chart for metric: ${metric}`);
-    console.log('Data received:', data);
+    console.log(`Handling individual chart for metric: ${metric} - Fixed scale version`);
     
     if (!data.data[metric] || !Array.isArray(data.data[metric]) || data.data[metric].length === 0) {
-        console.error(`No data available for ${metric}. Data structure:`, data);
+        console.error(`No data available for ${metric}.`);
         throw new Error(`No data available for ${metric}`);
     }
     
     const chartData = data.data[metric];
-    console.log(`Chart data for ${metric}:`, chartData);
     const labels = [];
     const values = [];
-    
-    // Track min and max for dynamic axis scaling
-    let minValue = Number.MAX_VALUE;
-    let maxValue = Number.MIN_VALUE;
     
     // Process each data point
     chartData.forEach(point => {
         if (Array.isArray(point) && point.length === 2) {
             const [timestamp, value] = point;
             if (value !== null && !isNaN(value)) {
-                const numValue = parseFloat(value);
-                minValue = Math.min(minValue, numValue);
-                maxValue = Math.max(maxValue, numValue);
-                
                 const date = new Date(timestamp * 1000);
                 labels.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-                values.push(numValue);
+                values.push(parseFloat(value));
             } else {
                 labels.push('');
                 values.push(null);
@@ -420,40 +410,49 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
         }
     });
     
-    console.log(`Processed ${values.length} data points with min: ${minValue}, max: ${maxValue}`);
-    console.log('Labels:', labels);
-    console.log('Values:', values);
-    
     // Get chart colors and labels for the metric
     const chartConfig = getChartConfig(metric);
     
-    // Set fixed scales based on metric
-    let minY, maxY;
-    if (metric === 'pH') {
-        minY = 0;
-        maxY = 14;
-    } else if (metric === 'temperature') {
-        minY = 0;
-        maxY = 100;
-    } else if (metric === 'EC') {
-        minY = 0;
-        maxY = 5.0;  // Updated based on actual data range
-    } else {
-        // Add 30% padding to min/max to determine axis range for other metrics
-        const valuePadding = (maxValue - minValue) * 0.3;
-        minY = minValue - valuePadding;
-        maxY = maxValue + valuePadding;
-        
-        // Handle case where min and max are very close or equal
-        if (minValue === maxValue || Math.abs(maxValue - minValue) < 0.1) {
-            minY = minValue * 0.7;  // 30% below
-            maxY = maxValue * 1.3;  // 30% above
-        }
-        
-        // Ensure zero is included for metrics where it makes sense
-        if (minY > 0 && ['temperature', 'distance', 'TDS', 'EC', 'ORP'].includes(metric)) {
-            minY = 0;
-        }
+    // Set hard-coded fixed scales based on metric
+    let yMin, yMax;
+    
+    switch(metric) {
+        case 'pH':
+            yMin = 0;
+            yMax = 14;
+            break;
+        case 'temperature':
+            yMin = 0;
+            yMax = 100;
+            break;
+        case 'EC':
+            yMin = 0;
+            yMax = 5.0;
+            break;
+        case 'TDS':
+            yMin = 0;
+            yMax = 2000;
+            break;
+        case 'ORP':
+            yMin = 0;
+            yMax = 1000;
+            break;
+        case 'distance':
+            yMin = 0;
+            yMax = 10;
+            break;
+        default:
+            // Calculate from data with 30% padding if no fixed scale
+            const minValue = Math.min(...values.filter(v => v !== null));
+            const maxValue = Math.max(...values.filter(v => v !== null));
+            const padding = (maxValue - minValue) * 0.3;
+            yMin = minValue - padding;
+            yMax = maxValue + padding;
+            
+            // Ensure zero is included for metrics where it makes sense
+            if (yMin > 0) {
+                yMin = 0;
+            }
     }
     
     try {
@@ -461,8 +460,38 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
             throw new Error('Canvas context not available');
         }
         
+        // Add debug note to confirm code execution
+        const container = canvas.parentElement;
+        const debugEl = document.createElement('div');
+        debugEl.style.position = 'absolute';
+        debugEl.style.top = '5px';
+        debugEl.style.right = '5px';
+        debugEl.style.fontSize = '10px';
+        debugEl.style.background = 'rgba(255,255,255,0.7)';
+        debugEl.style.padding = '2px 5px';
+        debugEl.style.borderRadius = '3px';
+        debugEl.style.color = '#333';
+        debugEl.textContent = `${metric}: ${yMin}-${yMax} (Fixed)`;
+        container.appendChild(debugEl);
+        
+        // Calculate the number of steps and step size
+        const numSteps = 10;
+        const stepSize = (yMax - yMin) / numSteps;
+        
+        // Create fixed ticks array with exactly 1 decimal place
+        const fixedTicks = [];
+        for (let i = 0; i <= numSteps; i++) {
+            fixedTicks.push(parseFloat((yMin + i * stepSize).toFixed(1)));
+        }
+        
         const ctx = canvas.getContext('2d');
-        mainChart = new Chart(ctx, {
+        
+        // Destroy any existing chart
+        if (window.mainChart) {
+            window.mainChart.destroy();
+        }
+        
+        window.mainChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
@@ -481,6 +510,7 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: false, // Disable animation for faster rendering
                 plugins: {
                     legend: {
                         position: 'top',
@@ -500,7 +530,7 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
                                     label += ': ';
                                 }
                                 if (context.parsed.y !== null) {
-                                    label += context.parsed.y.toFixed(1);  // 1 decimal place in tooltip
+                                    label += context.parsed.y.toFixed(1);
                                 }
                                 return label;
                             }
@@ -509,21 +539,16 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
                 },
                 scales: {
                     y: {
-                        beginAtZero: minY <= 0,
-                        min: minY,
-                        max: maxY,
-                        grace: 0,
-                        suggestedMin: minY,
-                        suggestedMax: maxY,
-                        bounds: 'ticks',
+                        min: yMin,
+                        max: yMax,
                         ticks: {
-                            precision: 1,
                             callback: function(value) {
-                                return Number(value).toFixed(1);
+                                return parseFloat(value).toFixed(1);
                             },
                             color: chartConfig.color,
-                            stepSize: (maxY - minY) / 10,
-                            autoSkip: false
+                            // Force specific ticks with 1 decimal place
+                            stepSize: stepSize,
+                            precision: 1
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
@@ -542,9 +567,6 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
                 }
             }
         });
-        
-        // Store reference to chart to avoid memory leaks
-        window.mainChart = mainChart;
     } catch (e) {
         console.error(`Error creating ${metric} chart:`, e);
         throw new Error(`Error creating chart: ${e.message}`);
@@ -553,6 +575,8 @@ function handleSingleMetricChart(metric, data, canvas, deviceId) {
 
 // Function to handle combined metric charts 
 function handleCombinedChart(data, canvas, deviceId) {
+    console.log(`Handling combined chart - Fixed scale version`);
+    
     // Process data for combined chart
     const metricMaps = {
         temperature: new Map(),
@@ -560,11 +584,11 @@ function handleCombinedChart(data, canvas, deviceId) {
         EC: new Map()
     };
     
-    // Track min and max for each metric
+    // Hard-coded fixed ranges
     const ranges = {
-        temperature: { min: 0, max: 100 },  // Fixed range for temperature
-        pH: { min: 0, max: 14 },           // Fixed range for pH
-        EC: { min: 0, max: 5.0 }          // Fixed range for EC - updated based on actual data
+        temperature: { min: 0, max: 100 },
+        pH: { min: 0, max: 14 },
+        EC: { min: 0, max: 5.0 }
     };
     
     // Collect all timestamps from all metrics
@@ -602,9 +626,33 @@ function handleCombinedChart(data, canvas, deviceId) {
     const ecData = sortedTimestamps.map(timestamp => metricMaps.EC.get(timestamp) || null);
     
     try {
+        // Add debug note to confirm code execution
+        const container = canvas.parentElement;
+        const debugEl = document.createElement('div');
+        debugEl.style.position = 'absolute';
+        debugEl.style.top = '5px';
+        debugEl.style.right = '5px';
+        debugEl.style.fontSize = '10px';
+        debugEl.style.background = 'rgba(255,255,255,0.7)';
+        debugEl.style.padding = '2px 5px';
+        debugEl.style.borderRadius = '3px';
+        debugEl.style.color = '#333';
+        debugEl.textContent = `Combined: T(${ranges.temperature.min}-${ranges.temperature.max}), pH(${ranges.pH.min}-${ranges.pH.max}), EC(${ranges.EC.min}-${ranges.EC.max})`;
+        container.appendChild(debugEl);
+        
+        // Calculate step sizes for each metric
+        const tempStepSize = (ranges.temperature.max - ranges.temperature.min) / 10;
+        const phStepSize = (ranges.pH.max - ranges.pH.min) / 10;
+        const ecStepSize = (ranges.EC.max - ranges.EC.min) / 10;
+        
         // Clear canvas before drawing
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Destroy any existing chart
+        if (window.mainChart) {
+            window.mainChart.destroy();
+        }
         
         window.mainChart = new Chart(ctx, {
             type: 'line',
@@ -646,6 +694,7 @@ function handleCombinedChart(data, canvas, deviceId) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: false, // Disable animation for faster rendering
                 plugins: {
                     legend: {
                         position: 'top',
@@ -665,7 +714,7 @@ function handleCombinedChart(data, canvas, deviceId) {
                                     label += ': ';
                                 }
                                 if (context.parsed.y !== null) {
-                                    label += context.parsed.y.toFixed(1);  // 1 decimal place in tooltip
+                                    label += context.parsed.y.toFixed(1);
                                 }
                                 return label;
                             }
@@ -684,18 +733,13 @@ function handleCombinedChart(data, canvas, deviceId) {
                         },
                         min: ranges.temperature.min,
                         max: ranges.temperature.max,
-                        grace: 0,
-                        suggestedMin: ranges.temperature.min,
-                        suggestedMax: ranges.temperature.max,
-                        bounds: 'ticks',
                         ticks: {
-                            precision: 1,
                             callback: function(value) {
-                                return Number(value).toFixed(1);
+                                return parseFloat(value).toFixed(1);
                             },
                             color: '#4e73df',
-                            stepSize: (ranges.temperature.max - ranges.temperature.min) / 10,
-                            autoSkip: false
+                            stepSize: tempStepSize,
+                            precision: 1
                         },
                         grid: {
                             color: 'rgba(0, 0, 0, 0.05)'
@@ -712,18 +756,13 @@ function handleCombinedChart(data, canvas, deviceId) {
                         },
                         min: ranges.pH.min,
                         max: ranges.pH.max,
-                        grace: 0,
-                        suggestedMin: ranges.pH.min,
-                        suggestedMax: ranges.pH.max,
-                        bounds: 'ticks',
                         ticks: {
-                            precision: 1,
                             callback: function(value) {
-                                return Number(value).toFixed(1);
+                                return parseFloat(value).toFixed(1);
                             },
                             color: '#e74a3b',
-                            stepSize: (ranges.pH.max - ranges.pH.min) / 10,
-                            autoSkip: false
+                            stepSize: phStepSize,
+                            precision: 1
                         },
                         grid: {
                             drawOnChartArea: false
@@ -740,18 +779,13 @@ function handleCombinedChart(data, canvas, deviceId) {
                         },
                         min: ranges.EC.min,
                         max: ranges.EC.max,
-                        grace: 0,
-                        suggestedMin: ranges.EC.min,
-                        suggestedMax: ranges.EC.max,
-                        bounds: 'ticks',
                         ticks: {
-                            precision: 1,
                             callback: function(value) {
-                                return Number(value).toFixed(1);
+                                return parseFloat(value).toFixed(1);
                             },
                             color: '#36b9cc',
-                            stepSize: (ranges.EC.max - ranges.EC.min) / 10,
-                            autoSkip: false
+                            stepSize: ecStepSize,
+                            precision: 1
                         },
                         grid: {
                             drawOnChartArea: false
