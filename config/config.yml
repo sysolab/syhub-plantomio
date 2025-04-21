@@ -21,7 +21,7 @@ service_names:
 
 # --- Network Configuration ---
 # Set to false to skip AP+STA setup entirely (e.g., if using Ethernet or manual config)
-configure_network: false
+configure_network: true
 
 # --- WiFi Access Point (AP) + Station (STA) Mode ---
 # AP SSID and password will use project name if not specified
