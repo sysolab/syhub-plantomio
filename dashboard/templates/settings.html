@@ -23,13 +23,13 @@
         <!-- Sidebar - SAME AS DASHBOARD PAGE -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
+                <a href="/" class="logo">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                         <line x1="8" y1="21" x2="16" y2="21"></line>
                         <line x1="12" y1="17" x2="12" y2="21"></line>
                     </svg>
-                </div>
+                </a>
             </div>
             <nav class="sidebar-nav">
                 <ul>
@@ -55,189 +55,256 @@
             </header>
 
             <div class="page-content">
-                <!-- Device Information -->
-                <div class="settings-panel">
-                    <div class="panel-header">
-                        <h2>Device Information</h2>
-                    </div>
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <div class="info-label">Device ID</div>
-                            <div class="info-value">plt-404cca470da0</div>
+                <div class="settings-grid">
+                    <!-- Device Information -->
+                    <div class="settings-panel">
+                        <div class="panel-header">
+                            <h2><i class="fas fa-microchip"></i> Device Information</h2>
                         </div>
-                        <div class="info-item">
-                            <div class="info-label">Firmware Version</div>
-                            <div class="info-value">1.2.5</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Hardware Version</div>
-                            <div class="info-value">Plantomio v2</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">IP Address</div>
-                            <div class="info-value">192.168.1.105</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">MAC Address</div>
-                            <div class="info-value">40:4C:CA:47:0D:A0</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Uptime</div>
-                            <div class="info-value">7 days, 3 hours</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Sensor Configuration -->
-                <div class="settings-panel">
-                    <div class="panel-header">
-                        <h2>Sensor Configuration</h2>
-                    </div>
-                    <div class="config-table">
-                        <div class="config-item">
-                            <div class="config-label">Temperature</div>
-                            <div class="config-value">
-                                <select class="form-control">
-                                    <option value="c" selected>Celsius (°C)</option>
-                                    <option value="f">Fahrenheit (°F)</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="config-item">
-                            <div class="config-label">pH Calibration</div>
-                            <div class="config-value">
-                                <button class="btn btn-secondary">Calibrate pH Sensor</button>
-                            </div>
-                        </div>
-                        
-                        <div class="config-item">
-                            <div class="config-label">TDS Calibration</div>
-                            <div class="config-value">
-                                <button class="btn btn-secondary">Calibrate TDS Sensor</button>
-                            </div>
-                        </div>
-                        
-                        <div class="config-item">
-                            <div class="config-label">Reading Interval</div>
-                            <div class="config-value">
-                                <select class="form-control">
-                                    <option value="30">30 seconds</option>
-                                    <option value="60" selected>1 minute</option>
-                                    <option value="300">5 minutes</option>
-                                    <option value="600">10 minutes</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Tank Configuration -->
-                <div class="settings-panel">
-                    <div class="panel-header">
-                        <h2>Water Tank Configuration</h2>
-                    </div>
-                    <div class="settings-flex">
-                        <div class="settings-form">
-                            <div class="form-group">
-                                <label for="tank-min-level">Minimum Level (cm)</label>
-                                <input type="number" id="tank-min-level" class="form-control" value="0" step="0.1">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="tank-max-level">Maximum Level (cm)</label>
-                                <input type="number" id="tank-max-level" class="form-control" value="10" step="0.1">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="tank-alert-level">Alert Level (%)</label>
-                                <input type="number" id="tank-alert-level" class="form-control" value="25" min="1" max="100">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="alert-enabled">Low Water Alert</label>
-                                <div class="toggle-switch">
-                                    <input type="checkbox" id="alert-enabled" checked>
-                                    <label for="alert-enabled"></label>
+                        <div class="info-card">
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="info-label">Device ID</div>
+                                    <div class="info-value">plt-404cca470da0</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Firmware Version</div>
+                                    <div class="info-value">1.2.5</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Hardware Version</div>
+                                    <div class="info-value">Plantomio v2</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">IP Address</div>
+                                    <div class="info-value">192.168.1.105</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">MAC Address</div>
+                                    <div class="info-value">40:4C:CA:47:0D:A0</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Uptime</div>
+                                    <div class="info-value">7 days, 3 hours</div>
                                 </div>
                             </div>
-                            
-                            <div class="form-actions">
-                                <button class="btn btn-primary" id="save-tank-config">Save Configuration</button>
-                            </div>
                         </div>
-                        
-                        <div class="tank-preview-container">
-                            <h3>Preview</h3>
-                            <div class="tank-visualization preview">
-                                <div class="tank-level" id="preview-tank-level" style="height: 75%"></div>
-                                <div class="alert-level-indicator">
-                                    <div class="alert-level-line"></div>
+                    </div>
+                    
+                    <!-- Sensor Configuration -->
+                    <div class="settings-panel">
+                        <div class="panel-header">
+                            <h2><i class="fas fa-thermometer-half"></i> Sensor Configuration</h2>
+                        </div>
+                        <div class="settings-card">
+                            <div class="config-table">
+                                <div class="config-item">
+                                    <div class="config-label">Temperature</div>
+                                    <div class="config-value">
+                                        <select class="form-control">
+                                            <option value="c" selected>Celsius (°C)</option>
+                                            <option value="f">Fahrenheit (°F)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="config-item">
+                                    <div class="config-label">pH Calibration</div>
+                                    <div class="config-value">
+                                        <button class="btn btn-secondary"><i class="fas fa-vial"></i> Calibrate pH Sensor</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="config-item">
+                                    <div class="config-label">TDS Calibration</div>
+                                    <div class="config-value">
+                                        <button class="btn btn-secondary"><i class="fas fa-vial"></i> Calibrate TDS Sensor</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="config-item">
+                                    <div class="config-label">Reading Interval</div>
+                                    <div class="config-value">
+                                        <select class="form-control">
+                                            <option value="30">30 seconds</option>
+                                            <option value="60" selected>1 minute</option>
+                                            <option value="300">5 minutes</option>
+                                            <option value="600">10 minutes</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <div class="tank-preview-info">
-                                <p>Height: <span id="preview-height">10</span>cm</p>
-                                <p>Current: <span id="preview-current">7.5</span>cm</p>
-                                <p>Alert at: <span id="preview-alert">25</span>%</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Tank Configuration -->
+                    <div class="settings-panel">
+                        <div class="panel-header">
+                            <h2><i class="fas fa-tint"></i> Water Tank Configuration</h2>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-flex">
+                                <div class="settings-form">
+                                    <div class="form-group">
+                                        <label for="tank-min-level">Minimum Level (cm)</label>
+                                        <input type="number" id="tank-min-level" class="form-control" value="0" step="0.1">
+                                        <small class="form-hint">Distance when tank is full (100%)</small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="tank-max-level">Maximum Level (cm)</label>
+                                        <input type="number" id="tank-max-level" class="form-control" value="10" step="0.1">
+                                        <small class="form-hint">Distance when tank is empty (0%)</small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="tank-alert-level">Alert Level (%)</label>
+                                        <input type="number" id="tank-alert-level" class="form-control" value="25" min="1" max="100">
+                                        <small class="form-hint">Water level at which to trigger alerts</small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="alert-enabled">Low Water Alert</label>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="alert-enabled" checked>
+                                            <label for="alert-enabled"></label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-actions">
+                                        <button class="btn btn-primary" id="save-tank-config"><i class="fas fa-save"></i> Save Configuration</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="tank-preview-container">
+                                    <h3><i class="fas fa-eye"></i> Preview</h3>
+                                    <div class="tank-visualization preview">
+                                        <div class="tank-level" id="preview-tank-level" style="height: 75%"></div>
+                                        <div class="alert-level-indicator">
+                                            <div class="alert-level-line"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="tank-preview-info">
+                                        <p><i class="fas fa-arrows-alt-v"></i> Height: <span id="preview-height">10</span>cm</p>
+                                        <p><i class="fas fa-water"></i> Current: <span id="preview-current">7.5</span>cm</p>
+                                        <p><i class="fas fa-bell"></i> Alert at: <span id="preview-alert">25</span>%</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Network Settings -->
+                    <div class="settings-panel">
+                        <div class="panel-header">
+                            <h2><i class="fas fa-wifi"></i> Network Settings</h2>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-section">
+                                <h3>Wi-Fi Configuration</h3>
+                                <div class="form-group">
+                                    <label for="wifi-ssid">Wi-Fi SSID</label>
+                                    <input type="text" id="wifi-ssid" class="form-control" value="Plantomio_Network">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="wifi-password">Wi-Fi Password</label>
+                                    <div class="password-input">
+                                        <input type="password" id="wifi-password" class="form-control" value="••••••••••">
+                                        <button class="btn-toggle-password"><i class="fas fa-eye"></i></button>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button class="btn btn-secondary"><i class="fas fa-search"></i> Scan Networks</button>
+                                    <button class="btn btn-primary"><i class="fas fa-plug"></i> Connect</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- System Maintenance -->
+                    <div class="settings-panel">
+                        <div class="panel-header">
+                            <h2><i class="fas fa-tools"></i> System Maintenance</h2>
+                        </div>
+                        <div class="settings-card">
+                            <div class="maintenance-grid">
+                                <div class="action-card">
+                                    <div class="action-icon"><i class="fas fa-download"></i></div>
+                                    <div class="action-content">
+                                        <h4>Check for Updates</h4>
+                                        <p>Current version: 1.2.5</p>
+                                        <button class="btn btn-secondary">Check</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="action-card">
+                                    <div class="action-icon"><i class="fas fa-save"></i></div>
+                                    <div class="action-content">
+                                        <h4>Backup Settings</h4>
+                                        <p>Save your configuration</p>
+                                        <button class="btn btn-secondary">Backup</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="action-card">
+                                    <div class="action-icon"><i class="fas fa-upload"></i></div>
+                                    <div class="action-content">
+                                        <h4>Restore Settings</h4>
+                                        <p>Load from backup file</p>
+                                        <button class="btn btn-secondary">Restore</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="action-card">
+                                    <div class="action-icon warning"><i class="fas fa-exclamation-triangle"></i></div>
+                                    <div class="action-content">
+                                        <h4>Factory Reset</h4>
+                                        <p>Reset to default values</p>
+                                        <button class="btn btn-danger">Reset</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="action-card">
+                                    <div class="action-icon warning"><i class="fas fa-power-off"></i></div>
+                                    <div class="action-content">
+                                        <h4>Reboot System</h4>
+                                        <p>Restart monitoring system</p>
+                                        <button class="btn btn-danger">Reboot</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Network Settings -->
-                <div class="settings-panel">
+                <!-- Service Status -->
+                <div class="service-status-panel">
                     <div class="panel-header">
-                        <h2>Network Settings</h2>
+                        <h2><i class="fas fa-server"></i> Service Status</h2>
                     </div>
-                    <div class="settings-section">
-                        <h3>Wi-Fi Configuration</h3>
-                        <div class="form-group">
-                            <label for="wifi-ssid">Wi-Fi SSID</label>
-                            <input type="text" id="wifi-ssid" class="form-control" value="Plantomio_Network">
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-label">Dashboard</div>
+                            <div class="status-value" id="dashboard-status">--</div>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="wifi-password">Wi-Fi Password</label>
-                            <input type="password" id="wifi-password" class="form-control" value="••••••••••">
+                        <div class="status-item">
+                            <div class="status-label">Node-RED</div>
+                            <div class="status-value" id="nodered-status">--</div>
                         </div>
-                        
-                        <div class="form-actions">
-                            <button class="btn btn-secondary">Scan Networks</button>
-                            <button class="btn btn-primary">Connect</button>
+                        <div class="status-item">
+                            <div class="status-label">VictoriaMetrics</div>
+                            <div class="status-value" id="vm-status">--</div>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- System Maintenance -->
-                <div class="settings-panel">
-                    <div class="panel-header">
-                        <h2>System Maintenance</h2>
-                    </div>
-                    <div class="maintenance-actions">
-                        <div class="action-group">
-                            <button class="btn btn-secondary">Check for Updates</button>
-                            <span class="action-desc">Current version: 1.2.5</span>
+                        <div class="status-item">
+                            <div class="status-label">MQTT</div>
+                            <div class="status-value" id="mqtt-status">--</div>
                         </div>
-                        
-                        <div class="action-group">
-                            <button class="btn btn-secondary">Backup Settings</button>
-                            <span class="action-desc">Save your configuration to a file</span>
-                        </div>
-                        
-                        <div class="action-group">
-                            <button class="btn btn-secondary">Restore Settings</button>
-                            <span class="action-desc">Load configuration from a backup file</span>
-                        </div>
-                        
-                        <div class="action-group">
-                            <button class="btn btn-danger">Factory Reset</button>
-                            <span class="action-desc">Reset all settings to default values</span>
-                        </div>
-                        
-                        <div class="action-group">
-                            <button class="btn btn-danger">Reboot System</button>
-                            <span class="action-desc">Restart the monitoring system</span>
+                        <div class="status-item">
+                            <div class="status-label">AP Mode</div>
+                            <div class="status-value" id="ap-status">--</div>
                         </div>
                     </div>
                 </div>

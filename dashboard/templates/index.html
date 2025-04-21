@@ -24,13 +24,13 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
+                <a href="/" class="logo">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                         <line x1="8" y1="21" x2="16" y2="21"></line>
                         <line x1="12" y1="17" x2="12" y2="21"></line>
                     </svg>
-                </div>
+                </a>
             </div>
             <nav class="sidebar-nav">
                 <ul>
@@ -163,7 +163,7 @@
                         </div>
                     </div>
                     <div class="trends-container">
-                        <canvas id="trends-chart" class="trends-chart"></canvas>
+                        <canvas id="main-chart" class="trends-chart"></canvas>
                     </div>
                 </div>
                 
@@ -196,19 +196,11 @@
                             </div>
                             <div class="status-value">18%</div>
                         </div>
-                        
-                        <div class="status-item">
-                            <div class="status-label">Water Level</div>
-                            <div class="status-gauge">
-                                <div class="gauge-fill water" style="width: 75%"></div>
-                            </div>
-                            <div class="status-value">2.7cm</div>
-                        </div>
                     </div>
                 </div>
                 
-                <!-- Quick Actions -->
-                <div class="quick-actions-panel">
+                <!-- Quick Actions Panel (Hidden) -->
+                <div class="quick-actions-panel" style="display: none;">
                     <div class="panel-header">
                         <h2>Quick Actions</h2>
                     </div>
@@ -253,8 +245,75 @@
         </div>
     </div>
 
+    <!-- Service Status Panel -->
+    <div class="service-status-panel">
+        <div class="panel-header"><h2>Service Status</h2></div>
+        <div class="status-grid">
+            <!-- Dashboard status -->
+            <div class="status-item">
+                <div class="status-label">Dashboard</div>
+                <div class="status-value" id="dashboard-status">--</div>
+            </div>
+            <!-- Node-RED status -->
+            <div class="status-item">
+                <div class="status-label">Node-RED</div>
+                <div class="status-value" id="nodered-status">--</div>
+            </div>
+            <!-- VictoriaMetrics status -->
+            <div class="status-item">
+                <div class="status-label">VictoriaMetrics</div>
+                <div class="status-value" id="vm-status">--</div>
+            </div>
+            <!-- MQTT status -->
+            <div class="status-item">
+                <div class="status-label">MQTT</div>
+                <div class="status-value" id="mqtt-status">--</div>
+            </div>
+            <!-- AP Mode status -->
+            <div class="status-item">
+                <div class="status-label">AP Mode</div>
+                <div class="status-value" id="ap-status">--</div>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/dashboard.js"></script>
     <script>
+        // Update service status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check service status
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.services) {
+                        // Update dashboard status
+                        document.getElementById('dashboard-status').textContent = 
+                            data.services.dashboard?.status === 'ok' ? 'Running' : 'Error';
+                        document.getElementById('dashboard-status').className = 
+                            data.services.dashboard?.status === 'ok' ? 'status-ok' : 'status-error';
+                        
+                        // Update Node-RED status
+                        document.getElementById('nodered-status').textContent = 
+                            data.services.node_red?.status === 'ok' ? 'Running' : 'Error';
+                        document.getElementById('nodered-status').className = 
+                            data.services.node_red?.status === 'ok' ? 'status-ok' : 'status-error';
+                        
+                        // Update VictoriaMetrics status
+                        document.getElementById('vm-status').textContent = 
+                            data.services.victoria_metrics?.status === 'ok' ? 'Running' : 'Error';
+                        document.getElementById('vm-status').className = 
+                            data.services.victoria_metrics?.status === 'ok' ? 'status-ok' : 'status-error';
+                        
+                        // For MQTT and AP Mode (not in the provided API yet)
+                        document.getElementById('mqtt-status').textContent = 'Unknown';
+                        document.getElementById('ap-status').textContent = 'Unknown';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking service status:', error);
+                });
+        });
+        
         // Mobile sidebar toggle
         document.getElementById('mobile-toggle').addEventListener('click', function() {
             document.querySelector('.sidebar').classList.toggle('active');
@@ -321,74 +380,180 @@
         
         // Initialize charts
         function initChart() {
-            const chartCanvas = document.getElementById('trends-chart');
+            const chartCanvas = document.getElementById('main-chart');
             if (chartCanvas) {
                 const ctx = chartCanvas.getContext('2d');
                 
-                // Mock data (24 hours)
-                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
-                const temperatureData = Array.from({length: 24}, () => Math.random() * 5 + 18);
-                const phData = Array.from({length: 24}, () => Math.random() * 2 + 6);
-                const ecData = Array.from({length: 24}, () => Math.random() * 20 + 20);
+                // Get device ID for filtering
+                const deviceId = document.getElementById('device-id').textContent || 'plt-404cca470da0';
                 
-                // Chart configuration
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Temperature (°C)',
-                                data: temperatureData,
-                                borderColor: '#4e73df',
-                                backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2,
-                                fill: false
-                            },
-                            {
-                                label: 'pH',
-                                data: phData,
-                                borderColor: '#e74a3b',
-                                backgroundColor: 'rgba(231, 74, 59, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2,
-                                fill: false
-                            },
-                            {
-                                label: 'EC (μS/cm)',
-                                data: ecData,
-                                borderColor: '#36b9cc',
-                                backgroundColor: 'rgba(54, 185, 204, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2,
-                                fill: false
+                // We'll fetch data via API with device filter
+                fetch(`/api/trends?metrics=temperature,pH,EC&minutes=1440&device=${deviceId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === "success") {
+                            const timestamps = [];
+                            const temperatureData = [];
+                            const phData = [];
+                            const ecData = [];
+                            
+                            // Process temperature data with timestamp deduplication
+                            if (data.data.temperature) {
+                                const uniqueTimestamps = new Set();
+                                data.data.temperature.forEach(point => {
+                                    const [timestamp, value] = point;
+                                    // Only add unique timestamps
+                                    if (!uniqueTimestamps.has(timestamp)) {
+                                        uniqueTimestamps.add(timestamp);
+                                        const date = new Date(timestamp * 1000);
+                                        timestamps.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                                        temperatureData.push(parseFloat(value));
+                                    }
+                                });
                             }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    display: false
+                            
+                            // Process pH data with matching timestamps
+                            if (data.data.pH) {
+                                const phMap = new Map();
+                                data.data.pH.forEach(point => {
+                                    const [timestamp, value] = point;
+                                    phMap.set(timestamp, parseFloat(value));
+                                });
+                                
+                                // Use the timestamps from temperature data as reference
+                                for (let i = 0; i < timestamps.length; i++) {
+                                    const timestamp = Array.from(new Set(data.data.temperature.map(p => p[0])))[i];
+                                    phData.push(phMap.get(timestamp) || null);
                                 }
                             }
+                            
+                            // Process EC data with matching timestamps
+                            if (data.data.EC) {
+                                const ecMap = new Map();
+                                data.data.EC.forEach(point => {
+                                    const [timestamp, value] = point;
+                                    ecMap.set(timestamp, parseFloat(value));
+                                });
+                                
+                                // Use the timestamps from temperature data as reference
+                                for (let i = 0; i < timestamps.length; i++) {
+                                    const timestamp = Array.from(new Set(data.data.temperature.map(p => p[0])))[i];
+                                    ecData.push(ecMap.get(timestamp) || null);
+                                }
+                            }
+                            
+                            // Chart configuration with three Y axes
+                            new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: timestamps,
+                                    datasets: [
+                                        {
+                                            label: 'Temperature (°C)',
+                                            data: temperatureData,
+                                            borderColor: '#4e73df',
+                                            backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                                            tension: 0.4,
+                                            borderWidth: 2,
+                                            fill: false,
+                                            yAxisID: 'y-temperature'
+                                        },
+                                        {
+                                            label: 'pH',
+                                            data: phData,
+                                            borderColor: '#e74a3b',
+                                            backgroundColor: 'rgba(231, 74, 59, 0.1)',
+                                            tension: 0.4,
+                                            borderWidth: 2,
+                                            fill: false,
+                                            yAxisID: 'y-ph'
+                                        },
+                                        {
+                                            label: 'EC (μS/cm)',
+                                            data: ecData,
+                                            borderColor: '#36b9cc',
+                                            backgroundColor: 'rgba(54, 185, 204, 0.1)',
+                                            tension: 0.4,
+                                            borderWidth: 2,
+                                            fill: false,
+                                            yAxisID: 'y-ec'
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top',
+                                        },
+                                        title: {
+                                            display: true,
+                                            text: `Device: ${deviceId}`
+                                        }
+                                    },
+                                    scales: {
+                                        'y-temperature': {
+                                            type: 'linear',
+                                            display: true,
+                                            position: 'left',
+                                            title: {
+                                                display: true,
+                                                text: 'Temperature (°C)'
+                                            },
+                                            grid: {
+                                                color: 'rgba(0, 0, 0, 0.05)'
+                                            }
+                                        },
+                                        'y-ph': {
+                                            type: 'linear',
+                                            display: true,
+                                            position: 'right',
+                                            title: {
+                                                display: true,
+                                                text: 'pH'
+                                            },
+                                            grid: {
+                                                drawOnChartArea: false
+                                            }
+                                        },
+                                        'y-ec': {
+                                            type: 'linear',
+                                            display: true,
+                                            position: 'right',
+                                            title: {
+                                                display: true,
+                                                text: 'EC (μS/cm)'
+                                            },
+                                            grid: {
+                                                drawOnChartArea: false
+                                            }
+                                        },
+                                        x: {
+                                            grid: {
+                                                display: false
+                                            }
+                                        }
+                                    }
+                                }
+                            });
                         }
-                    }
-                });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching chart data:', error);
+                        // Fallback to empty chart
+                        new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: [],
+                                datasets: []
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false
+                            }
+                        });
+                    });
             }
         }
         

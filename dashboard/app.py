@@ -237,8 +237,8 @@ def query_data():
         now = int(time.time())
         start = now - (minutes * 60)  # Convert minutes to seconds
         
-        # Construct device filter if provided
-        device_filter = f',device="{device_id}"' if device_id else ''
+        # Construct device filter if provided - using deviceID as the field name
+        device_filter = f',deviceID="{device_id}"' if device_id else ''
         
         # Query VictoriaMetrics for range data
         query_url = f"{VICTORIA_URL}/api/v1/query_range"
@@ -291,6 +291,7 @@ def trends_data():
     try:
         # Get parameters
         metrics_list = request.args.get('metrics', 'temperature,pH,EC,TDS,waterLevel').split(',')
+        device_id = request.args.get('device', '')
         
         # Parse time range (default to last 10 minutes)
         minutes = int(request.args.get('minutes', 10))
@@ -299,6 +300,9 @@ def trends_data():
         now = int(time.time())
         start = now - (minutes * 60)  # Convert minutes to seconds
         
+        # Construct device filter if provided - using deviceID as the field name
+        device_filter = f',deviceID="{device_id}"' if device_id else ''
+        
         results = {}
         
         # Query each metric
@@ -306,7 +310,7 @@ def trends_data():
             try:
                 query_url = f"{VICTORIA_URL}/api/v1/query_range"
                 params = {
-                    'query': f'{metric}{{}}',
+                    'query': f'{metric}{{{device_filter}}}',
                     'start': start,
                     'end': now,
                     'step': '10s'  # 10-second intervals

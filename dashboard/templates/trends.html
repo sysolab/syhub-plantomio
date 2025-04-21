@@ -24,13 +24,13 @@
         <!-- Sidebar - SAME AS DASHBOARD PAGE -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
+                <a href="/" class="logo">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                         <line x1="8" y1="21" x2="16" y2="21"></line>
                         <line x1="12" y1="17" x2="12" y2="21"></line>
                     </svg>
-                </div>
+                </a>
             </div>
             <nav class="sidebar-nav">
                 <ul>
@@ -108,16 +108,29 @@
                     </div>
                 </div>
                 
-                <!-- EC/TDS Chart -->
+                <!-- TDS Chart -->
                 <div class="chart-panel">
                     <div class="panel-header">
-                        <h2>EC & TDS</h2>
+                        <h2>TDS Level</h2>
                         <div class="chart-controls">
                             <button class="btn btn-export">Export Data</button>
                         </div>
                     </div>
                     <div class="chart-container">
-                        <canvas id="ec-tds-chart"></canvas>
+                        <canvas id="tds-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- EC Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h2>EC Level</h2>
+                        <div class="chart-controls">
+                            <button class="btn btn-export">Export Data</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="ec-chart"></canvas>
                     </div>
                 </div>
                 
@@ -161,195 +174,203 @@
         
         // Initialize charts
         document.addEventListener('DOMContentLoaded', function() {
-            // Temperature Chart
-            const tempCanvas = document.getElementById('temperature-chart');
-            if (tempCanvas) {
-                const tempCtx = tempCanvas.getContext('2d');
-                
-                // Mock data (24 hours of data points)
-                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
-                const temperatureData = Array.from({length: 24}, () => Math.random() * 5 + 18);
-                
-                new Chart(tempCtx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Temperature (°C)',
-                                data: temperatureData,
-                                borderColor: '#4e73df',
-                                backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2,
-                                fill: true
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    display: false
-                                }
-                            }
+            // Time period settings
+            let timeMinutes = 1440; // 24 hours
+
+            // Set active time button
+            document.querySelectorAll('.time-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    if (this.textContent === 'Custom') {
+                        document.querySelector('.date-range-selector').style.display = 'flex';
+                    } else {
+                        document.querySelector('.date-range-selector').style.display = 'none';
+                        
+                        // Set time range based on button
+                        if (this.textContent === '24 Hours') {
+                            timeMinutes = 1440;
+                        } else if (this.textContent === 'Week') {
+                            timeMinutes = 10080;
+                        } else if (this.textContent === 'Month') {
+                            timeMinutes = 43200;
                         }
+                        
+                        // Refresh all charts
+                        loadChartData('temperature', 'temperature-chart', timeMinutes);
+                        loadChartData('pH', 'ph-chart', timeMinutes);
+                        loadChartData('TDS', 'tds-chart', timeMinutes);
+                        loadChartData('EC', 'ec-chart', timeMinutes);
                     }
                 });
-            }
-            
-            // pH Chart
-            const phCanvas = document.getElementById('ph-chart');
-            if (phCanvas) {
-                const phCtx = phCanvas.getContext('2d');
-                
-                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
-                const phData = Array.from({length: 24}, () => Math.random() * 2 + 6);
-                
-                new Chart(phCtx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'pH',
-                                data: phData,
-                                borderColor: '#e74a3b',
-                                backgroundColor: 'rgba(231, 74, 59, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2,
-                                fill: true
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    display: false
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-            
-            // EC/TDS Chart
-            const ecTdsCanvas = document.getElementById('ec-tds-chart');
-            if (ecTdsCanvas) {
-                const ecTdsCtx = ecTdsCanvas.getContext('2d');
-                
-                const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
-                const ecData = Array.from({length: 24}, () => Math.random() * 20 + 20);
-                const tdsData = Array.from({length: 24}, () => Math.random() * 10000 + 50000);
-                
-                new Chart(ecTdsCtx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'EC (μS/cm)',
-                                data: ecData,
-                                borderColor: '#36b9cc',
-                                backgroundColor: 'rgba(54, 185, 204, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2,
-                                fill: false,
-                                yAxisID: 'y'
-                            },
-                            {
-                                label: 'TDS (ppm)',
-                                data: tdsData,
-                                borderColor: '#1cc88a',
-                                backgroundColor: 'rgba(28, 200, 138, 0.1)',
-                                tension: 0.4,
-                                borderWidth: 2,
-                                fill: false,
-                                yAxisID: 'y1'
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
-                                },
-                                position: 'left',
-                                title: {
-                                    display: true,
-                                    text: 'EC (μS/cm)'
-                                }
-                            },
-                            y1: {
-                                beginAtZero: false,
-                                grid: {
-                                    display: false
-                                },
-                                position: 'right',
-                                title: {
-                                    display: true,
-                                    text: 'TDS (ppm)'
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    display: false
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        });
-        
-        // Toggle custom date range
-        document.querySelectorAll('.time-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
-                this.classList.add('active');
-                
-                if (this.textContent === 'Custom') {
-                    document.querySelector('.date-range-selector').style.display = 'flex';
-                } else {
-                    document.querySelector('.date-range-selector').style.display = 'none';
-                }
             });
+
+            // Helper function to load chart data
+            function loadChartData(metric, chartId, minutes) {
+                const canvas = document.getElementById(chartId);
+                if (!canvas) return;
+                
+                const ctx = canvas.getContext('2d');
+                
+                // Get current device ID for filtering
+                const deviceId = document.getElementById('device-id').textContent || 'plt-404cca470da0';
+                
+                // Fetch data from API with device ID filter
+                fetch(`/api/query?metric=${metric}&minutes=${minutes}&device=${deviceId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Process data
+                        const timestamps = [];
+                        const values = [];
+                        
+                        if (data.data && data.data.result && data.data.result.length > 0) {
+                            // Get device ID from result - corrected to use deviceID instead of device
+                            const resultDeviceId = data.data.result[0].metric?.deviceID || deviceId;
+                            
+                            // Extract values and filter unique timestamps
+                            const uniqueTimestamps = new Set();
+                            data.data.result[0].values.forEach(point => {
+                                const [timestamp, value] = point;
+                                if (!uniqueTimestamps.has(timestamp)) {
+                                    uniqueTimestamps.add(timestamp);
+                                    const date = new Date(timestamp * 1000);
+                                    timestamps.push(date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                                    values.push(parseFloat(value));
+                                }
+                            });
+                            
+                            // Get chart color based on metric
+                            let borderColor, backgroundColor;
+                            switch (metric) {
+                                case 'temperature':
+                                    borderColor = '#4e73df';
+                                    backgroundColor = 'rgba(78, 115, 223, 0.1)';
+                                    break;
+                                case 'pH':
+                                    borderColor = '#e74a3b';
+                                    backgroundColor = 'rgba(231, 74, 59, 0.1)';
+                                    break;
+                                case 'TDS':
+                                    borderColor = '#1cc88a';
+                                    backgroundColor = 'rgba(28, 200, 138, 0.1)';
+                                    break;
+                                case 'EC':
+                                    borderColor = '#36b9cc';
+                                    backgroundColor = 'rgba(54, 185, 204, 0.1)';
+                                    break;
+                                default:
+                                    borderColor = '#858796';
+                                    backgroundColor = 'rgba(133, 135, 150, 0.1)';
+                            }
+                            
+                            // Unit for display
+                            let unit = '';
+                            switch (metric) {
+                                case 'temperature': unit = '°C'; break;
+                                case 'pH': unit = ''; break;
+                                case 'TDS': unit = 'ppm'; break;
+                                case 'EC': unit = 'μS/cm'; break;
+                            }
+                            
+                            // Create chart
+                            new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: timestamps,
+                                    datasets: [
+                                        {
+                                            label: `${metric} ${unit}`,
+                                            data: values,
+                                            borderColor: borderColor,
+                                            backgroundColor: backgroundColor,
+                                            tension: 0.4,
+                                            borderWidth: 2,
+                                            fill: true
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top',
+                                        },
+                                        title: {
+                                            display: true,
+                                            text: `Device: ${resultDeviceId}`
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: false,
+                                            grid: {
+                                                color: 'rgba(0, 0, 0, 0.05)'
+                                            }
+                                        },
+                                        x: {
+                                            grid: {
+                                                display: false
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        } else {
+                            // No data
+                            new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: [],
+                                    datasets: [{
+                                        label: metric,
+                                        data: [],
+                                        borderColor: '#858796',
+                                        backgroundColor: 'rgba(133, 135, 150, 0.1)'
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        title: {
+                                            display: true,
+                                            text: `No data available for device: ${deviceId}`
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`Error loading ${metric} chart:`, error);
+                        // Display error chart
+                        new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: [],
+                                datasets: []
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: `Error loading data for device: ${deviceId}`
+                                    }
+                                }
+                            }
+                        });
+                    });
+            }
+            
+            // Initialize all charts
+            loadChartData('temperature', 'temperature-chart', timeMinutes);
+            loadChartData('pH', 'ph-chart', timeMinutes);
+            loadChartData('TDS', 'tds-chart', timeMinutes);
+            loadChartData('EC', 'ec-chart', timeMinutes);
         });
     </script>
 </body>

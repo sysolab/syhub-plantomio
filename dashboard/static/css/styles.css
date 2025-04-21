@@ -329,31 +329,27 @@ body {
 
 /* Tank visualization */
 .tank-container {
-  width: 20%;
-  min-width: 160px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 1rem;
   background-color: var(--card-bg);
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
-  position: relative;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 180px;
+  width: 180px;
+  height: auto;
 }
 
 .tank-visualization {
+  width: 100px;
+  height: 150px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
   position: relative;
-  width: 70px;
-  height: 80%;
-  max-height: 150px;
-  border: 2px solid var(--dark-color);
-  border-top: none;
-  border-radius: 0 0 10px 10px;
   margin-bottom: 1rem;
-  background-color: rgba(255, 255, 255, 0.8);
   overflow: hidden;
+  background-color: rgba(0,0,0,0.02);
 }
 
 .tank-level {
@@ -705,47 +701,40 @@ body {
   .main-header {
     flex-direction: column;
     align-items: flex-start;
-    padding-left: 50px; /* Make room for mobile menu button */
   }
   
   .header-status {
-    margin-top: 1rem;
-    flex-wrap: wrap;
+    margin-top: 0.5rem;
     gap: 0.75rem;
   }
   
   .tank-container {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 1rem;
+    width: 100%;
   }
   
   .tank-visualization {
-    margin-right: 1rem;
-    margin-bottom: 0;
-    height: 120px;
+    width: 100px;
+    height: 150px;
   }
   
   .tank-info {
-    text-align: left;
+    text-align: center;
   }
   
   .health-metric {
-    flex-wrap: wrap;
+    margin-bottom: 1rem;
   }
   
   .health-metric label {
-    width: 100%;
-    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
   }
   
   .progress-container {
-    margin: 0 0.5rem 0 0;
+    flex: 1;
   }
   
   .actions-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 
@@ -755,6 +744,127 @@ body {
   }
   
   .status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Service status panel */
+.service-status-panel {
+  background-color: var(--card-bg);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.status-ok {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.status-error {
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+/* Settings page improvements */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+  gap: 1.5rem;
+}
+
+.settings-card, .info-card {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--secondary-color);
+}
+
+.password-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.btn-toggle-password {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--secondary-color);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.maintenance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.action-card {
+  display: flex;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.action-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--primary-light);
+  color: white;
+  border-radius: 50%;
+  margin-right: 0.75rem;
+  font-size: 1.1rem;
+}
+
+.action-icon.warning {
+  background-color: var(--danger-color);
+}
+
+.action-content {
+  flex: 1;
+}
+
+.action-content h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--dark-color);
+}
+
+.action-content p {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.75rem;
+  color: var(--secondary-color);
+}
+
+/* Media query adjustments */
+@media (max-width: 768px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .maintenance-grid {
     grid-template-columns: 1fr;
   }
 }
