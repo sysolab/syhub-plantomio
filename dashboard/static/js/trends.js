@@ -1,335 +1,461 @@
-// trends.js - JavaScript for the trends page
-// Handles chart rendering and data loading
+// trends.js - Optimized JavaScript for the trends page
+// Handles chart rendering and data loading with improved error handling
 
 // State management
 const state = {
-    timeRange: '1h', // Default time range
+    timeRange: 1440, // Default time range in minutes (24 hours)
     charts: {},
-    chartOptions: {
-        temperature: {
-            label: 'Temperature (°C)',
-            color: '#F6C343',
-            min: 15,
-            max: 35,
-            decimals: 1
-        },
-        pH: {
-            label: 'pH',
-            color: '#4e73df',
-            min: 0,
-            max: 14,
-            decimals: 1
-        },
-        EC: {
-            label: 'EC (mS/cm)',
-            color: '#1cc88a',
-            min: 0,
-            max: 3,
-            decimals: 2
-        },
-        TDS: {
-            label: 'TDS (ppm)',
-            color: '#36b9cc',
-            min: 0,
-            max: 1000,
-            decimals: 0
-        },
-        waterLevel: {
-            label: 'Water Level (%)',
-            color: '#4e73df',
-            min: 0,
-            max: 100,
-            decimals: 1
-        }
+    currentDevice: null,
+    isLoading: false
+};
+
+// Chart configuration for different metrics
+const chartConfig = {
+    temperature: {
+        label: 'Temperature (°C)',
+        color: '#4e73df',
+        background: 'rgba(78, 115, 223, 0.1)',
+        min: 10,
+        max: 40
+    },
+    pH: {
+        label: 'pH Level',
+        color: '#e74a3b',
+        background: 'rgba(231, 74, 59, 0.1)',
+        min: 0, 
+        max: 14
+    },
+    TDS: {
+        label: 'TDS (ppm)',
+        color: '#1cc88a',
+        background: 'rgba(28, 200, 138, 0.1)',
+        min: 0,
+        max: 2000
+    },
+    EC: {
+        label: 'EC (μS/cm)',
+        color: '#36b9cc',
+        background: 'rgba(54, 185, 204, 0.1)',
+        min: 0,
+        max: 50
+    },
+    distance: {
+        label: 'Distance (m)',
+        color: '#f6c23e',
+        background: 'rgba(246, 194, 62, 0.1)',
+        min: 0,
+        max: 10
+    },
+    ORP: {
+        label: 'ORP (mV)',
+        color: '#6f42c1',
+        background: 'rgba(111, 66, 193, 0.1)',
+        min: 0,
+        max: 500
     }
 };
 
-// Converts timestamp to formatted date/time string
+// Format timestamp for display
 function formatTimestamp(timestamp) {
-    const date = new Date(timestamp * 1000); // Convert to milliseconds
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-// Initialize all charts on the page
-function initializeCharts() {
-    // Find chart canvases
-    const chartElements = {
-        temperature: document.getElementById('temperature-chart'),
-        pH: document.getElementById('ph-chart'),
-        EC: document.getElementById('ec-chart'),
-        TDS: document.getElementById('tds-chart'),
-        waterLevel: document.getElementById('water-level-chart')
-    };
+    if (!timestamp) return '';
+    const date = new Date(timestamp * 1000);
     
-    // Initialize each chart
-    for (const [metric, element] of Object.entries(chartElements)) {
-        if (element && state.chartOptions[metric]) {
-            const options = state.chartOptions[metric];
-            initChart(metric, element, options);
-        }
+    // For time ranges > 24 hours, include date
+    if (state.timeRange > 1440) {
+        return date.toLocaleDateString([], {month: 'short', day: 'numeric'}) + ' ' +
+               date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     }
     
-    // Load initial data
-    loadTrendsData(state.timeRange);
+    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 }
 
-// Initialize a single chart
-function initChart(metric, element, options) {
-    if (!element) return;
+// Handle time range selection
+function setupTimeRangeButtons() {
+    document.querySelectorAll('.time-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            // Remove active class from all buttons
+            document.querySelectorAll('.time-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Add active class to this button
+            this.classList.add('active');
+            
+            // Get time range in minutes
+            const minutes = parseInt(this.dataset.minutes || 1440);
+            if (minutes !== state.timeRange) {
+                state.timeRange = minutes;
+                loadAllChartData();
+            }
+        });
+    });
+}
+
+// Handle export buttons
+function setupExportButtons() {
+    document.querySelectorAll('.btn-export').forEach(button => {
+        button.addEventListener('click', function() {
+            // Find parent panel to determine which chart to export
+            const panel = this.closest('.chart-panel');
+            if (!panel) return;
+            
+            // Determine which chart to export based on panel heading
+            const heading = panel.querySelector('h2');
+            if (!heading) return;
+            
+            const headingText = heading.textContent.trim().toLowerCase();
+            let metric = '';
+            
+            if (headingText.includes('temperature')) metric = 'temperature';
+            else if (headingText.includes('ph')) metric = 'pH';
+            else if (headingText.includes('tds')) metric = 'TDS';
+            else if (headingText.includes('ec')) metric = 'EC';
+            else if (headingText.includes('distance')) metric = 'distance';
+            else if (headingText.includes('orp')) metric = 'ORP';
+            
+            if (!metric || !state.charts[metric]) {
+                alert('Cannot export: Chart not found');
+                return;
+            }
+            
+            // Create CSV data from chart
+            const chart = state.charts[metric];
+            const labels = chart.data.labels;
+            const data = chart.data.datasets[0].data;
+            
+            let csv = 'Time,' + chartConfig[metric].label + '\n';
+            for (let i = 0; i < labels.length; i++) {
+                csv += labels[i] + ',' + (data[i] !== null ? data[i] : '') + '\n';
+            }
+            
+            // Create download link
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${metric}_data.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    });
+}
+
+// Initialize the page
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup event handlers
+    setupTimeRangeButtons();
+    setupExportButtons();
     
-    const ctx = element.getContext('2d');
+    // Mobile menu toggle
+    const mobileToggle = document.getElementById('mobile-toggle');
+    if (mobileToggle) {
+        mobileToggle.addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+    }
+    
+    // Initialize charts and load data
+    initializeAllCharts();
+    
+    // Update service status
+    if (typeof updateServiceStatus === 'function') {
+        updateServiceStatus();
+        // Update every 60 seconds
+        setInterval(updateServiceStatus, 60000);
+    }
+});
+
+// Set loading state for all charts
+function setLoading(isLoading) {
+    state.isLoading = isLoading;
+    
+    // Update UI to reflect loading state
+    document.querySelectorAll('.chart-container').forEach(container => {
+        const messageEl = container.querySelector('.chart-message');
+        if (messageEl) {
+            if (isLoading) {
+                messageEl.textContent = "Loading data...";
+                messageEl.style.display = 'block';
+            } else {
+                messageEl.style.display = 'none';
+            }
+        }
+        
+        // Adjust opacity of canvas
+        const canvas = container.querySelector('canvas');
+        if (canvas) {
+            canvas.style.opacity = isLoading ? '0.5' : '1';
+        }
+    });
+}
+
+// Show error message for a specific chart
+function showChartError(metricId, message) {
+    const container = document.getElementById(`${metricId}-chart-container`);
+    const messageEl = document.getElementById(`${metricId}-chart-message`);
+    
+    if (container && messageEl) {
+        messageEl.textContent = message || "Error loading data";
+        messageEl.style.display = 'block';
+        container.classList.add('no-data');
+    }
+}
+
+// Clear error message for a specific chart
+function clearChartError(metricId) {
+    const container = document.getElementById(`${metricId}-chart-container`);
+    const messageEl = document.getElementById(`${metricId}-chart-message`);
+    
+    if (container && messageEl) {
+        messageEl.style.display = 'none';
+        container.classList.remove('no-data');
+    }
+}
+
+// Initialize a chart for a specific metric
+function initializeChart(metric) {
+    // Get canvas element
+    const canvasId = metric === 'pH' ? 'ph-chart' : `${metric.toLowerCase()}-chart`;
+    const canvas = document.getElementById(canvasId);
+    
+    if (!canvas) {
+        console.error(`Canvas for ${metric} not found`);
+        return;
+    }
+    
+    // Get chart configuration
+    const config = chartConfig[metric];
+    if (!config) {
+        console.error(`Configuration for ${metric} not found`);
+        return;
+    }
+    
+    // Initialize Chart.js instance with empty data
+    const ctx = canvas.getContext('2d');
+    
+    // Destroy existing chart if it exists
+    if (state.charts[metric]) {
+        state.charts[metric].destroy();
+        state.charts[metric] = null;
+    }
+    
+    // Create new chart
     state.charts[metric] = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [],
             datasets: [{
-                label: options.label,
+                label: config.label,
                 data: [],
-                borderColor: options.color,
-                backgroundColor: `${options.color}20`, // 20 is hex for 12% opacity
-                borderWidth: 2,
+                borderColor: config.color,
+                backgroundColor: config.background,
                 tension: 0.4,
+                borderWidth: 2,
+                fill: true,
                 pointRadius: 2,
-                pointBackgroundColor: options.color,
-                fill: true
+                pointHoverRadius: 5
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
             plugins: {
                 legend: {
                     position: 'top',
                     labels: {
-                        usePointStyle: true,
                         font: {
                             size: 12
                         }
                     }
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    titleColor: '#333',
-                    bodyColor: '#666',
-                    borderColor: '#e3e6f0',
-                    borderWidth: 1,
-                    cornerRadius: 6,
-                    padding: 8,
-                    boxPadding: 4
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y.toFixed(2);
+                            }
+                            return label;
+                        }
+                    }
                 }
             },
             scales: {
+                y: {
+                    beginAtZero: metric === 'pH' || metric === 'distance' ? true : false,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    min: config.min,
+                    max: config.max,
+                    ticks: {
+                        maxTicksLimit: 6
+                    }
+                },
                 x: {
                     grid: {
                         display: false
                     },
                     ticks: {
-                        maxRotation: 0,
-                        autoSkip: true,
-                        maxTicksLimit: 6
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: options.label,
-                        color: options.color
-                    },
-                    min: options.min,
-                    max: options.max,
-                    ticks: {
-                        color: options.color
+                        maxTicksLimit: 8
                     }
                 }
             },
             animation: {
-                duration: 300
+                duration: 150 // Faster animations for better performance
             }
         }
     });
+    
+    return state.charts[metric];
 }
 
-// Load data from API based on selected time range
-function loadTrendsData(timeRange) {
-    // Convert time range to minutes
-    let minutes = 10; // Default 10 minutes
-    switch (timeRange) {
-        case '1h': minutes = 60; break;
-        case '6h': minutes = 360; break;
-        case '24h': minutes = 1440; break;
-        case '7d': minutes = 10080; break;
-        default: minutes = 60;
-    }
-    
-    // Show loading indicators
-    document.querySelectorAll('.chart-container').forEach(container => {
-        container.classList.add('loading');
+// Initialize all charts
+function initializeAllCharts() {
+    Object.keys(chartConfig).forEach(metric => {
+        initializeChart(metric);
     });
     
-    // Fetch data from API
-    fetch(`/api/trends?minutes=${minutes}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data && data.status === 'success' && data.data) {
-                updateCharts(data.data);
+    // Load initial data
+    loadAllChartData();
+}
+
+// Load data for all charts
+function loadAllChartData() {
+    // Get current device
+    const deviceElement = document.getElementById('device-id');
+    const deviceId = deviceElement ? deviceElement.textContent.trim() : 'plt-404cca470da0';
+    state.currentDevice = deviceId;
+    
+    // Set loading state
+    setLoading(true);
+    
+    // Fetch data for all metrics
+    const metrics = Object.keys(chartConfig).join(',');
+    const url = `/api/trends?metrics=${metrics}&device=${deviceId}&minutes=${state.timeRange}`;
+    
+    // Fetch with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
+    fetch(url, { signal: controller.signal })
+        .then(response => {
+            clearTimeout(timeoutId);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (result.status === 'success' && result.data) {
+                // Process each metric
+                let hasAnyData = false;
+                
+                Object.entries(result.data).forEach(([metric, data]) => {
+                    if (updateChart(metric, data)) {
+                        hasAnyData = true;
+                    }
+                });
+                
+                if (!hasAnyData) {
+                    console.warn('No data available for any metrics');
+                }
             } else {
-                console.error('Invalid data format received from API');
+                console.error('Invalid API response format:', result);
+                throw new Error('Invalid API response format');
             }
         })
         .catch(error => {
-            console.error('Error fetching trends data:', error);
+            console.error('Error fetching chart data:', error);
+            
+            // Show error on all charts
+            Object.keys(chartConfig).forEach(metric => {
+                showChartError(metric, 'Error loading data: ' + (error.message || 'Unknown error'));
+            });
         })
         .finally(() => {
-            // Hide loading indicators
-            document.querySelectorAll('.chart-container').forEach(container => {
-                container.classList.remove('loading');
-            });
+            setLoading(false);
         });
 }
 
-// Update all charts with new data
-function updateCharts(data) {
-    // Process each metric
-    for (const [metric, values] of Object.entries(data)) {
-        if (state.charts[metric] && values && values.length > 0) {
-            // Format timestamps and prepare data points
-            const labels = [];
-            const dataPoints = [];
-            
-            // Get chart options for formatting
-            const options = state.chartOptions[metric] || { decimals: 1 };
-            
-            // Sort values by timestamp (ascending)
-            values.sort((a, b) => a[0] - b[0]);
-            
-            // Extract data points
-            values.forEach(point => {
+// Update a specific chart with new data
+function updateChart(metric, data) {
+    // Get chart
+    const chart = state.charts[metric];
+    if (!chart) {
+        console.error(`Chart for ${metric} not initialized`);
+        return;
+    }
+    
+    // Extract timestamps and values
+    const labels = [];
+    const values = [];
+    let hasData = false;
+    
+    if (Array.isArray(data)) {
+        // Process data points
+        data.forEach(point => {
+            if (Array.isArray(point) && point.length === 2) {
                 const [timestamp, value] = point;
+                
+                // Format timestamp
                 labels.push(formatTimestamp(timestamp));
-                dataPoints.push(parseFloat(value).toFixed(options.decimals));
-            });
-            
-            // Update chart data
-            state.charts[metric].data.labels = labels;
-            state.charts[metric].data.datasets[0].data = dataPoints;
-            
-            // Update y-axis scale if needed
-            updateChartScale(state.charts[metric], dataPoints, options);
-            
-            // Refresh chart
-            state.charts[metric].update();
+                
+                // Handle null values
+                values.push(value !== null && value !== undefined ? value : null);
+                
+                // Check if we have any valid data
+                if (value !== null && value !== undefined) {
+                    hasData = true;
+                }
+            }
+        });
+    }
+    
+    // Update chart data
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    
+    // Show or hide error message based on data availability
+    if (!hasData) {
+        showChartError(metric, "No data available for the selected time range");
+    } else {
+        clearChartError(metric);
+        
+        // Dynamically adjust Y axis if needed
+        const config = chartConfig[metric];
+        if (config) {
+            const validValues = values.filter(v => v !== null && v !== undefined);
+            if (validValues.length > 0) {
+                const minValue = Math.min(...validValues);
+                const maxValue = Math.max(...validValues);
+                
+                // Determine if we need to adjust the scale
+                if (minValue < config.min || maxValue > config.max) {
+                    // Calculate new min/max with 10% padding
+                    const padding = (maxValue - minValue) * 0.1;
+                    const newMin = Math.max(0, Math.floor(minValue - padding));
+                    const newMax = Math.ceil(maxValue + padding);
+                    
+                    // Update chart scale
+                    chart.options.scales.y.min = newMin;
+                    chart.options.scales.y.max = newMax;
+                } else {
+                    // Reset to defaults
+                    chart.options.scales.y.min = config.min;
+                    chart.options.scales.y.max = config.max;
+                }
+            }
         }
     }
+    
+    // Update the chart
+    chart.update();
+    
+    return hasData;
 }
-
-// Update chart scale based on data range
-function updateChartScale(chart, dataPoints, options) {
-    if (!dataPoints || dataPoints.length === 0) return;
-    
-    // Convert string values to numbers
-    const numericData = dataPoints.map(p => parseFloat(p)).filter(p => !isNaN(p));
-    
-    if (numericData.length === 0) return;
-    
-    // Calculate min and max with padding
-    const minValue = Math.min(...numericData);
-    const maxValue = Math.max(...numericData);
-    
-    // Only adjust if data is outside current range
-    const yScale = chart.options.scales.y;
-    const padding = (maxValue - minValue) * 0.1; // 10% padding
-    
-    if (minValue < yScale.min) {
-        yScale.min = Math.max(options.min, Math.floor(minValue - padding));
-    }
-    
-    if (maxValue > yScale.max) {
-        yScale.max = Math.min(options.max, Math.ceil(maxValue + padding));
-    }
-}
-
-// Event listener for time range buttons
-function setupTimeRangeButtons() {
-    const buttons = document.querySelectorAll('.time-range-selector .btn');
-    buttons.forEach(button => {
-        button.addEventListener('click', function() {
-            // Update active button
-            buttons.forEach(btn => btn.classList.remove('active'));
-            this.classList.add('active');
-            
-            // Get time range and update charts
-            const range = this.getAttribute('data-range');
-            if (range && range !== state.timeRange) {
-                state.timeRange = range;
-                loadTrendsData(range);
-            }
-        });
-    });
-}
-
-// Export functionality
-function setupExportButtons() {
-    const exportDataBtn = document.getElementById('export-data');
-    const exportGraphBtn = document.getElementById('export-graph');
-    
-    if (exportDataBtn) {
-        exportDataBtn.addEventListener('click', function() {
-            const sensor = document.getElementById('export-sensor').value;
-            const range = document.getElementById('export-range').value;
-            
-            // Create CSV from chart data
-            if (state.charts[sensor] && state.charts[sensor].data.labels.length > 0) {
-                const labels = state.charts[sensor].data.labels;
-                const data = state.charts[sensor].data.datasets[0].data;
-                
-                let csv = 'Time,' + state.chartOptions[sensor].label + '\n';
-                for (let i = 0; i < labels.length; i++) {
-                    csv += labels[i] + ',' + data[i] + '\n';
-                }
-                
-                // Create download
-                const blob = new Blob([csv], { type: 'text/csv' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.setAttribute('href', url);
-                a.setAttribute('download', `${sensor}_data_${range}.csv`);
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            } else {
-                alert('No data available for this sensor');
-            }
-        });
-    }
-    
-    if (exportGraphBtn) {
-        exportGraphBtn.addEventListener('click', function() {
-            const sensor = document.getElementById('export-sensor').value;
-            const range = document.getElementById('export-range').value;
-            
-            // Export chart as image
-            if (state.charts[sensor]) {
-                const url = state.charts[sensor].toBase64Image();
-                const a = document.createElement('a');
-                a.setAttribute('href', url);
-                a.setAttribute('download', `${sensor}_chart_${range}.png`);
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            } else {
-                alert('Chart not available');
-            }
-        });
-    }
-}
-
-// Initialize everything when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    setupTimeRangeButtons();
-    setupExportButtons();
-    initializeCharts();
-}); 

@@ -25,6 +25,7 @@ configure_network: false
 
 # --- WiFi Access Point (AP) + Station (STA) Mode ---
 # AP SSID and password will use project name if not specified
+#setup guide: https://community.element14.com/products/raspberry-pi/f/forum/53996/configuring-a-wifi-access-point-using-raspberry-pi-how-to-with-the-new-kernel
 wifi:
   ap_interface: uap0
   ap_ip: 192.168.77.1

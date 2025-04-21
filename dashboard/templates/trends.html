@@ -279,13 +279,26 @@
             
             // Helper function to load chart data
             function loadChart(metric, timeMinutes, device) {
-                const canvas = document.getElementById(`${metric}-chart`);
-                if (!canvas) return;
+                const canvas = document.getElementById(`${metric.toLowerCase()}-chart`);
+                if (!canvas) {
+                    console.error(`Canvas for ${metric} not found`);
+                    return;
+                }
                 
-                const ctx = canvas.getContext('2d');
+                const chartContainer = document.getElementById(`${metric}-chart-container`);
+                const messageEl = document.getElementById(`${metric}-chart-message`);
+                
+                if (!chartContainer || !messageEl) {
+                    console.error(`Container or message element for ${metric} not found`);
+                    return;
+                }
+                
+                // Clear any existing message
+                messageEl.textContent = "";
                 
                 // Show loading indicator
                 canvas.style.opacity = '0.5';
+                chartContainer.classList.remove('no-data');
                 
                 // Fetch data from API with device ID filter
                 fetch(`/api/trends?metrics=${metric}&device=${device}&minutes=${timeMinutes}`)
@@ -299,11 +312,12 @@
                         // Remove loading indicator
                         canvas.style.opacity = '1';
                         
-                        if (!data || !data[metric] || data[metric].timestamps.length === 0) {
-                            document.getElementById(`${metric}-chart-message`).textContent = "No data available for the selected time range";
-                            document.getElementById(`${metric}-chart-container`).classList.add('no-data');
+                        // Check if we have data for this metric
+                        if (!data || !data[metric] || !data[metric].timestamps || data[metric].timestamps.length === 0) {
+                            messageEl.textContent = "No data available for the selected time range";
+                            chartContainer.classList.add('no-data');
                             
-                            // Clear any existing chart
+                            // Destroy any existing chart
                             if (window.chartInstances && window.chartInstances[`${metric}-chart`]) {
                                 window.chartInstances[`${metric}-chart`].destroy();
                                 window.chartInstances[`${metric}-chart`] = null;
@@ -311,76 +325,82 @@
                             return;
                         }
                         
-                        document.getElementById(`${metric}-chart-message`).textContent = "";
-                        document.getElementById(`${metric}-chart-container`).classList.remove('no-data');
+                        // Get the chart context
+                        const ctx = canvas.getContext('2d');
                         
-                        // Clear canvas again right before drawing
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        // Destroy any existing chart
+                        if (window.chartInstances && window.chartInstances[`${metric}-chart`]) {
+                            window.chartInstances[`${metric}-chart`].destroy();
+                            window.chartInstances[`${metric}-chart`] = null;
+                        }
                         
-                        try {
-                            // Create chart configuration based on the metric
-                            let chartConfig = {
-                                type: 'line',
-                                data: {
-                                    labels: data[metric].timestamps,
-                                    datasets: [{
-                                        label: getMetricLabel(metric),
-                                        data: data[metric].values,
-                                        borderColor: getChartColor(metric).border,
-                                        backgroundColor: getChartColor(metric).background,
-                                        tension: 0.4,
-                                        borderWidth: 2,
-                                        fill: true
-                                    }]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    plugins: {
-                                        legend: {
-                                            position: 'top',
-                                        },
-                                        title: {
-                                            display: true,
-                                            text: `Device: ${device}`
-                                        },
-                                        tooltip: {
-                                            callbacks: {
-                                                label: function(context) {
-                                                    let label = context.dataset.label || '';
-                                                    if (label) {
-                                                        label += ': ';
-                                                    }
-                                                    if (context.parsed.y !== null) {
-                                                        label += context.parsed.y.toFixed(2);
-                                                    }
-                                                    return label;
-                                                }
-                                            }
-                                        }
+                        // Create chart configuration based on the metric
+                        let chartConfig = {
+                            type: 'line',
+                            data: {
+                                labels: data[metric].timestamps,
+                                datasets: [{
+                                    label: getMetricLabel(metric),
+                                    data: data[metric].values,
+                                    borderColor: getChartColor(metric).border,
+                                    backgroundColor: getChartColor(metric).background,
+                                    tension: 0.4,
+                                    borderWidth: 2,
+                                    fill: true
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        position: 'top',
                                     },
-                                    scales: {
-                                        y: {
-                                            beginAtZero: false,
-                                            grid: {
-                                                color: 'rgba(0, 0, 0, 0.05)'
-                                            }
-                                        },
-                                        x: {
-                                            grid: {
-                                                display: false
+                                    title: {
+                                        display: true,
+                                        text: `Device: ${device}`
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) {
+                                                    label += ': ';
+                                                }
+                                                if (context.parsed.y !== null) {
+                                                    label += context.parsed.y.toFixed(2);
+                                                }
+                                                return label;
                                             }
                                         }
                                     }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: false,
+                                        grid: {
+                                            color: 'rgba(0, 0, 0, 0.05)'
+                                        }
+                                    },
+                                    x: {
+                                        grid: {
+                                            display: false
+                                        }
+                                    }
                                 }
-                            };
+                            }
+                        };
+                        
+                        try {
+                            // Initialize chartInstances object if it doesn't exist
+                            window.chartInstances = window.chartInstances || {};
                             
                             // Create the chart
-                            window.chartInstances = window.chartInstances || {};
                             window.chartInstances[`${metric}-chart`] = new Chart(ctx, chartConfig);
                         } catch (e) {
                             console.error(`Error creating ${metric} chart:`, e);
-                            document.getElementById(`${metric}-chart-message`).textContent = "Error creating chart";
+                            messageEl.textContent = "Error creating chart";
+                            chartContainer.classList.add('no-data');
                             
                             // Clear the canvas to avoid contamination
                             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -389,8 +409,8 @@
                     .catch(error => {
                         console.error(`Error fetching ${metric} data:`, error);
                         canvas.style.opacity = '1';
-                        document.getElementById(`${metric}-chart-message`).textContent = "Error loading data";
-                        document.getElementById(`${metric}-chart-container`).classList.add('no-data');
+                        messageEl.textContent = "Error loading data";
+                        chartContainer.classList.add('no-data');
                     });
             }
             

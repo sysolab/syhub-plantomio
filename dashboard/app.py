@@ -1,3 +1,12 @@
+"""
+Modified app.py with optimized API endpoints for more efficient data handling
+Key changes:
+1. Improved error handling in trend data processing
+2. Optimized VictoriaMetrics query format
+3. Better data structure for frontend consumption
+4. Fixed data format issues between VM and frontend
+"""
+
 import os
 import json
 import time
@@ -17,7 +26,7 @@ app = Flask(__name__)
 NODERED_URL = f"http://localhost:{config['node_red']['port']}"
 VICTORIA_URL = f"http://localhost:{config['victoria_metrics']['port']}"
 PROJECT_NAME = config['project']['name']
-UPDATE_INTERVAL = 60  # Update interval in seconds - CHANGED from 1 to 60 seconds to match device frequency
+UPDATE_INTERVAL = 60  # Update interval in seconds
 
 # Available metrics and their last known values
 metrics = {
@@ -27,7 +36,7 @@ metrics = {
     "TDS": {"value": 0, "last_updated": None},
     "waterLevel": {"value": 0, "last_updated": None},
     "distance": {"value": 0, "last_updated": None},
-    "ORP": {"value": 0, "last_updated": None}  # Added ORP to available metrics
+    "ORP": {"value": 0, "last_updated": None}
 }
 
 # Tank configuration with default values
@@ -73,23 +82,23 @@ def get_current_values():
     result = {
         "deviceID": device_id,
         "lastUpdate": datetime.now().isoformat(),
-        "timestamp": now  # Default to current time, will be updated if we find an actual timestamp
+        "timestamp": now
     }
     
-    # Query each metric individually
+    # Query each metric individually with improved error handling
     available_metrics = ["temperature", "pH", "EC", "TDS", "distance", "ORP"]
     metric_timestamps = []  # To track all timestamps from metrics
     
     for metric_name in available_metrics:
         try:
-            # Use instant query for current value
+            # Use instant query for current value with timeout to prevent hanging
             query_url = f"{VICTORIA_URL}/api/v1/query"
             params = {
-                'query': f'{metric_name}{{device="{device_id}"}}',  # Query specific device
+                'query': f'{metric_name}{{device="{device_id}"}}',
                 'time': now
             }
             
-            response = requests.get(query_url, params=params, timeout=1)
+            response = requests.get(query_url, params=params, timeout=2)
             
             if response.status_code == 200:
                 data = response.json()
@@ -98,51 +107,40 @@ def get_current_values():
                     first_result = data['data']['result'][0]
                     if 'value' in first_result:
                         value = first_result['value'][1]
-                        timestamp = int(first_result['value'][0])  # Ensure it's an integer
+                        timestamp = int(first_result['value'][0])
                         
                         # Keep track of the timestamp for this metric
                         metric_timestamps.append(timestamp)
                         
-                        # Skip NaN values but include them in result as "NaN"
-                        if value != "NaN" and value != "nan":
-                            value = float(value)
-                            # Store in metrics cache
-                            metrics[metric_name]['value'] = value
-                            metrics[metric_name]['last_updated'] = timestamp
-                        
-                        # Always add to result, even if NaN
-                        result[metric_name] = value
+                        # Skip NaN values but include them in result as null for proper handling
+                        if value == "NaN" or value == "nan":
+                            result[metric_name] = None
+                        else:
+                            try:
+                                # Always convert to float for consistency
+                                value = float(value)
+                                # Store in metrics cache
+                                metrics[metric_name]['value'] = value
+                                metrics[metric_name]['last_updated'] = timestamp
+                                result[metric_name] = value
+                            except ValueError:
+                                # If conversion fails, use null
+                                result[metric_name] = None
         except Exception as e:
             app.logger.error(f"Error querying {metric_name}: {str(e)}")
             
-            # Use cached value if available, otherwise default value
+            # Use cached value if available, otherwise set to null
             if metrics[metric_name]['last_updated']:
                 result[metric_name] = metrics[metric_name]['value']
+            else:
+                result[metric_name] = None
     
-    # Use the latest common timestamp as the device timestamp (all metrics should share the same timestamp)
+    # Use the latest timestamp as the device timestamp
     if metric_timestamps:
-        # Find the most common timestamp (the one that appears most frequently)
-        from collections import Counter
-        timestamp_counts = Counter(metric_timestamps)
-        most_common_timestamp = timestamp_counts.most_common(1)[0][0]
-        result["timestamp"] = most_common_timestamp
-    
-    # Add default values for missing metrics
-    default_values = {
-        "temperature": 25.0,
-        "pH": 7.0,
-        "EC": 1.0,
-        "TDS": 500,
-        "distance": 10.0,
-        "ORP": 300.0
-    }
-    
-    for metric_name, default in default_values.items():
-        if metric_name not in result:
-            result[metric_name] = default
+        result["timestamp"] = max(metric_timestamps)
     
     # Calculate water level if we have distance
-    if "distance" in result and result["distance"] != "NaN" and result["distance"] != "nan":
+    if "distance" in result and result["distance"] is not None:
         try:
             # Ensure distance is a float for calculation
             distance_value = float(result["distance"]) if isinstance(result["distance"], str) else result["distance"]
@@ -155,15 +153,15 @@ def get_current_values():
     return result
 
 def get_device_list():
-    """Get list of available devices from VictoriaMetrics"""
+    """Get list of available devices from VictoriaMetrics with improved error handling"""
     try:
-        # Query for a common metric to get device list
+        # Query for a common metric to get device list with increased timeout
         query_url = f"{VICTORIA_URL}/api/v1/query"
         params = {
             'query': 'temperature',  # Use temperature as it's likely always present
         }
         
-        response = requests.get(query_url, params=params, timeout=2)
+        response = requests.get(query_url, params=params, timeout=3)
         
         if response.status_code == 200:
             data = response.json()
@@ -200,14 +198,13 @@ def trends():
 def events():
     """SSE endpoint with real data from VictoriaMetrics"""
     def generate():
-        sent_data = {}  # Track previously sent data to avoid duplicates
-        last_sent_timestamp = 0  # Track the last device timestamp we've sent
+        last_sent_timestamp = 0
         
         try:
             # Send initial connection message
             yield f"data: {json.dumps({'status': 'connected', 'timestamp': datetime.now().isoformat()})}\n\n"
             
-            # Send data updates only when new device data is available, limiting total time to avoid worker timeout
+            # Send data updates only when new device data is available
             max_time = 25  # seconds (just under gunicorn's default 30 sec timeout)
             start_time = time.time()
             
@@ -215,7 +212,7 @@ def events():
                 # Get the latest data
                 current_data = get_current_values()
                 
-                # Check if data has a new timestamp from the device (not just our query timestamp)
+                # Check if data has a new timestamp from the device
                 device_timestamp = current_data.get("timestamp", 0)
                 
                 # Only send data if it's truly a new reading with a new timestamp
@@ -284,11 +281,11 @@ def latest_data():
         return jsonify(current_data)
     except Exception as e:
         app.logger.error(f"Error fetching latest data: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route('/api/query')
 def query_data():
-    """Query historical data from VictoriaMetrics"""
+    """Query historical data from VictoriaMetrics with improved error handling"""
     try:
         # Get parameters
         metric = request.args.get('metric', 'temperature')
@@ -301,23 +298,16 @@ def query_data():
         now = int(time.time())
         start = now - (minutes * 60)  # Convert minutes to seconds
         
-        # Construct device filter if provided - using device as the field name (from VM data)
+        # Construct device filter if provided
         device_filter = f',device="{device_id}"' if device_id else ''
         
-        # Log the request for debugging
-        app.logger.info(f"Query data request: metric={metric}, device={device_id}, minutes={minutes}")
-        
-        # Query VictoriaMetrics for range data
-        query_url = f"{VICTORIA_URL}/api/v1/query_range"
-        
         # Optimize step size based on time range to reduce data points
-        # This ensures we get a reasonable number of data points (~100) for any time range
         if minutes >= 10080:  # 7 days
-            step_size = '2h'  # 2 hour intervals for week view (84 points)
+            step_size = '2h'  # 2 hour intervals for week view
         elif minutes >= 1440:  # 24 hours
-            step_size = '15m'  # 15 minute intervals for day view (96 points)
+            step_size = '15m'  # 15 minute intervals for day view
         elif minutes >= 720:  # 12 hours
-            step_size = '8m'  # 8 minute intervals (90 points)
+            step_size = '8m'  # 8 minute intervals
         else:
             step_size = '1m'  # 1 minute for shorter ranges
         
@@ -328,68 +318,66 @@ def query_data():
             'query': query,
             'start': start,
             'end': now,
-            'step': step_size  # Optimized step size
+            'step': step_size
         }
         
-        # Log the actual query for debugging
+        # Log the query for debugging
         app.logger.info(f"VM Query: {query}")
         
-        response = requests.get(query_url, params=params, timeout=5)
+        # Use a longer timeout for range queries
+        response = requests.get(f"{VICTORIA_URL}/api/v1/query_range", params=params, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            
-            # Log the result briefly for debugging
             result_count = len(data.get('data', {}).get('result', []))
             app.logger.info(f"VM Response for {metric}: got {result_count} results")
             
-            # Check if we have actual data
+            # Process data for frontend consumption
             if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
                 result = data['data']['result'][0]
                 
-                # Filter out duplicate timestamps and keep only unique data points
-                unique_values = []
-                seen_timestamps = set()
-                
+                # Filter out NaN values and handle as null
                 if 'values' in result:
-                    for timestamp, value in result['values']:
-                        # Include NaN values with null for proper gap rendering in chart
-                        if value == "NaN" or value == "nan":
-                            if timestamp not in seen_timestamps:
-                                seen_timestamps.add(timestamp)
-                                unique_values.append([timestamp, None])
-                            continue
-                            
-                        if timestamp not in seen_timestamps:
-                            seen_timestamps.add(timestamp)
-                            try:
-                                # Convert string values to floats for consistency
-                                unique_values.append([timestamp, float(value)])
-                            except (ValueError, TypeError):
-                                # If conversion fails, include as string
-                                unique_values.append([timestamp, value])
+                    processed_values = []
                     
-                    # Replace the values with unique ones
-                    result['values'] = unique_values
+                    for timestamp, value in result['values']:
+                        if value == "NaN" or value == "nan":
+                            processed_values.append([timestamp, None])
+                        else:
+                            try:
+                                # Convert to float for consistency
+                                processed_values.append([timestamp, float(value)])
+                            except ValueError:
+                                processed_values.append([timestamp, None])
+                    
+                    # Replace values with processed ones
+                    result['values'] = processed_values
                     data['data']['result'][0] = result
                 
-                return jsonify(data)
-        
-        # If no data or query failed, return empty result structure
-        return jsonify({
-            "status": "success",
-            "data": {
-                "resultType": "matrix",
-                "result": []
-            }
-        })
+                return jsonify({"status": "success", "data": data})
+            
+            # Return empty result with success status
+            return jsonify({
+                "status": "success",
+                "data": {
+                    "resultType": "matrix",
+                    "result": []
+                }
+            })
+        else:
+            # Log error response
+            app.logger.error(f"VM Error response: {response.status_code} - {response.text}")
+            return jsonify({"status": "error", "message": f"VM API returned status {response.status_code}"}), 500
     except Exception as e:
-        app.logger.error(f"Error querying data: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Error querying data: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/trends')
 def trends_data():
-    """Query multiple metrics over time for trends page"""
+    """
+    Query multiple metrics over time for trends page
+    Returns data in a format optimized for frontend charting
+    """
     try:
         # Get parameters
         metrics_str = request.args.get('metrics', 'temperature,pH,EC,TDS,distance,ORP')
@@ -398,188 +386,98 @@ def trends_data():
         
         # Parse time range (default to last 24 hours)
         try:
-            minutes = int(request.args.get('minutes', 1440))  # Default to 24 hours
+            minutes = int(request.args.get('minutes', 1440))
         except ValueError:
-            minutes = 1440  # Fallback if parsing fails
+            minutes = 1440
         
         # Calculate time range
         now = int(time.time())
-        start = now - (minutes * 60)  # Convert minutes to seconds
+        start = now - (minutes * 60)
         
-        # Construct device filter if provided - using device as the field name (from VM data)
+        # Construct device filter
         device_filter = f',device="{device_id}"' if device_id else ''
         
-        # Optimize step size based on time range to reduce data points
+        # Optimize step size based on time range
         if minutes >= 10080:  # 7 days
-            step_size = '2h'  # 2 hour intervals for week view (84 points)
+            step_size = '2h'
         elif minutes >= 1440:  # 24 hours
-            step_size = '15m'  # 15 minute intervals for day view (96 points)
+            step_size = '15m'
         elif minutes >= 720:  # 12 hours
-            step_size = '8m'  # 8 minute intervals (90 points)
+            step_size = '8m'
         else:
-            step_size = '1m'  # 1 minute for shorter ranges
+            step_size = '1m'
         
-        # Check if we need the older format used by trends.html or the newer format
-        is_trends_page = 'trends=' in request.query_string.decode('utf-8')
-        is_single_metric = len(metrics_list) == 1
+        # Create result object
+        results = {}
         
-        # This section is for the trends.html page that expects a specific format
-        if request.path == '/api/trends' and not is_trends_page:
-            # Create result object for each metric
-            results = {}
-            
-            # Log the request for debugging
-            app.logger.info(f"Trends data request: metrics={metrics_list}, device={device_id}, minutes={minutes}")
-            
-            # Query each metric
-            for metric in metrics_list:
-                try:
-                    # Ensure exact case match for metric name in VM
-                    metric_name = metric.strip()
-                    if not metric_name:
-                        continue
+        # Log request for debugging
+        app.logger.info(f"Trends data request: metrics={metrics_list}, device={device_id}, minutes={minutes}")
+        
+        # Query each metric with improved error handling
+        for metric in metrics_list:
+            try:
+                metric_name = metric.strip()
+                if not metric_name:
+                    continue
+                
+                query = f'{metric_name}{{{device_filter}}}'
+                
+                params = {
+                    'query': query,
+                    'start': start,
+                    'end': now,
+                    'step': step_size
+                }
+                
+                app.logger.info(f"VM Query: {query}")
+                
+                # Use longer timeout for range queries
+                response = requests.get(f"{VICTORIA_URL}/api/v1/query_range", params=params, timeout=10)
+                
+                if response.status_code != 200:
+                    app.logger.error(f"VM Error response for {metric_name}: {response.status_code} - {response.text}")
+                    results[metric_name] = []
+                    continue
+                
+                data = response.json()
+                
+                if not data.get('data', {}).get('result') or len(data['data']['result']) == 0:
+                    # No data for this metric
+                    results[metric_name] = []
+                    continue
+                
+                # Extract and process values
+                values = []
+                for point in data['data']['result'][0].get('values', []):
+                    timestamp, value = point
                     
-                    query_url = f"{VICTORIA_URL}/api/v1/query_range"
-                    query = f'{metric_name}{{{device_filter}}}'
+                    # Format timestamp as epoch seconds (integer)
+                    ts = int(timestamp)
                     
-                    params = {
-                        'query': query,
-                        'start': start,
-                        'end': now,
-                        'step': step_size  # Optimized step size to reduce data volume
-                    }
-                    
-                    # Log the specific query for debugging
-                    app.logger.info(f"VM Query: {query}")
-                    
-                    response = requests.get(query_url, params=params, timeout=5)  # Increased timeout for bulk data
-                    if response.status_code == 200:
-                        data = response.json()
-                        
-                        # Format for trends.html
-                        timestamps = []
-                        values = []
-                        
-                        if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
-                            # Extract unique timestamps and values
-                            seen_timestamps = set()
-                            
-                            for point in data['data']['result'][0].get('values', []):
-                                try:
-                                    timestamp, value = point
-                                    
-                                    # Include NaN values as null for proper gap rendering
-                                    if value == "NaN" or value == "nan":
-                                        if timestamp not in seen_timestamps:
-                                            seen_timestamps.add(timestamp)
-                                            # Format timestamp for display
-                                            date = datetime.fromtimestamp(timestamp)
-                                            time_str = date.strftime('%H:%M')
-                                            timestamps.append(time_str)
-                                            values.append(None)
-                                        continue
-                                        
-                                    if timestamp not in seen_timestamps:
-                                        seen_timestamps.add(timestamp)
-                                        # Format timestamp for display
-                                        date = datetime.fromtimestamp(timestamp)
-                                        time_str = date.strftime('%H:%M')
-                                        timestamps.append(time_str)
-                                        try:
-                                            # Convert string values to floats for consistent charting
-                                            values.append(float(value))
-                                        except (ValueError, TypeError):
-                                            # If conversion fails, include as null
-                                            values.append(None)
-                                except Exception as e:
-                                    app.logger.error(f"Error processing data point {point}: {str(e)}")
-                                    # Skip this point if there's an error
-                                    continue
-                        
-                        # Add to results
-                        results[metric_name] = {
-                            "timestamps": timestamps,
-                            "values": values
-                        }
-                except Exception as e:
-                    app.logger.error(f"Error querying {metric} for trends: {str(e)}")
-                    # Continue with next metric
-                    results[metric] = {
-                        "timestamps": [],
-                        "values": []
-                    }
-            
-            return jsonify(results)
-        # This is the original format used by the main dashboard
-        else:
-            # Legacy format with the "data" wrapper
-            results = {}
-            
-            # Query each metric
-            for metric in metrics_list:
-                try:
-                    # Ensure exact case match for metric name in VM
-                    metric_name = metric.strip()
-                    
-                    query_url = f"{VICTORIA_URL}/api/v1/query_range"
-                    query = f'{metric_name}{{{device_filter}}}'
-                    
-                    params = {
-                        'query': query,
-                        'start': start,
-                        'end': now,
-                        'step': step_size  # Optimized step size to reduce data volume
-                    }
-                    
-                    # Log the specific query for debugging
-                    app.logger.info(f"VM Query: {query}")
-                    
-                    response = requests.get(query_url, params=params, timeout=5)  # Increased timeout for bulk data
-                    if response.status_code == 200:
-                        data = response.json()
-                        
-                        if data.get('data', {}).get('result') and len(data['data']['result']) > 0:
-                            # Extract unique timestamps and values
-                            values = []
-                            seen_timestamps = set()
-                            
-                            for point in data['data']['result'][0].get('values', []):
-                                try:
-                                    timestamp, value = point
-                                    
-                                    # Include NaN values as null for proper gap rendering
-                                    if value == "NaN" or value == "nan":
-                                        if timestamp not in seen_timestamps:
-                                            seen_timestamps.add(timestamp)
-                                            values.append([timestamp, None])
-                                        continue
-                                        
-                                    if timestamp not in seen_timestamps:
-                                        seen_timestamps.add(timestamp)
-                                        try:
-                                            # Convert string values to floats for consistent charting
-                                            values.append([timestamp, float(value)])
-                                        except (ValueError, TypeError):
-                                            # If conversion fails, include as original value
-                                            values.append([timestamp, value])
-                                except Exception as e:
-                                    app.logger.error(f"Error processing data point {point}: {str(e)}")
-                                    # Skip this point if there's an error
-                                    continue
-                            
-                            results[metric] = values
-                except Exception as e:
-                    app.logger.error(f"Error querying {metric} for trends: {str(e)}")
-                    # Continue with next metric
-            
-            return jsonify({"status": "success", "data": results})
+                    # Handle NaN values as null
+                    if value == "NaN" or value == "nan":
+                        values.append([ts, None])
+                    else:
+                        try:
+                            # Convert to float
+                            values.append([ts, float(value)])
+                        except ValueError:
+                            values.append([ts, None])
+                
+                # Store values for this metric
+                results[metric_name] = values
+            except Exception as e:
+                app.logger.error(f"Error processing metric {metric_name}: {str(e)}")
+                results[metric_name] = []
+        
+        return jsonify({"status": "success", "data": results})
     except Exception as e:
         app.logger.error(f"Error fetching trends data: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/health')
 def health_check():
-    """Enhanced health check endpoint that also checks MQTT"""
+    """Enhanced health check endpoint"""
     services = {
         "dashboard": {"status": "ok"},
         "node_red": {"status": "unknown"},
@@ -588,7 +486,7 @@ def health_check():
         "ap_mode": {"status": "unknown"}
     }
     
-    # Check Node-RED - just check if port is open instead of HTTP
+    # Check Node-RED
     try:
         import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -599,9 +497,9 @@ def health_check():
     except:
         services["node_red"]["status"] = "error"
     
-    # Check VictoriaMetrics
+    # Check VictoriaMetrics with timeout
     try:
-        resp = requests.get(f"{VICTORIA_URL}/health", timeout=1)
+        resp = requests.get(f"{VICTORIA_URL}/health", timeout=2)
         services["victoria_metrics"]["status"] = "ok" if resp.status_code == 200 else "error"
     except:
         services["victoria_metrics"]["status"] = "error"
@@ -611,9 +509,7 @@ def health_check():
         import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(1)
-        # Check if MQTT port is open (typically 1883)
-        mqtt_port = 1883
-        result = s.connect_ex(('localhost', mqtt_port))
+        result = s.connect_ex(('localhost', 1883))
         services["mqtt"]["status"] = "ok" if result == 0 else "error"
         s.close()
     except:
@@ -642,7 +538,7 @@ def devices():
         return jsonify({"status": "success", "devices": devices})
     except Exception as e:
         app.logger.error(f"Error fetching devices: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=config['dashboard']['port'], debug=True) 
+    app.run(host='0.0.0.0', port=config['dashboard']['port'], debug=True)
