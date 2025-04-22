@@ -43,7 +43,7 @@ An integrated IoT monitoring system for sensor data collection, storage, visuali
 4. Choose Raspberry Pi OS Lite (64-bit) for a minimal headless installation
 5. Select your SD card
 6. Click on the gear icon (⚙️) to configure:
-   - Set hostname (e.g., `syhub.local`)
+   - Set hostname (e.g., `plantomio.local`)
    - Enable SSH
    - Set username and password
    - Configure WiFi (if needed for initial setup)
@@ -203,9 +203,9 @@ The typical data flow is:
 
 After installation, access your dashboards at:
 
-- **Main Dashboard**: http://syhub.local:1880/ui
-- **Node-RED Editor**: http://syhub.local:1880/admin
-- **VictoriaMetrics**: http://syhub.local:8428
+- **Main Dashboard**: http://plantomio.local:1880/ui
+- **Node-RED Editor**: http://plantomio.local:1880/admin
+- **VictoriaMetrics**: http://plantomio.local:8428
 
 Default login credentials:
 - **Node-RED**: Username: `admin`, Password: As configured during setup
@@ -215,7 +215,7 @@ Default login credentials:
 Send sensor data to the MQTT broker using the topic format specified in your config:
 
 ```bash
-mosquitto_pub -h syhub.local -p 1883 -u plantomioX1 -P plantomioX1Pass -t v1/devices/me/telemetry -m '{"deviceID":"plt-404cca470da0","temperature":"21.813","distance":"2.762","pH":"42.091"}'
+mosquitto_pub -h plantomio.local -p 1883 -u plantomioX1 -P plantomioX1Pass -t v1/devices/me/telemetry -m '{"deviceID":"plt-404cca470da0","temperature":"21.813","distance":"2.762","pH":"42.091"}'
 ```
 
 For Arduino/ESP32/ESP8266 code examples, see the `examples` directory.
@@ -225,7 +225,7 @@ For Arduino/ESP32/ESP8266 code examples, see the `examples` directory.
 Data can be queried directly from VictoriaMetrics:
 
 ```bash
-curl -G "http://syhub.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature{device=\"plt-404cca470da0\"}"
+curl -G "http://plantomio.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature{device=\"plt-404cca470da0\"}"
 ```
 
 Or use the Node-RED flows to create custom queries.
@@ -302,7 +302,7 @@ Node-RED configuration is stored in `/home/youruser/.node-red/settings.js`. This
 
 ### Customizing Dashboards
 
-1. Access the Node-RED editor at http://syhub.local:1880/admin
+1. Access the Node-RED editor at http://plantomio.local:1880/admin
 
 2. Navigate to the "Plantomio" flow tab
 
@@ -388,7 +388,7 @@ If your dashboard isn't showing data:
 
 2. Check VictoriaMetrics contains your data:
    ```bash
-   curl -G "http://syhub.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature"
+   curl -G "http://plantomio.local:8428/api/v1/query" --data-urlencode "query=plnt_temperature"
    ```
 
 3. In Node-RED, enable debug nodes to view the data flow
@@ -454,7 +454,7 @@ To install all components (MQTT, VictoriaMetrics, Node-RED, Dashboard, Nginx, Wi
 
 ```bash
 # Clone the repository if you haven't already
-git clone https://github.com/yourusername/syhub.git
+git clone https://github.com/sysolab/syhub-plantomio.git
 cd syhub
 
 # Run the setup script
